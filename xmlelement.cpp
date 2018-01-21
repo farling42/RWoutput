@@ -220,7 +220,7 @@ QString XmlElement::toHtml() const
         if (elem)
         {
             // Linkages need to be handled inline since they affect the result collected so far.
-            if (elem->p_element_title == "linkage" && elem->p_linkage_direction == "Outbound")
+            if (elem->p_element_title == "linkage" && elem->p_linkage_direction != "Inbound")
             {
                 QString from_pattern = QString(">%1<").arg(elem->p_linkage_name);
                 QString to_pattern   = QString("><a href=\"#%1\">%2</a><").arg(elem->p_linkage_id).arg(elem->p_linkage_name);
