@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>Realm Works Output Formatter</DisplayName>
+    <Description>This application converts a Realm Works® output file into other formats.</Description>
+    <Version>1.0</Version>
+    <ReleaseDate>2018-01-21</ReleaseDate>
+    <Licenses>
+        <License name="GNU General Public License, version 3.0" file="LICENSE.txt" />
+    </Licenses>
+    <ForcedInstallation>true</ForcedInstallation>
+    <Script>installscript.qs</Script>
+</Package>
