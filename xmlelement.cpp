@@ -147,7 +147,7 @@ XmlElement *XmlElement::readTree(QIODevice *device)
                       reader.errorString();
         return root_element;
     }
-    root_element->dump_tree();
+    //root_element->dump_tree();
     return root_element;
 }
 
@@ -179,6 +179,7 @@ void XmlElement::writeAttributes(QXmlStreamWriter *stream) const
 
 void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) const
 {
+    //qDebug() << "write span";
     // Splan is replaced by "<a href=" element instead
     for (auto link : links)
     {
@@ -208,6 +209,7 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) c
 
 void XmlElement::writePara(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix) const
 {
+    //qDebug() << "write paragraph";
     stream->writeStartElement("p");
     writeAttributes(stream);
     if (!prefix.isEmpty())
@@ -231,6 +233,7 @@ void XmlElement::writePara(QXmlStreamWriter *stream, const LinkageList &links, c
 
 void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix) const
 {
+    //qDebug() << "write paragraph children";
     bool first = true;
     for (XmlElement *para: xmlChildren("p"))
     {
@@ -243,6 +246,7 @@ void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &
 void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links) const
 {
     QString sn_type = attribute("type");
+    //qDebug() << "snippet of type" << sn_type;
     if (sn_type == "Multi_Line")
     {
         // child is either <contents> or <gm_directions> or both
@@ -329,6 +333,8 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
     // Start with HEADER for the section
     stream->writeTextElement(QString("H%1").arg(++header_level), attribute("name"));
 
+    //qDebug() << "section" << attribute("name");
+
     // Write snippets
     for (XmlElement *snippet: xmlChildren("snippet"))
     {
@@ -348,6 +354,8 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
 void XmlElement::writeTopic(QXmlStreamWriter *stream) const
 {
     int prev_header_level = header_level;
+
+    //qDebug() << "topic" << attribute("public_name");
 
     // Start with HEADER for the topic
     stream->writeStartElement(QString("H%1").arg(++header_level));
@@ -381,10 +389,8 @@ void XmlElement::writeTopic(QXmlStreamWriter *stream) const
 }
 
 
-QString XmlElement::toHtml() const
+void XmlElement::toHtml(QXmlStreamWriter &stream) const
 {
-    QString result;
-    QXmlStreamWriter stream(&result);
     stream.setAutoFormatting(true);
     stream.setAutoFormattingIndent(2);
     if (this->objectName() == "output")
@@ -395,6 +401,13 @@ QString XmlElement::toHtml() const
             if (child->objectName() == "definition")
             {
                 stream.writeStartElement("head");
+
+                // Put <meta charset="UTF-8"> into header.
+                // Note that lack of a proper "/>" at the end.
+                stream.writeStartElement("meta");
+                stream.writeAttribute("charset", "UTF-8");
+                stream.writeEndElement();
+
                 for (XmlElement *header: child->xmlChildren())
                 {
                     if (header->objectName() == "details")
@@ -416,7 +429,6 @@ QString XmlElement::toHtml() const
         }
         stream.writeEndElement(); // html
     }
-    return result;
 }
 
 bool XmlElement::hasAttribute(const QString &name) const

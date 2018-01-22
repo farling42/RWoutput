@@ -39,10 +39,11 @@ void MainWindow::on_loadFile_clicked()
     }
     //settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
 
+    ui->statusBar->showMessage("Loading RWoutput file...");
     root_element = XmlElement::readTree(&in_file);
+    ui->statusBar->showMessage("RWoutput file LOAD complete.");
 
     ui->saveHtml->setEnabled(true);
-    qInfo() << "LOAD FILE complete";
 }
 
 void MainWindow::on_saveHtml_clicked()
@@ -60,7 +61,8 @@ void MainWindow::on_saveHtml_clicked()
     }
     settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
 
-    QTextStream out_stream(&out_file);
-    out_stream << root_element->toHtml();
-    qInfo() << "SAVE HTML complete";
+    ui->statusBar->showMessage("Saving HTML file...");
+    QXmlStreamWriter out_stream(&out_file);
+    root_element->toHtml(out_stream);
+    ui->statusBar->showMessage("HTML file SAVE complete.");
 }

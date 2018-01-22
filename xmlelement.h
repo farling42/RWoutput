@@ -17,7 +17,7 @@ public:
     static XmlElement *readTree(QIODevice*);
     QString p_text;
 
-    QString toHtml() const;
+    void toHtml(QXmlStreamWriter &stream) const;
 
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;
