@@ -2,6 +2,7 @@
 #define XMLELEMENT_H
 
 #include <QObject>
+#include <QHash>
 #include <QIODevice>
 #include <QXmlStreamReader>
 #include <QXmlStreamAttributes>
@@ -18,19 +19,35 @@ public:
 
     QString toHtml() const;
 
+    bool hasAttribute(const QString &name) const;
+    QString attribute(const QString &name) const;
+
+    QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
+    QList<XmlElement *> childrenWithAttributes(const QString &attribute, const QString &value = QString()) const;
+
 private:
-    QString p_element_title;
-    QString p_topic_id;
-    QString p_public_name;  // for topic
-    QString p_section_name;
-    QString p_snippet_type;
-    QString p_asset_filename;
-    QString p_linkage_id;
-    QString p_linkage_name;
-    QString p_linkage_direction;
-    bool p_revealed;
-    QXmlStreamAttributes p_attributes;
-    void dump_tree(int indent);
+    // objectName == XML element title
+    struct Attribute {
+        QString name;
+        QString value;
+        Attribute(const QString &name, const QString &value) : name(name), value(value) {}
+    };
+    QList<Attribute> p_attributes;
+    void dump_tree() const;
+    void writeHtml(QXmlStreamWriter *writer) const;
+    void writeTopic(QXmlStreamWriter *stream) const;
+    void writeAttributes(QXmlStreamWriter *stream) const;
+    struct Linkage {
+        QString name;
+        QString id;
+        Linkage(const QString &name, const QString &id) : name(name), id(id) {}
+    };
+    typedef QList<Linkage> LinkageList;
+    void writeSnippet(QXmlStreamWriter *stream, const LinkageList &links) const;
+    void writeSection(QXmlStreamWriter *stream, const LinkageList &links) const;
+    void writeSpan(QXmlStreamWriter *stream, const LinkageList &links) const;
+    void writePara(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix = QString()) const;
+    void writeParaChildren(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix = QString()) const;
 };
 
 #endif // XMLELEMENT_H

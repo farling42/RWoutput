@@ -4,6 +4,10 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    QCoreApplication::setOrganizationName("Amusing Time");
+    QCoreApplication::setOrganizationDomain("amusingtime.uk");
+    QCoreApplication::setApplicationName("RWoutput");
+
     MainWindow w;
     w.show();
 

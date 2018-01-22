@@ -27,8 +27,8 @@ MainWindow::~MainWindow()
 void MainWindow::on_loadFile_clicked()
 {
     QSettings settings;
-    const QString LOAD_DIRECTORY_PARAM("SourceDir");
-    QString in_filename = QFileDialog::getOpenFileName(this, tr("RWoutput File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("RWoutput Files (*.rwoutput)"));
+    const QString LOAD_DIRECTORY_PARAM("inputDirectory");
+    QString in_filename = QFileDialog::getOpenFileName(this, tr("RWoutput File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
     if (in_filename.isEmpty()) return;
 
     QFile in_file(in_filename);
@@ -42,12 +42,13 @@ void MainWindow::on_loadFile_clicked()
     root_element = XmlElement::readTree(&in_file);
 
     ui->saveHtml->setEnabled(true);
+    qInfo() << "LOAD FILE complete";
 }
 
 void MainWindow::on_saveHtml_clicked()
 {
     QSettings settings;
-    const QString SAVE_DIRECTORY_PARAM("DestinationDir");
+    const QString SAVE_DIRECTORY_PARAM("outputDirectory");
     QString out_filename = QFileDialog::getSaveFileName(this, tr("HTML File"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(), /*template*/ tr("HTML Files (*.html)"));
     if (out_filename.isEmpty()) return;
 
@@ -60,7 +61,6 @@ void MainWindow::on_saveHtml_clicked()
     settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
 
     QTextStream out_stream(&out_file);
-    out_stream << "<html><body>";
     out_stream << root_element->toHtml();
-    out_stream << "</body></html>";
+    qInfo() << "SAVE HTML complete";
 }
