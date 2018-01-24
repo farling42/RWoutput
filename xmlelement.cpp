@@ -265,14 +265,23 @@ void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &
     }
 }
 
-
-static void write_img(QXmlStreamWriter *stream, const QString &alt_name,
-                      const QString &base64_data, const QString &format, const QString &caption)
+/*
+ * Return the divisor for the map's size
+ */
+static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
+                      const QString &base64_data, const QString &format, const QString &caption, const QString &usemap = QString())
 {
+    int divisor = 1;
     stream->writeStartElement("p");
 
     stream->writeStartElement("figure");
+
+    stream->writeStartElement("figcaption");
+    stream->writeCharacters(caption);
+    stream->writeEndElement();  // figcaption
+
     stream->writeStartElement("img");
+    if (!usemap.isEmpty()) stream->writeAttribute("usemap", "#" + usemap);
     if (image_max_width <= 0)
     {
         // No image conversion required
@@ -287,13 +296,13 @@ static void write_img(QXmlStreamWriter *stream, const QString &alt_name,
         }
         else
         {
-            QSize orig_size = image.size();
             // Reduce width in a binary fashion, so maximum detail is kept.
-            while (orig_size.width() > image_max_width)
+            int orig_width = image.size().width();
+            while (orig_width / divisor > image_max_width)
             {
-                orig_size = orig_size / 2;
+                divisor = divisor << 1;
             }
-            image = image.scaled(orig_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            image = image.scaled(image.size() / divisor, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             QBuffer buffer;
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, qPrintable(format));
@@ -304,12 +313,9 @@ static void write_img(QXmlStreamWriter *stream, const QString &alt_name,
     stream->writeAttribute("alt", alt_name);
     stream->writeEndElement();  // img
 
-    stream->writeStartElement("figcaption");
-    stream->writeCharacters(caption);
-    stream->writeEndElement();  // figcaption
-
     stream->writeEndElement();  // figure
     stream->writeEndElement();  // p
+    return divisor;
 }
 
 
@@ -392,22 +398,46 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         // ext_object child, asset grand-child
         for (XmlElement *smart_image: xmlChildren("smart_image"))
         {
-            for (XmlElement *asset: smart_image->xmlChildren("asset"))
+            XmlElement *asset = smart_image->xmlChild("asset");
+            if (asset == nullptr) return;
+
+            QString format = asset->attribute("filename").split(".").last();
+            XmlElement *contents = asset->xmlChild("contents");
+            XmlElement *annotation = asset->xmlChild("annotation");
+            if (contents == nullptr) return;
+
+            QString caption = snippetName();
+            if (annotation) caption.append(" : " + annotation->p_text);
+
+            QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
+            QString usemap;
+            if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
+
+            int divisor = write_img(stream, smart_image->attribute("name"), contents->p_text, format, caption, usemap);
+
+            if (!pins.isEmpty())
             {
-                QString format = asset->attribute("filename").split(".").last();
-                XmlElement *contents = asset->xmlChild("contents");
-                XmlElement *annotation = asset->xmlChild("annotation");
-                if (contents)
+                // Create the clickable MAP on top of the map
+                stream->writeStartElement("map");
+                stream->writeAttribute("name", usemap);
+                for (auto pin : pins)
                 {
-                    QString caption = snippetName();
-                    if (annotation) caption.append(" : " + annotation->p_text);
-                    write_img(stream, smart_image->attribute("name"), contents->p_text, format, caption);
+                    XmlElement *description = pin->xmlChild("description");
+                    stream->writeStartElement("area");
+                    stream->writeAttribute("shape", "circle");
+                    stream->writeAttribute("coords", QString("%1,%2,%3")
+                                           .arg(pin->attribute("x").toInt() / divisor)
+                                           .arg(pin->attribute("y").toInt() / divisor)
+                                           .arg(10));
+                    stream->writeAttribute("href", pin->attribute("topic_id") + ".html");
+                    if (description && !description->p_text.isEmpty())
+                    {
+                        stream->writeAttribute("alt", description->p_text);
+                    }
+                    stream->writeEndElement();  // area
                 }
+                stream->writeEndElement();  // map
             }
-            // TODO
-            // maybe loads of "map_pin"
-            //   attributes pin_name  topic_id  x   y
-            // optional child "description"
         }
     }
     else if (sn_type == "Date_Game")
