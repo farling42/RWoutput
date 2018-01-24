@@ -1,9 +1,13 @@
 #include "xmlelement.h"
 
+#include <QBuffer>
 #include <QDebug>
+#include <QImage>
 #include <QMetaEnum>
 
 static int dump_indentation = 0;
+
+static int image_max_width = -1;
 
 void XmlElement::dump_tree() const
 {
@@ -243,6 +247,42 @@ void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &
 }
 
 
+static void write_img(QXmlStreamWriter *stream, const QString &alt_name, const QString &base64_data, const QString &format)
+{
+    stream->writeStartElement("img");
+    if (image_max_width <= 0)
+    {
+        // No image conversion required
+        stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(base64_data));
+    }
+    else
+    {
+        QImage image = QImage::fromData(QByteArray::fromBase64(base64_data.toLocal8Bit()), qPrintable(format));
+        if (image.width() < image_max_width)
+        {
+            stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(base64_data));
+        }
+        else
+        {
+            QSize orig_size = image.size();
+            // Reduce width in a binary fashion, so maximum detail is kept.
+            while (orig_size.width() > image_max_width)
+            {
+                orig_size = orig_size / 2;
+            }
+            image = image.scaled(orig_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QBuffer buffer;
+            buffer.open(QIODevice::WriteOnly);
+            image.save(&buffer, qPrintable(format));
+            buffer.close();
+            stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(QString(buffer.data().toBase64())));
+        }
+    }
+    stream->writeAttribute("alt", alt_name);
+    stream->writeEndElement();
+}
+
+
 void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links) const
 {
     QString sn_type = attribute("type");
@@ -276,10 +316,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                 for (XmlElement *contents: asset->xmlChildren("contents"))
                 {
                     QString format = asset->attribute("filename").split(".").last();
-                    stream->writeStartElement("img");
-                    stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(contents->p_text));
-                    stream->writeAttribute("alt", ext_object->attribute("name"));
-                    stream->writeEndElement();
+                    write_img(stream, ext_object->attribute("name"), contents->p_text, format);
                 }
             }
         }
@@ -294,10 +331,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                 for (XmlElement *contents: asset->xmlChildren("contents"))
                 {
                     QString format = asset->attribute("filename").split(".").last();
-                    stream->writeStartElement("img");
-                    stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(contents->p_text));
-                    stream->writeAttribute("alt", smart_image->attribute("name"));
-                    stream->writeEndElement();
+                    write_img(stream, smart_image->attribute("name"), contents->p_text, format);
                 }
             }
             // maybe loads of "map_pin"
@@ -389,8 +423,9 @@ void XmlElement::writeTopic(QXmlStreamWriter *stream) const
 }
 
 
-void XmlElement::toHtml(QXmlStreamWriter &stream) const
+void XmlElement::toHtml(QXmlStreamWriter &stream, int max_image_width) const
 {
+    image_max_width = max_image_width;
     stream.setAutoFormatting(true);
     stream.setAutoFormattingIndent(2);
     if (this->objectName() == "output")

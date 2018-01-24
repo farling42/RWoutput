@@ -17,7 +17,7 @@ public:
     static XmlElement *readTree(QIODevice*);
     QString p_text;
 
-    void toHtml(QXmlStreamWriter &stream) const;
+    void toHtml(QXmlStreamWriter &stream, int max_image_width) const;
 
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;

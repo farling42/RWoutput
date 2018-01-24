@@ -61,8 +61,11 @@ void MainWindow::on_saveHtml_clicked()
     }
     settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
 
+    bool ok = true;
+    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
+    if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving HTML file...");
     QXmlStreamWriter out_stream(&out_file);
-    root_element->toHtml(out_stream);
+    root_element->toHtml(out_stream, max_image_width);
     ui->statusBar->showMessage("HTML file SAVE complete.");
 }
