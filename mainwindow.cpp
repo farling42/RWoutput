@@ -9,7 +9,7 @@
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
-    root_element(0)
+    root_element(nullptr)
 {
     ui->setupUi(this);
     // Set icons that can't be set in Designer.
@@ -30,6 +30,13 @@ void MainWindow::on_loadFile_clicked()
     const QString LOAD_DIRECTORY_PARAM("inputDirectory");
     QString in_filename = QFileDialog::getOpenFileName(this, tr("RWoutput File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
     if (in_filename.isEmpty()) return;
+
+    // Delete any previously loaded data
+    if (root_element != nullptr)
+    {
+        delete root_element;
+        root_element = nullptr;
+    }
 
     QFile in_file(in_filename);
     if (!in_file.open(QFile::ReadOnly))
