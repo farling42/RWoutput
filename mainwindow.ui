@@ -88,6 +88,19 @@ HTML</string>
      <string>Max. Image Width</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="oneTopicPerFile">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>210</y>
+      <width>121</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>One Topic Per File</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">

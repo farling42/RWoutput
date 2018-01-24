@@ -2,12 +2,14 @@
 
 #include <QBuffer>
 #include <QDebug>
+#include <QFile>
 #include <QImage>
 #include <QMetaEnum>
 
 static int dump_indentation = 0;
 
 static int image_max_width = -1;
+static bool separate_topic_files = false;
 
 void XmlElement::dump_tree() const
 {
@@ -170,6 +172,7 @@ XmlElement *XmlElement::readTree(QIODevice *device)
  * @return
  */
 static int header_level = 0;
+static int section_level = 0;
 
 
 void XmlElement::writeAttributes(QXmlStreamWriter *stream) const
@@ -191,7 +194,10 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) c
         if (link.name.compare(p_text, Qt::CaseInsensitive) == 0)
         {
             stream->writeStartElement("a");
-            stream->writeAttribute("href", "#" + link.id);
+            if (separate_topic_files)
+                stream->writeAttribute("href", link.id + ".html");
+            else
+                stream->writeAttribute("href", "#" + link.id);
             stream->writeCharacters(p_text);  // case might be different
             stream->writeEndElement();  // a
             return;
@@ -362,10 +368,14 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
 
 void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links) const
 {
-    int prev_header_level = header_level;
+    int prev_section_level = section_level;
 
     // Start with HEADER for the section
-    stream->writeTextElement(QString("H%1").arg(++header_level), attribute("name"));
+    ++section_level;
+    stream->writeStartElement(QString("H%1").arg(header_level + section_level));
+    stream->writeAttribute("style", QString("section%1").arg(section_level));
+    stream->writeCharacters(attribute("name"));
+    stream->writeEndElement();
 
     //qDebug() << "section" << attribute("name");
 
@@ -381,19 +391,90 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
         section->writeSection(stream, links);
     }
 
-    header_level = prev_header_level;
+    section_level = prev_section_level;
 }
 
 
-void XmlElement::writeTopic(QXmlStreamWriter *stream) const
+static void write_generic_css()
+{
+    QFile file("theme.css");
+    if (!file.open(QFile::WriteOnly | QFile::Text)) return;
+    QTextStream css(&file);
+    css << "*[style=\"summary1\"] {" << endl;
+    css << "    font-size: 25px;" << endl;
+    css << "}" << endl;
+    css << "*[style=\"summary2\"] {" << endl;
+    css << "    font-size: 20px;" << endl;
+    css << "}" << endl;
+    css << endl;
+    css << "*[style=\"topic\"] {" << endl;
+    css << "    font-family: verdana;" << endl;
+    css << "    font-size: 20px;" << endl;
+    css << "    text-align: center;" << endl;
+    css << "}" << endl;
+    css << endl;
+    css << "*[style=\"section1\"] {" << endl;
+    css << "    background-color: lightblue;" << endl;
+    css << "}\n" << endl;
+}
+
+
+static void write_generic_header(QXmlStreamWriter *stream)
+{
+    stream->writeStartElement("meta");
+    stream->writeAttribute("charset", "UTF-8");
+    stream->writeEndElement();
+
+    stream->writeStartElement("link");
+    stream->writeAttribute("rel", "stylesheet");
+    stream->writeAttribute("type", "text/css");
+    stream->writeAttribute("href", "theme.css");
+    stream->writeEndElement();
+}
+
+
+void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 {
     int prev_header_level = header_level;
+    QXmlStreamWriter *stream = orig_stream;
+    QFile topic_file;
+
+    section_level = 0;
+
+    if (separate_topic_files)
+    {
+        header_level = 0;
+        topic_file.setFileName(attribute("topic_id") + ".html");
+        if (!topic_file.open(QFile::WriteOnly))
+        {
+            qWarning() << "Failed to open output file for topic" << topic_file.fileName();
+            return;
+        }
+        stream = new QXmlStreamWriter(&topic_file);
+        stream->setAutoFormatting(true);
+        stream->setAutoFormattingIndent(2);
+
+        stream->writeStartElement("html");
+        stream->writeStartElement("head");
+
+        // Put <meta charset="UTF-8"> into header.
+        // Note that lack of a proper "/>" at the end.
+        write_generic_header(stream);
+
+        stream->writeTextElement("title", attribute("public_name"));
+
+        stream->writeEndElement(); // head
+    }
 
     //qDebug() << "topic" << attribute("public_name");
 
     // Start with HEADER for the topic
     stream->writeStartElement(QString("H%1").arg(++header_level));
-    stream->writeAttribute("id", attribute("topic_id"));
+    stream->writeAttribute("style", "topic");
+    if (!separate_topic_files)
+    {
+        stream->writeAttribute("id", attribute("topic_id"));
+    }
     stream->writeCharacters(attribute("public_name"));
     stream->writeEndElement();
 
@@ -412,6 +493,29 @@ void XmlElement::writeTopic(QXmlStreamWriter *stream) const
     {
         section->writeSection(stream, links);
     }
+
+    if (separate_topic_files)
+    {
+        stream->writeEndElement(); // html
+        header_level = prev_header_level + 1;
+
+        delete stream;
+        topic_file.close();
+        stream = orig_stream;
+
+        // Now write an entry into the main stream.
+        stream->writeStartElement(QString("ul"));
+        stream->writeAttribute("style", QString("summary%1").arg(header_level));
+
+        stream->writeStartElement("li");
+        stream->writeStartElement("a");
+        stream->writeAttribute("href", topic_file.fileName());
+        stream->writeCharacters(attribute("public_name"));
+        stream->writeEndElement();   // a
+        stream->writeEndElement();   // li
+        // UL not finished until after we do the child topics
+    }
+
     // Process <tag_assigns>
     // Process all child topics
     for (XmlElement *topic: xmlChildren("topic"))
@@ -419,13 +523,22 @@ void XmlElement::writeTopic(QXmlStreamWriter *stream) const
         topic->writeTopic(stream);
     }
 
+    if (separate_topic_files)
+    {
+        stream->writeEndElement();   // ul
+    }
+
     header_level = prev_header_level;
 }
 
 
-void XmlElement::toHtml(QXmlStreamWriter &stream, int max_image_width) const
+void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width) const
 {
     image_max_width = max_image_width;
+    separate_topic_files = multi_page;
+
+    write_generic_css();
+
     stream.setAutoFormatting(true);
     stream.setAutoFormattingIndent(2);
     if (this->objectName() == "output")
@@ -439,9 +552,7 @@ void XmlElement::toHtml(QXmlStreamWriter &stream, int max_image_width) const
 
                 // Put <meta charset="UTF-8"> into header.
                 // Note that lack of a proper "/>" at the end.
-                stream.writeStartElement("meta");
-                stream.writeAttribute("charset", "UTF-8");
-                stream.writeEndElement();
+                write_generic_header(&stream);
 
                 for (XmlElement *header: child->xmlChildren())
                 {
@@ -465,6 +576,8 @@ void XmlElement::toHtml(QXmlStreamWriter &stream, int max_image_width) const
         stream.writeEndElement(); // html
     }
 }
+
+
 
 bool XmlElement::hasAttribute(const QString &name) const
 {
