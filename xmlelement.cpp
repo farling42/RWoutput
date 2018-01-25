@@ -12,6 +12,7 @@ static int dump_indentation = 0;
 
 static int image_max_width = -1;
 static bool separate_topic_files = false;
+static bool apply_reveal_mask = true;
 
 void XmlElement::dump_tree() const
 {
@@ -91,12 +92,18 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                 if (body.startsWith("<p class"))
                 {
                     // Convert what was previously translated XML into new XmlElement objects
+                    // The stream reader requires a SINGLE top-level element
+                    body = "<top>" + body + "</body";
                     QXmlStreamReader subreader(body);
                     if (subreader.readNextStartElement())
                     {
+                        // Don't create an XmlElement for OUR top-level fake element
                         while (!subreader.atEnd())
                         {
-                            new XmlElement(&subreader, this);
+                            if (subreader.readNext() == QXmlStreamReader::StartElement)
+                            {
+                                new XmlElement(&subreader, this);
+                            }
                         }
                     }
                 }
@@ -181,7 +188,10 @@ void XmlElement::writeAttributes(QXmlStreamWriter *stream) const
 {
     for (auto attr : p_attributes)
     {
-        stream->writeAttribute(attr.name, attr.value);
+        if (attr.name != "class")
+        {
+            stream->writeAttribute(attr.name, attr.value);
+        }
     }
 }
 
@@ -207,15 +217,19 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) c
     }
 
     // not a replacement
-    stream->writeStartElement("span");
-    writeAttributes(stream);
+    bool in_span = hasAttribute("style");
+    if (in_span)
+    {
+        stream->writeStartElement("span");
+        writeAttributes(stream);
+    }
     stream->writeCharacters(p_text);
 
     for (auto span: xmlChildren("span"))
     {
         span->writeSpan(stream, links);
     }
-    stream->writeEndElement(); // span
+    if (in_span) stream->writeEndElement(); // span
 }
 
 
@@ -227,17 +241,13 @@ void XmlElement::writePara(QXmlStreamWriter *stream, const LinkageList &links, c
     if (!prefix.isEmpty())
     {
         stream->writeStartElement("span");
-        stream->writeAttribute("class", "RWSnippet");
-        stream->writeAttribute("style", "font-weight: bold");
+        stream->writeAttribute("class", "snippetLabel");
         stream->writeCharacters(prefix + ": ");
         stream->writeEndElement();
     }
     if (!value.isEmpty())
     {
-        stream->writeStartElement("span");
-        stream->writeAttribute("class", "RWSnippet");
         stream->writeCharacters(value);
-        stream->writeEndElement();
     }
     for (auto child : xmlChildren())
     {
@@ -306,27 +316,30 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
     {
         QImage image = QImage::fromData(QByteArray::fromBase64(base64_data.toLocal8Bit()), qPrintable(format));
 
-        // Apply mask, if supplied
-        if (mask_elem)
-        {
-            // Create a mask with the correct alpha
-            QPixmap pixmap(image.size());
-            pixmap.fill(QColor(0, 0, 0, 200));
-            QImage mask = QImage::fromData(QByteArray::fromBase64(mask_elem->p_text.toLocal8Bit()), qPrintable(format));
-            pixmap.setMask(QBitmap::fromImage(mask));
-
-            // Apply the mask to the original picture
-            QPainter painter(&image);
-            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-            painter.drawPixmap(0, 0, pixmap);
-        }
-
-        if (mask_elem == 0 && (image_max_width <= 0 || image.width() < image_max_width))
+        if (mask_elem == nullptr && (image_max_width <= 0 || image.width() < image_max_width))
         {
             stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(base64_data));
         }
         else
         {
+            // Apply mask, if supplied
+            if (mask_elem && apply_reveal_mask)
+            {
+                // Ensure we have a 32-bit image to convert
+                image = image.convertToFormat(QImage::Format_RGB32);
+
+                // Create a mask with the correct alpha
+                QPixmap pixmap(image.size());
+                pixmap.fill(QColor(0, 0, 0, 200));
+                QImage mask = QImage::fromData(QByteArray::fromBase64(mask_elem->p_text.toLocal8Bit()), qPrintable(format));
+                pixmap.setMask(QBitmap::fromImage(mask));
+
+                // Apply the mask to the original picture
+                QPainter painter(&image);
+                painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+                painter.drawPixmap(0, 0, pixmap);
+            }
+
             // Reduce width in a binary fashion, so maximum detail is kept.
             int orig_width = image.size().width();
             int new_width  = orig_width;
@@ -339,6 +352,7 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
             {
                 image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
             }
+
             QBuffer buffer;
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, qPrintable(format));
@@ -363,10 +377,11 @@ static void write_ext_object(QXmlStreamWriter *stream, const QString &prefix,
 
     stream->writeStartElement("p");
     stream->writeStartElement("span");
-    stream->writeAttribute("class", "RWSnippet");
-    stream->writeAttribute("style", "font-weight: bold");
+    stream->writeAttribute("class", "snippetLabel");
     stream->writeCharacters(prefix + ": ");
+    stream->writeEndElement();  // span
 
+    stream->writeStartElement("span");
     stream->writeStartElement("a");
     stream->writeAttribute("href", filename);
     stream->writeCharacters(filename);
@@ -388,7 +403,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         for (XmlElement *contents: xmlChildren("contents"))
             contents->writeParaChildren(stream, links);
         for (XmlElement *gm_directions: xmlChildren("gm_directions"))
-            gm_directions->writeParaChildren(stream, links);
+            gm_directions->writeParaChildren(stream, links, "GM");
     }
     else if (sn_type == "Labeled_Text")
     {
@@ -555,7 +570,7 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
     // Start with HEADER for the section
     ++section_level;
     stream->writeStartElement(QString("H%1").arg(header_level + section_level));
-    stream->writeAttribute("style", QString("section%1").arg(section_level));
+    stream->writeAttribute("class", QString("section%1").arg(section_level));
     stream->writeCharacters(attribute("name"));
     stream->writeEndElement();
 
@@ -582,21 +597,24 @@ static void write_generic_css()
     QFile file("theme.css");
     if (!file.open(QFile::WriteOnly | QFile::Text)) return;
     QTextStream css(&file);
-    css << "*[style=\"summary1\"] {" << endl;
+    css << "*.summary1 {" << endl;
     css << "    font-size: 25px;" << endl;
     css << "}" << endl;
-    css << "*[style=\"summary2\"] {" << endl;
+    css << "*.summary2 {" << endl;
     css << "    font-size: 20px;" << endl;
     css << "}" << endl;
     css << endl;
-    css << "*[style=\"topic\"] {" << endl;
+    css << "*.topic {" << endl;
     css << "    font-family: verdana;" << endl;
     css << "    font-size: 20px;" << endl;
     css << "    text-align: center;" << endl;
     css << "}" << endl;
     css << endl;
-    css << "*[style=\"section1\"] {" << endl;
+    css << "*.section1 {" << endl;
     css << "    background-color: lightblue;" << endl;
+    css << "}\n" << endl;
+    css << "*.snippetLabel {" << endl;
+    css << "    font-weight: bold;" << endl;
     css << "}\n" << endl;
 }
 
@@ -654,7 +672,7 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 
     // Start with HEADER for the topic
     stream->writeStartElement(QString("H%1").arg(++header_level));
-    stream->writeAttribute("style", "topic");
+    stream->writeAttribute("class", "topic");
     if (!separate_topic_files)
     {
         stream->writeAttribute("id", attribute("topic_id"));
@@ -689,7 +707,7 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 
         // Now write an entry into the main stream.
         stream->writeStartElement(QString("ul"));
-        stream->writeAttribute("style", QString("summary%1").arg(header_level));
+        stream->writeAttribute("class", QString("summary%1").arg(header_level));
 
         stream->writeStartElement("li");
         stream->writeStartElement("a");
@@ -716,10 +734,11 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 }
 
 
-void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width) const
+void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width, bool use_reveal_mask) const
 {
-    image_max_width = max_image_width;
+    image_max_width      = max_image_width;
     separate_topic_files = multi_page;
+    apply_reveal_mask    = use_reveal_mask;
 
     write_generic_css();
 

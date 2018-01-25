@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->loadFile->setIcon(style()->standardIcon(QStyle::SP_FileDialogStart));
     ui->saveHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
-    ui->saveHtml->setEnabled(false);
+    ui->htmlOutput->setEnabled(false);
 }
 
 MainWindow::~MainWindow()
@@ -50,7 +50,7 @@ void MainWindow::on_loadFile_clicked()
     root_element = XmlElement::readTree(&in_file);
     ui->statusBar->showMessage("RWoutput file LOAD complete.");
 
-    ui->saveHtml->setEnabled(true);
+    ui->htmlOutput->setEnabled(true);
 }
 
 void MainWindow::on_saveHtml_clicked()
@@ -89,6 +89,6 @@ void MainWindow::on_saveHtml_clicked()
     if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving HTML file...");
     QXmlStreamWriter out_stream(&out_file);
-    root_element->toHtml(out_stream, ui->oneTopicPerFile->isChecked(), max_image_width);
+    root_element->toHtml(out_stream, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
     ui->statusBar->showMessage("HTML file SAVE complete.");
 }
