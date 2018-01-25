@@ -15,7 +15,6 @@ public:
     XmlElement(QXmlStreamReader*, QObject *parent = 0);
 
     static XmlElement *readTree(QIODevice*);
-    QString p_text;
 
     void toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width, bool use_reveal_mask) const;
 
@@ -33,6 +32,7 @@ private:
         QString value;
         Attribute(const QString &name, const QString &value) : name(name), value(value) {}
     };
+    QString p_fixed_text;
     QList<Attribute> p_attributes;
     void dump_tree() const;
     void writeHtml(QXmlStreamWriter *writer) const;
@@ -55,6 +55,8 @@ private:
     void writeExtObject(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix,
                         const QString &base64_data, const QString &filename, XmlElement *annotation) const;
     QString snippetName() const;
+    XmlElement(const QString &fixed_text, QObject *parent);
+    QString childString() const;
 };
 
 #endif // XMLELEMENT_H
