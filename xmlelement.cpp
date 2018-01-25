@@ -746,6 +746,8 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
         section->writeSection(stream, links);
     }
 
+    auto child_topics = xmlChildren("topic");
+
     if (separate_topic_files)
     {
         stream->writeEndElement(); // html
@@ -756,8 +758,6 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
         stream = orig_stream;
 
         // Now write an entry into the main stream.
-        stream->writeStartElement(QString("ul"));
-        stream->writeAttribute("class", QString("summary%1").arg(header_level));
 
         stream->writeStartElement("li");
         stream->writeStartElement("a");
@@ -766,16 +766,23 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
         stream->writeEndElement();   // a
         stream->writeEndElement();   // li
         // UL not finished until after we do the child topics
+
+        if (!child_topics.isEmpty())
+        {
+            // next level for the children
+            stream->writeStartElement(QString("ul"));
+            stream->writeAttribute("class", QString("summary%1").arg(header_level+1));
+        }
     }
 
     // Process <tag_assigns>
     // Process all child topics
-    for (XmlElement *topic: xmlChildren("topic"))
+    for (auto topic: child_topics)
     {
         topic->writeTopic(stream);
     }
 
-    if (separate_topic_files)
+    if (separate_topic_files && !child_topics.isEmpty())
     {
         stream->writeEndElement();   // ul
     }
@@ -819,10 +826,25 @@ void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image
             else if (child->objectName() == "contents")
             {
                 stream.writeStartElement("body");
+
+                // Outer wrapper for summary page
+                if (separate_topic_files)
+                {
+                    // next level for the children
+                    stream.writeStartElement(QString("ul"));
+                    stream.writeAttribute("class", QString("summary1"));
+                }
+
                 for (XmlElement *topic: child->xmlChildren("topic"))
                 {
                     topic->writeTopic(&stream);
                 }
+
+                if (separate_topic_files)
+                {
+                    stream.writeEndElement();   // ul
+                }
+
                 stream.writeEndElement(); // body
             }
         }
