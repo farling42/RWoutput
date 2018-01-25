@@ -1,31 +1,53 @@
-*.summary1 {
+.summary1 {
     font-size: 25px;
 }
-*.summary2 {
+.summary2 {
     font-size: 20px;
 }
-*.topic {
+.topic {
     font-family: verdana;
     font-size: 20px;
     text-align: center;
 }
-*.section1 {
+.section1 {
     background-color: lightblue;
 }
-*.snippet_label {
+.snippet_label {
     font-weight: bold;
 }
-*.annotation {
+.annotation {
     font-style: italic;
     margin-left: 20px;
 }
-*.gm_directions {
+.gm_directions {
     background-color: floralwhite;
     border: 1px solid tan;
 }
-*.topic[topic_prefix]:before {
+
+/* Formatting for the prefix and/or suffix of Topics */
+.topic[topic_prefix]:before {
     content: attr(topic_prefix) " - ";
 }
-*.topic[topic_suffix]:after {
+.topic[topic_suffix]:after {
     content: " (" attr(topic_suffix) ")";
+}
+
+/* Auto-numbering of sections within topics */
+.topic {
+    counter-reset: s1counter;
+}
+.section1:before {
+    content:  counter(s1counter) ".\0000a0\0000a0";
+    counter-increment: s1counter;
+    counter-reset: s2counter;
+    counter-reset: s3counter;
+}
+.section2:before {
+    content:  counter(s1counter) "." counter(s2counter) ".\0000a0\0000a0";
+    counter-increment: s2counter;
+    counter-reset: s3counter;
+}
+.section3:before {
+    content:  counter(s1counter) "." counter(s2counter) "." counter(s3counter) ".\0000a0\0000a0";
+    counter-increment: s3counter;
 }
