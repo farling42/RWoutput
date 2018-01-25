@@ -384,15 +384,22 @@ int XmlElement::writeImage(QXmlStreamWriter *stream, const LinkageList &links,
             // Apply mask, if supplied
             if (mask_elem && apply_reveal_mask)
             {
+                // If the mask is empty, then don't use it
+                // (if the image is JPG, the mask isn't necessarily JPG
+                QImage mask = QImage::fromData(QByteArray::fromBase64(mask_elem->childString().toLocal8Bit()));
+
                 // Ensure we have a 32-bit image to convert
                 image = image.convertToFormat(QImage::Format_RGB32);
 
                 // Create a mask with the correct alpha
                 QPixmap pixmap(image.size());
                 pixmap.fill(QColor(0, 0, 0, 200));
-                QImage mask = QImage::fromData(QByteArray::fromBase64(mask_elem->childString().toLocal8Bit()), qPrintable(format));
                 pixmap.setMask(QBitmap::fromImage(mask));
 
+                if (image.size() != mask.size())
+                {
+                    qDebug() << "Image size differences for" << filename << ": image =" << image.size() << ", mask =" << mask.size();
+                }
                 // Apply the mask to the original picture
                 QPainter painter(&image);
                 painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
@@ -655,6 +662,8 @@ static void write_generic_css()
     QFile destfile("theme.css");
     if (destfile.exists()) destfile.remove();
     QFile::copy(":/theme.css", destfile.fileName());
+    // Qt copies the file and makes it read-only!
+    destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
 }
 
 
