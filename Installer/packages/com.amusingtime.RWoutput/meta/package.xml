@@ -2,7 +2,7 @@
 <Package>
     <DisplayName>Realm Works Output Formatter</DisplayName>
     <Description>This application converts a Realm Works® output file into other formats.</Description>
-    <Version>1.6</Version>
+    <Version>1.7</Version>
     <ReleaseDate>2018-01-25</ReleaseDate>
     <Licenses>
         <License name="GNU General Public License, version 3.0" file="LICENSE.txt" />
