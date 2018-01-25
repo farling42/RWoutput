@@ -1,10 +1,12 @@
 #include "xmlelement.h"
 
+#include <QBitmap>
 #include <QBuffer>
 #include <QDebug>
 #include <QFile>
 #include <QImage>
 #include <QMetaEnum>
+#include <QPainter>
 
 static int dump_indentation = 0;
 
@@ -265,12 +267,24 @@ void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &
     }
 }
 
+
+static bool write_base64_file(const QString &filename, const QString &base64_data)
+{
+    QFile file(filename);
+    if (!file.open(QFile::WriteOnly)) return false;
+    file.write (QByteArray::fromBase64(base64_data.toLocal8Bit()));
+    return true;
+}
+
+
 /*
  * Return the divisor for the map's size
  */
 static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
-                      const QString &base64_data, const QString &format, const QString &caption, const QString &usemap = QString())
+                     const QString &base64_data, XmlElement *mask_elem,
+                     const QString &filename, const QString &caption, const QString &usemap = QString())
 {
+    QString format = filename.split(".").last();
     int divisor = 1;
     stream->writeStartElement("p");
 
@@ -282,7 +296,8 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
 
     stream->writeStartElement("img");
     if (!usemap.isEmpty()) stream->writeAttribute("usemap", "#" + usemap);
-    if (image_max_width <= 0)
+
+    if (mask_elem == nullptr && image_max_width <= 0)
     {
         // No image conversion required
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(base64_data));
@@ -290,7 +305,23 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
     else
     {
         QImage image = QImage::fromData(QByteArray::fromBase64(base64_data.toLocal8Bit()), qPrintable(format));
-        if (image.width() < image_max_width)
+
+        // Apply mask, if supplied
+        if (mask_elem)
+        {
+            // Create a mask with the correct alpha
+            QPixmap pixmap(image.size());
+            pixmap.fill(QColor(0, 0, 0, 200));
+            QImage mask = QImage::fromData(QByteArray::fromBase64(mask_elem->p_text.toLocal8Bit()), qPrintable(format));
+            pixmap.setMask(QBitmap::fromImage(mask));
+
+            // Apply the mask to the original picture
+            QPainter painter(&image);
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            painter.drawPixmap(0, 0, pixmap);
+        }
+
+        if (mask_elem == 0 && (image_max_width <= 0 || image.width() < image_max_width))
         {
             stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(base64_data));
         }
@@ -298,15 +329,21 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
         {
             // Reduce width in a binary fashion, so maximum detail is kept.
             int orig_width = image.size().width();
-            while (orig_width / divisor > image_max_width)
+            int new_width  = orig_width;
+            while (new_width > image_max_width)
             {
                 divisor = divisor << 1;
+                new_width = new_width >> 1;
             }
-            image = image.scaled(image.size() / divisor, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            if (divisor > 1)
+            {
+                image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
+            }
             QBuffer buffer;
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, qPrintable(format));
             buffer.close();
+
             stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(QString(buffer.data().toBase64())));
         }
     }
@@ -322,9 +359,7 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
 static void write_ext_object(QXmlStreamWriter *stream, const QString &prefix,
                              const QString &base64_data, const QString &filename, const QString &suffix)
 {
-    QFile file(filename);
-    if (!file.open(QFile::WriteOnly)) return;
-    file.write (QByteArray::fromBase64(base64_data.toLocal8Bit()));
+    if (!write_base64_file(filename, base64_data)) return;
 
     stream->writeStartElement("p");
     stream->writeStartElement("span");
@@ -378,14 +413,13 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
             for (XmlElement *asset: ext_object->xmlChildren("asset"))
             {
                 QString filename = asset->attribute("filename");
-                QString format   = asset->attribute("filename").split(".").last();
                 XmlElement *contents = asset->xmlChild("contents");
                 XmlElement *annotation = asset->xmlChild("annotation");
                 if (contents)
                 {
                     QString caption = annotation ? (snippetName() + " : " + annotation->p_text) : snippetName();
                     if (sn_type == "Picture")
-                        write_img(stream, ext_object->attribute("name"), contents->p_text, format, caption);
+                        write_img(stream, ext_object->attribute("name"), contents->p_text, nullptr, filename, caption);
                     else
                         write_ext_object(stream, ext_object->attribute("name"), contents->p_text, filename,
                                          (annotation ? annotation->p_text : QString()));
@@ -399,9 +433,10 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         for (XmlElement *smart_image: xmlChildren("smart_image"))
         {
             XmlElement *asset = smart_image->xmlChild("asset");
+            XmlElement *mask  = smart_image->xmlChild("subset_mask");
             if (asset == nullptr) return;
 
-            QString format = asset->attribute("filename").split(".").last();
+            QString filename = asset->attribute("filename");
             XmlElement *contents = asset->xmlChild("contents");
             XmlElement *annotation = asset->xmlChild("annotation");
             if (contents == nullptr) return;
@@ -413,7 +448,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
             QString usemap;
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            int divisor = write_img(stream, smart_image->attribute("name"), contents->p_text, format, caption, usemap);
+            int divisor = write_img(stream, smart_image->attribute("name"), contents->p_text, mask, filename, caption, usemap);
 
             if (!pins.isEmpty())
             {
