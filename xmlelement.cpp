@@ -196,7 +196,7 @@ void XmlElement::writeAttributes(QXmlStreamWriter *stream) const
 }
 
 
-void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) const
+void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links, const QString &classname) const
 {
     //qDebug() << "write span";
     // Splan is replaced by "<a href=" element instead
@@ -217,64 +217,89 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links) c
     }
 
     // not a replacement
-    bool in_span = hasAttribute("style");
+    bool in_span = hasAttribute("style") || !classname.isEmpty();
     if (in_span)
     {
         stream->writeStartElement("span");
         writeAttributes(stream);
+        if (!classname.isEmpty()) stream->writeAttribute("class", classname);
     }
     stream->writeCharacters(p_text);
 
     for (auto span: xmlChildren("span"))
     {
-        span->writeSpan(stream, links);
+        span->writeSpan(stream, links, QString());
     }
     if (in_span) stream->writeEndElement(); // span
 }
 
 
-void XmlElement::writePara(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix, const QString &value) const
+void XmlElement::writePara(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &label, const QString &bodytext) const
 {
     //qDebug() << "write paragraph";
     stream->writeStartElement("p");
     if (objectName() == "p") writeAttributes(stream);
-    if (!prefix.isEmpty())
+    // If there is no label, then set the class on the paragraph element,
+    // otherwise we will put the text inside a span with the given class.
+    bool class_set = false;
+    if (!label.isEmpty())
     {
         stream->writeStartElement("span");
-        stream->writeAttribute("class", "snippetLabel");
-        stream->writeCharacters(prefix + ": ");
+        stream->writeAttribute("class", "snippet_label");
+        stream->writeCharacters(label + ": ");
         stream->writeEndElement();
     }
-    if (!value.isEmpty())
+    else if (!classname.isEmpty())
     {
-        stream->writeCharacters(value);
+        stream->writeAttribute("class", classname);
+        class_set = true;
     }
-    for (auto child : xmlChildren())
+
+    if (!bodytext.isEmpty())
     {
-        if (child->objectName() == "span")
-            child->writeSpan(stream, links);
-        else if (child->objectName() == "p")
-            child->writePara(stream, links);
+        bool use_span = !label.isEmpty() && !classname.isEmpty();
+        if (use_span)
+        {
+            stream->writeStartElement("span");
+            stream->writeAttribute("class", classname);
+        }
+        stream->writeCharacters(bodytext);
+        if (use_span)
+        {
+            stream->writeEndElement();
+        }
+    }
+    for (auto child : xmlChildren("span"))
+    {
+        child->writeSpan(stream, links, class_set ? QString() : classname);
     }
     stream->writeEndElement();  // p
+
+    for (auto child : xmlChildren("p"))
+    {
+        child->writePara(stream, classname, links);
+    }
+}
+
+
+void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &first_label, const QString &first_bodytext) const
+{
+    //qDebug() << "write paragraph children";
+    bool first = true;
+    for (XmlElement *para: xmlChildren("p"))
+    {
+        if (first)
+            para->writePara(stream, classname, links, first_label, first_bodytext);
+        else
+            para->writePara(stream, classname, links);
+        first = false;
+    }
 }
 
 
 QString XmlElement::snippetName() const
 {
     return hasAttribute("facet_name") ? attribute("facet_name") : attribute("label");
-}
-
-
-void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix, const QString &value) const
-{
-    //qDebug() << "write paragraph children";
-    bool first = true;
-    for (XmlElement *para: xmlChildren("p"))
-    {
-        para->writePara(stream, links, first ? prefix : QString(), first ? value : QString());
-        first = false;
-    }
 }
 
 
@@ -290,9 +315,10 @@ static bool write_base64_file(const QString &filename, const QString &base64_dat
 /*
  * Return the divisor for the map's size
  */
-static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
-                     const QString &base64_data, XmlElement *mask_elem,
-                     const QString &filename, const QString &caption, const QString &usemap = QString())
+int XmlElement::writeImage(QXmlStreamWriter *stream, const LinkageList &links,
+                           const QString &image_name,
+                           const QString &base64_data, XmlElement *mask_elem,
+                           const QString &filename, XmlElement *annotation, const QString &usemap) const
 {
     QString format = filename.split(".").last();
     int divisor = 1;
@@ -301,7 +327,10 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
     stream->writeStartElement("figure");
 
     stream->writeStartElement("figcaption");
-    stream->writeCharacters(caption);
+    if (annotation)
+        annotation->writeParaChildren(stream, "annotation", links, image_name);
+    else
+        stream->writeCharacters(image_name);
     stream->writeEndElement();  // figcaption
 
     stream->writeStartElement("img");
@@ -361,7 +390,7 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
             stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format).arg(QString(buffer.data().toBase64())));
         }
     }
-    stream->writeAttribute("alt", alt_name);
+    stream->writeAttribute("alt", image_name);
     stream->writeEndElement();  // img
 
     stream->writeEndElement();  // figure
@@ -370,15 +399,17 @@ static int write_img(QXmlStreamWriter *stream, const QString &alt_name,
 }
 
 
-static void write_ext_object(QXmlStreamWriter *stream, const QString &prefix,
-                             const QString &base64_data, const QString &filename, const QString &suffix)
+void XmlElement::writeExtObject(QXmlStreamWriter *stream, const LinkageList &links,
+                                const QString &obj_name,
+                                const QString &base64_data, const QString &filename, XmlElement *annotation) const
 {
     if (!write_base64_file(filename, base64_data)) return;
 
     stream->writeStartElement("p");
+
     stream->writeStartElement("span");
-    stream->writeAttribute("class", "snippetLabel");
-    stream->writeCharacters(prefix + ": ");
+    stream->writeAttribute("class", "snippet_label");
+    stream->writeCharacters(obj_name + ": ");
     stream->writeEndElement();  // span
 
     stream->writeStartElement("span");
@@ -386,9 +417,9 @@ static void write_ext_object(QXmlStreamWriter *stream, const QString &prefix,
     stream->writeAttribute("href", filename);
     stream->writeCharacters(filename);
     stream->writeEndElement();  // a
-
-    if (!suffix.isEmpty()) stream->writeCharacters(" " + suffix);
     stream->writeEndElement();  // span
+
+    if (annotation) annotation->writeParaChildren(stream, "annotation", links);
     stream->writeEndElement();  // p
 }
 
@@ -397,20 +428,21 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
 {
     QString sn_type = attribute("type");
     //qDebug() << "snippet of type" << sn_type;
+
     if (sn_type == "Multi_Line")
     {
         // child is either <contents> or <gm_directions> or both
         for (XmlElement *contents: xmlChildren("contents"))
-            contents->writeParaChildren(stream, links);
+            contents->writeParaChildren(stream, "contents", links);
         for (XmlElement *gm_directions: xmlChildren("gm_directions"))
-            gm_directions->writeParaChildren(stream, links, "GM");
+            gm_directions->writeParaChildren(stream, "gm_directions", links, "GM");
     }
     else if (sn_type == "Labeled_Text")
     {
         for (XmlElement *contents: xmlChildren("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            contents->writeParaChildren(stream, links, snippetName());  // has its own 'p'
+            contents->writeParaChildren(stream, "contents", links, snippetName());  // has its own 'p'
         }
     }
     else if (sn_type == "Picture" ||
@@ -423,27 +455,26 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
              sn_type == "Rich_Text")
     {
         // ext_object child, asset grand-child
+        XmlElement *annotation = xmlChild("annotation");
         for (XmlElement *ext_object: xmlChildren("ext_object"))
         {
             for (XmlElement *asset: ext_object->xmlChildren("asset"))
             {
                 QString filename = asset->attribute("filename");
                 XmlElement *contents = asset->xmlChild("contents");
-                XmlElement *annotation = asset->xmlChild("annotation");
                 if (contents)
                 {
-                    QString caption = annotation ? (snippetName() + " : " + annotation->p_text) : snippetName();
                     if (sn_type == "Picture")
-                        write_img(stream, ext_object->attribute("name"), contents->p_text, nullptr, filename, caption);
+                        writeImage(stream, links, ext_object->attribute("name"), contents->p_text, nullptr, filename, annotation);
                     else
-                        write_ext_object(stream, ext_object->attribute("name"), contents->p_text, filename,
-                                         (annotation ? annotation->p_text : QString()));
+                        writeExtObject(stream, links, ext_object->attribute("name"), contents->p_text, filename, annotation);
                 }
             }
         }
     }
     else if (sn_type == "Smart_Image")
     {
+        XmlElement *annotation = xmlChild("annotation");
         // ext_object child, asset grand-child
         for (XmlElement *smart_image: xmlChildren("smart_image"))
         {
@@ -453,17 +484,13 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
 
             QString filename = asset->attribute("filename");
             XmlElement *contents = asset->xmlChild("contents");
-            XmlElement *annotation = asset->xmlChild("annotation");
             if (contents == nullptr) return;
-
-            QString caption = snippetName();
-            if (annotation) caption.append(" : " + annotation->p_text);
 
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             QString usemap;
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            int divisor = write_img(stream, smart_image->attribute("name"), contents->p_text, mask, filename, caption, usemap);
+            int divisor = writeImage(stream, links, smart_image->attribute("name"), contents->p_text, mask, filename, annotation, usemap);
 
             if (!pins.isEmpty())
             {
@@ -496,11 +523,11 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         XmlElement *annot = xmlChild("annotation");
         if (date == nullptr) return;
 
-        QString value = date->attribute("display");
+        QString bodytext = date->attribute("display");
         if (annot)
-            annot->writeParaChildren(stream, links, snippetName(), value);
+            annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else
-            writePara(stream, links, snippetName(), value);
+            writePara(stream, QString(), links, snippetName(), bodytext);
     }
     else if (sn_type == "Date_Range")
     {
@@ -508,11 +535,11 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         XmlElement *annot = xmlChild("annotation");
         if (date == nullptr) return;
 
-        QString value = "from " + date->attribute("display_start") + " to " + date->attribute("display_end");
+        QString bodytext = "from " + date->attribute("display_start") + " to " + date->attribute("display_end");
         if (annot)
-            annot->writeParaChildren(stream, links, snippetName(), value);
+            annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else
-            writePara(stream, links, snippetName(), value);
+            writePara(stream, QString(), links, snippetName(), bodytext);
     }
     else if (sn_type == "Tag_Standard")
     {
@@ -520,11 +547,11 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         XmlElement *annot = xmlChild("annotation");
         if (tag == nullptr) return;
 
-        QString value = tag->attribute("tag_name");
+        QString bodytext = tag->attribute("tag_name");
         if (annot)
-            annot->writeParaChildren(stream, links, snippetName(), value);
+            annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else
-            writePara(stream, links, snippetName(), value);
+            writePara(stream, QString(), links, snippetName(), bodytext);
     }
     else if (sn_type == "Numeric")
     {
@@ -532,11 +559,11 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         XmlElement *annot = xmlChild("annotation");
         if (contents == nullptr) return;
 
-        QString value = contents->p_text;
+        QString bodytext = contents->p_text;
         if (annot)
-            annot->writeParaChildren(stream, links, snippetName(), value);
+            annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else
-            writePara(stream, links, snippetName(), value);
+            writePara(stream, QString(), links, snippetName(), bodytext);
 
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -550,14 +577,13 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         {
             values.append(tag->attribute("domain_name") + ":" + tag->attribute("tag_name"));
         }
-        QString value = values.join("; ");
+        QString bodytext = values.join("; ");
         if (annot)
-            annot->writeParaChildren(stream, links, snippetName(), value);
+            annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else
-            writePara(stream, links, snippetName(), value);
+            writePara(stream, QString(), links, snippetName(), bodytext);
     }
     // Hybrid_Tag
-    // Smart_Image
 }
 
 
@@ -573,8 +599,6 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
     stream->writeAttribute("class", QString("section%1").arg(section_level));
     stream->writeCharacters(attribute("name"));
     stream->writeEndElement();
-
-    //qDebug() << "section" << attribute("name");
 
     // Write snippets
     for (XmlElement *snippet: xmlChildren("snippet"))
@@ -613,8 +637,11 @@ static void write_generic_css()
     css << "*.section1 {" << endl;
     css << "    background-color: lightblue;" << endl;
     css << "}\n" << endl;
-    css << "*.snippetLabel {" << endl;
+    css << "*.snippet_label {" << endl;
     css << "    font-weight: bold;" << endl;
+    css << "}\n" << endl;
+    css << "*.annotation {" << endl;
+    css << "    font-style: italic;" << endl;
     css << "}\n" << endl;
 }
 

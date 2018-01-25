@@ -46,6 +46,8 @@ void MainWindow::on_loadFile_clicked()
     }
     settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
 
+    ui->htmlOutput->setEnabled(false);
+
     ui->statusBar->showMessage("Loading RWoutput file...");
     root_element = XmlElement::readTree(&in_file);
     ui->statusBar->showMessage("RWoutput file LOAD complete.");

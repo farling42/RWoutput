@@ -46,9 +46,14 @@ private:
     typedef QList<Linkage> LinkageList;
     void writeSnippet(QXmlStreamWriter *stream, const LinkageList &links) const;
     void writeSection(QXmlStreamWriter *stream, const LinkageList &links) const;
-    void writeSpan(QXmlStreamWriter *stream, const LinkageList &links) const;
-    void writePara(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
-    void writeParaChildren(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
+    void writeSpan(QXmlStreamWriter *stream, const LinkageList &links, const QString &classname) const;
+    void writePara(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
+    void writeParaChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
+    int writeImage(QXmlStreamWriter *stream, const LinkageList &links, const QString &image_name,
+                   const QString &base64_data, XmlElement *mask_elem,
+                   const QString &filename, XmlElement *annotation, const QString &usemap = QString()) const;
+    void writeExtObject(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix,
+                        const QString &base64_data, const QString &filename, XmlElement *annotation) const;
     QString snippetName() const;
 };
 
