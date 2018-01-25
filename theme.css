@@ -1,0 +1,31 @@
+*.summary1 {
+    font-size: 25px;
+}
+*.summary2 {
+    font-size: 20px;
+}
+*.topic {
+    font-family: verdana;
+    font-size: 20px;
+    text-align: center;
+}
+*.section1 {
+    background-color: lightblue;
+}
+*.snippet_label {
+    font-weight: bold;
+}
+*.annotation {
+    font-style: italic;
+    margin-left: 20px;
+}
+*.gm_directions {
+    background-color: floralwhite;
+    border: 1px solid tan;
+}
+*.topic[topic_prefix]:before {
+    content: attr(topic_prefix) " - ";
+}
+*.topic[topic_suffix]:after {
+    content: " (" attr(topic_suffix) ")";
+}

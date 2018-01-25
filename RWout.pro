@@ -81,3 +81,6 @@ binarycreator.commands = D:\Qt\QtIFW-3.0.1\bin\binarycreator.exe --offline-only 
 
 QMAKE_EXTRA_COMPILERS += binarycreator
 }
+
+RESOURCES += \
+    rwout.qrc

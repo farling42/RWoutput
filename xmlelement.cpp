@@ -536,7 +536,10 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                                            .arg(pin->attribute("x").toInt() / divisor)
                                            .arg(pin->attribute("y").toInt() / divisor)
                                            .arg(10));
-                    stream->writeAttribute("href", pin->attribute("topic_id") + ".html");
+                    QString title = pin->attribute("pin_name");
+                    if (!title.isEmpty()) stream->writeAttribute("title", title);
+                    QString link = pin->attribute("topic_id");
+                    if (!link.isEmpty()) stream->writeAttribute("href", link + ".html");
                     if (description && !description->childString().isEmpty())
                     {
                         stream->writeAttribute("alt", description->childString());
@@ -648,36 +651,10 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
 
 static void write_generic_css()
 {
-    QFile file("theme.css");
-    if (!file.open(QFile::WriteOnly | QFile::Text)) return;
-    QTextStream css(&file);
-    css << "*.summary1 {" << endl;
-    css << "    font-size: 25px;" << endl;
-    css << "}" << endl;
-    css << "*.summary2 {" << endl;
-    css << "    font-size: 20px;" << endl;
-    css << "}" << endl;
-    css << endl;
-    css << "*.topic {" << endl;
-    css << "    font-family: verdana;" << endl;
-    css << "    font-size: 20px;" << endl;
-    css << "    text-align: center;" << endl;
-    css << "}" << endl;
-    css << endl;
-    css << "*.section1 {" << endl;
-    css << "    background-color: lightblue;" << endl;
-    css << "}\n" << endl;
-    css << "*.snippet_label {" << endl;
-    css << "    font-weight: bold;" << endl;
-    css << "}\n" << endl;
-    css << "*.annotation {" << endl;
-    css << "    font-style: italic;" << endl;
-    css << "    margin-left: 20px;" << endl;
-    css << "}\n" << endl;
-    css << "*.gm_directions {" << endl;
-    css << "    background-color: rgb(255,251,237);" << endl;
-    css << "    border: 1px solid rgb(210,180,140);" << endl;
-    css << "}\n" << endl;
+    // Use the file that is stored in the resource file
+    QFile destfile("theme.css");
+    if (destfile.exists()) destfile.remove();
+    QFile::copy(":/theme.css", destfile.fileName());
 }
 
 
@@ -739,6 +716,8 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
     {
         stream->writeAttribute("id", attribute("topic_id"));
     }
+    if (hasAttribute("prefix")) stream->writeAttribute("topic_prefix", attribute("prefix"));
+    if (hasAttribute("suffix")) stream->writeAttribute("topic_suffix", attribute("suffix"));
     stream->writeCharacters(attribute("public_name"));
     stream->writeEndElement();
 
