@@ -69,12 +69,6 @@ void XmlElement::dump_tree() const
 }
 
 
-XmlElement::XmlElement(QObject *parent) :
-    QObject(parent)
-{
-
-}
-
 XmlElement::XmlElement(const QString &fixed_text, QObject *parent) :
     QObject(parent)
 {
@@ -95,6 +89,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 {
     // Extract common data from this XML element
     setObjectName(reader->name().toString());
+
     //p_namespace_uri = reader->namespaceUri().toString();
 
     // Transfer all attributes into a map
@@ -102,7 +97,6 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
     p_attributes.reserve(attr.size());
     for (int idx=0; idx<attr.size(); idx++)
         p_attributes.append(Attribute(attr.at(idx).name().toString(), attr.at(idx).value().toString()));
-    bool after_children = false;
 
     // Now read the rest of this element
     while (!reader->atEnd())
@@ -110,32 +104,35 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
         switch (reader->readNext())
         {
         case QXmlStreamReader::StartElement:
-            //qDebug().noquote() << indentation << "StartElement:" << reader->name();
+            //qDebug().noquote() << "StartElement:" << reader->name();
             // The start of a child
             new XmlElement(reader, this);
-            after_children = true;
             break;
 
         case QXmlStreamReader::EndElement:
-            //qDebug().noquote() << indentation << "EndElement" << reader->name();
+            //qDebug().noquote() << "EndElement" << reader->name();
             // The end of this element
             return;
 
         case QXmlStreamReader::Characters:
             // Add the characters to the end of the text for this element.
-            if (!after_children && !reader->isWhitespace())
+            if (!reader->isWhitespace())
             {
-                //qDebug().noquote() << indentation << "Characters:" << reader->text();
+                //qDebug().noquote() << "Characters:" << reader->text();
                 QString body = reader->text().toString();
-                if (body.startsWith("<p class"))
+                if (body.startsWith("<p class") || body.startsWith("<table"))
                 {
                     // Convert what was previously translated XML into new XmlElement objects
                     // The stream reader requires a SINGLE top-level element
-                    body = "<top>" + body + "</top>";
+                    body = "<ignoretop>" + body + "</ignoretop>";
+                    // Do some substitutions to try and convert into XHTML.
+                    body = body.replace("<br>","<br/>");
+                    body = body.replace("<hr>","<hr/>");
+
                     QXmlStreamReader subreader(body);
+                    // Don't create an XmlElement for OUR top-level fake element
                     if (subreader.readNextStartElement())
                     {
-                        // Don't create an XmlElement for OUR top-level fake element
                         while (!subreader.atEnd())
                         {
                             if (subreader.readNext() == QXmlStreamReader::StartElement)
@@ -151,29 +148,29 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
             break;
 
         case QXmlStreamReader::Comment:
-            //qDebug().noquote() << indentation << "Comment:" << reader->text();
+            //qDebug().noquote() << "Comment:" << reader->text();
             break;
         case QXmlStreamReader::EntityReference:
             //qDebug().noquote() << "EntityReference:" << reader->name();
             break;
         case QXmlStreamReader::ProcessingInstruction:
-            //qDebug().noquote() << indentation << "ProcessingInstruction";
+            //qDebug().noquote() << "ProcessingInstruction";
             break;
         case QXmlStreamReader::NoToken:
-            //qDebug().noquote() << indentation << "NoToken";
+            //qDebug().noquote() << "NoToken";
             break;
         case QXmlStreamReader::Invalid:
-            //qDebug().noquote() << indentation << "Invalid:" << reader->errorString();
+            //qDebug().noquote() << "Invalid:" << reader->errorString();
             break;
         case QXmlStreamReader::StartDocument:
-            //qDebug().noquote() << indentation << "StartDocument:" << reader->documentVersion();
+            //qDebug().noquote() << "StartDocument:" << reader->documentVersion();
             setObjectName("StartDocument");
             break;
         case QXmlStreamReader::EndDocument:
-            //qDebug().noquote() << indentation << "EndDocument";
+            //qDebug().noquote() << "EndDocument";
             return;
         case QXmlStreamReader::DTD:
-            //qDebug().noquote() << indentation << "DTD:" << reader->text();
+            //qDebug().noquote() << "DTD:" << reader->text();
             break;
         }
     }
@@ -247,7 +244,7 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links, c
             {
                 stream->writeStartElement("a");
                 if (separate_topic_files)
-                    stream->writeAttribute("href", link.id + ".html");
+                    stream->writeAttribute("href", link.id + ".xhtml");
                 else
                     stream->writeAttribute("href", "#" + link.id);
                 stream->writeCharacters(p_fixed_text);  // case might be different
@@ -279,9 +276,20 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links, c
 
 void XmlElement::writePara(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &label, const QString &bodytext) const
 {
+    if (objectName() == FIXED_STRING_NAME)
+    {
+        writeSpan(stream, links, classname);
+        return;
+    }
+
     //qDebug() << "write paragraph";
-    stream->writeStartElement("p");
-    if (objectName() == "p") writeAttributes(stream);
+    if (objectName() == "snippet")
+        stream->writeStartElement("p");
+    else
+    {
+        stream->writeStartElement(objectName());
+        writeAttributes(stream);
+    }
     // If there is no label, then set the class on the paragraph element,
     // otherwise we will put the text inside a span with the given class.
     bool class_set = false;
@@ -300,32 +308,17 @@ void XmlElement::writePara(QXmlStreamWriter *stream, const QString &classname, c
 
     if (!bodytext.isEmpty())
     {
-#if 1
         stream->writeCharacters(bodytext);
-#else
-        bool use_span = !label.isEmpty() && !classname.isEmpty();
-        if (use_span)
-        {
-            stream->writeStartElement("span");
-            stream->writeAttribute("class", classname);
-        }
-        stream->writeCharacters(bodytext);
-        if (use_span)
-        {
-            stream->writeEndElement();
-        }
-#endif
     }
-    for (auto child : xmlChildren("span"))
+    for (auto child : xmlChildren())
     {
-        child->writeSpan(stream, links, class_set ? QString() : classname);
+        if (child->objectName() == "span")
+            child->writeSpan(stream, links, class_set ? QString() : classname);
+        else if (child->objectName() != "tag_assign")
+            // Ignore certain children
+            child->writePara(stream, classname, links);
     }
     stream->writeEndElement();  // p
-
-    for (auto child : xmlChildren("p"))
-    {
-        child->writePara(stream, classname, links);
-    }
 }
 
 
@@ -333,7 +326,7 @@ void XmlElement::writeParaChildren(QXmlStreamWriter *stream, const QString &clas
 {
     //qDebug() << "write paragraph children";
     bool first = true;
-    for (XmlElement *para: xmlChildren("p"))
+    for (XmlElement *para: xmlChildren())
     {
         if (first)
             para->writePara(stream, classname, links, first_label, first_bodytext);
@@ -563,7 +556,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                     QString title = pin->attribute("pin_name");
                     if (!title.isEmpty()) stream->writeAttribute("title", title);
                     QString link = pin->attribute("topic_id");
-                    if (!link.isEmpty()) stream->writeAttribute("href", link + ".html");
+                    if (!link.isEmpty()) stream->writeAttribute("href", link + ".xhtml");
                     if (description && !description->childString().isEmpty())
                     {
                         stream->writeAttribute("alt", description->childString());
@@ -652,7 +645,7 @@ void XmlElement::writeSection(QXmlStreamWriter *stream, const LinkageList &links
 
     // Start with HEADER for the section
     ++section_level;
-    stream->writeStartElement(QString("H%1").arg(header_level + section_level));
+    stream->writeStartElement(QString("h%1").arg(header_level + section_level));
     stream->writeAttribute("class", QString("section%1").arg(section_level));
     stream->writeCharacters(attribute("name"));
     stream->writeEndElement();
@@ -711,17 +704,19 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
     if (separate_topic_files)
     {
         header_level = 0;
-        topic_file.setFileName(attribute("topic_id") + ".html");
+        topic_file.setFileName(attribute("topic_id") + ".xhtml");
         if (!topic_file.open(QFile::WriteOnly))
         {
             qWarning() << "Failed to open output file for topic" << topic_file.fileName();
             return;
         }
+        topic_file.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">");
         stream = new QXmlStreamWriter(&topic_file);
         stream->setAutoFormatting(true);
         stream->setAutoFormattingIndent(2);
 
         stream->writeStartElement("html");
+        stream->writeAttribute("xmlns", "http://www.w3.org/1999/xhtml");
         stream->writeStartElement("head");
 
         // Put <meta charset="UTF-8"> into header.
@@ -731,12 +726,13 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
         stream->writeTextElement("title", attribute("public_name"));
 
         stream->writeEndElement(); // head
+        stream->writeStartElement("body");
     }
 
     //qDebug() << "topic" << attribute("public_name");
 
     // Start with HEADER for the topic
-    stream->writeStartElement(QString("H%1").arg(++header_level));
+    stream->writeStartElement(QString("h%1").arg(++header_level));
     stream->writeAttribute("class", "topic");
     if (!separate_topic_files)
     {
@@ -767,6 +763,7 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 
     if (separate_topic_files)
     {
+        stream->writeEndElement(); // body
         stream->writeEndElement(); // html
         header_level = prev_header_level + 1;
 
@@ -821,6 +818,7 @@ void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image
     if (this->objectName() == "output")
     {
         stream.writeStartElement("html");
+        stream.writeAttribute("xmlns", "http://www.w3.org/1999/xhtml");
         for (XmlElement *child: xmlChildren())
         {
             if (child->objectName() == "definition")

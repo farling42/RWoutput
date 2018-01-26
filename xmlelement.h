@@ -28,7 +28,6 @@ class XmlElement : public QObject
 {
     Q_OBJECT
 public:
-    XmlElement(QObject *parent = 0);
     XmlElement(QXmlStreamReader*, QObject *parent = 0);
 
     static XmlElement *readTree(QIODevice*);
@@ -74,6 +73,7 @@ private:
     QString snippetName() const;
     XmlElement(const QString &fixed_text, QObject *parent);
     QString childString() const;
+    void writeChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &first_label, const QString &first_bodytext) const;
 };
 
 #endif // XMLELEMENT_H

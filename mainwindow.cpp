@@ -84,12 +84,12 @@ void MainWindow::on_saveHtml_clicked()
         // we'll create index.html in that directory
         QString out_directory = QFileDialog::getExistingDirectory(this, tr("Output Directory"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString());
         if (out_directory.isEmpty()) return;
-        out_file.setFileName(out_directory + "/index.html");
+        out_file.setFileName(out_directory + "/index.xhtml");
     }
     else
     {
         // Enter a filename to generate a single massive file
-        QString out_filename = QFileDialog::getSaveFileName(this, tr("HTML File"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(), /*template*/ tr("HTML Files (*.html)"));
+        QString out_filename = QFileDialog::getSaveFileName(this, tr("XHTML File"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(), /*template*/ tr("XHTML Files (*.xhtml)"));
         if (out_filename.isEmpty()) return;
         out_file.setFileName(out_filename);
     }
@@ -103,11 +103,13 @@ void MainWindow::on_saveHtml_clicked()
     settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
     QDir::setCurrent(QFileInfo(out_file).path());
 
+    out_file.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">");
+
     bool ok = true;
     int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
     if (!ok) max_image_width = -1;
-    ui->statusBar->showMessage("Saving HTML file...");
+    ui->statusBar->showMessage("Saving XHTML file...");
     QXmlStreamWriter out_stream(&out_file);
     root_element->toHtml(out_stream, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
-    ui->statusBar->showMessage("HTML file SAVE complete.");
+    ui->statusBar->showMessage("XHTML file SAVE complete.");
 }
