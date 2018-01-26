@@ -58,7 +58,7 @@ DISTFILES += \
 
 # Put binarycreator packages files in the correct place
 bincre.path=$${OUT_PWD}
-bincre.files=Installer/packages
+bincre.files=Installer/packages ${DISTFILES}
 INSTALLS += bincre
 
 # Add new rule that will run the binarycreator (needs adding in Projects/Build Steps)
@@ -71,15 +71,14 @@ QMAKE_EXTRA_TARGETS += binarycreator
 
 INSTALLERS = Installer/config/config.xml
 
-binarycreator.input = INSTALLERS
-binarycreator.name = binarycreator
-binarycreator.depends = $$INSTALLERS install install_bincre
-binarycreator.output = RWoutput.exe
-binarycreator.variable_out = HEADERS
-binarycreator.commands = D:\Qt\QtIFW-3.0.1\bin\binarycreator.exe --offline-only \
-    -c ${QMAKE_FILE_IN} -p packages ${QMAKE_FILE_OUT}
+#binarycreator.input = INSTALLERS
+#binarycreator.name = binarycreator
+#binarycreator.depends = $$INSTALLERS install install_bincre
+#binarycreator.output = RWoutput.exe
+#binarycreator.variable_out = HEADERS
+#binarycreator.commands = D:\Qt\QtIFW-3.0.1\bin\binarycreator.exe --offline-only -c ${QMAKE_FILE_IN} -p packages ${QMAKE_FILE_OUT}
 
-QMAKE_EXTRA_COMPILERS += binarycreator
+#QMAKE_EXTRA_COMPILERS += binarycreator
 }
 
 RESOURCES += \
