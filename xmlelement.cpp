@@ -120,7 +120,10 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
             {
                 //qDebug().noquote() << "Characters:" << reader->text();
                 QString body = reader->text().toString();
-                if (body.startsWith("<p class") || body.startsWith("<table"))
+                // Some things shouldn't be converted.
+                bool is_image = parent->objectName() == "asset" &&
+                        objectName() != "annotation";
+                if (!is_image && reader->text().left(1) == "<")
                 {
                     // Convert what was previously translated XML into new XmlElement objects
                     // The stream reader requires a SINGLE top-level element
