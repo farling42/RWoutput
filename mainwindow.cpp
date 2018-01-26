@@ -103,13 +103,12 @@ void MainWindow::on_saveHtml_clicked()
     settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
     QDir::setCurrent(QFileInfo(out_file).path());
 
-    out_file.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">");
-
     bool ok = true;
     int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
     if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving XHTML file...");
     QXmlStreamWriter out_stream(&out_file);
-    root_element->toHtml(out_stream, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
+
+    root_element->toHtml(&out_stream, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }

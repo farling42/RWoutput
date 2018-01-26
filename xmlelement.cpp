@@ -677,17 +677,31 @@ static void write_generic_css()
 }
 
 
-static void write_generic_header(QXmlStreamWriter *stream)
+static void start_file(QXmlStreamWriter *stream)
 {
+    stream->setAutoFormatting(true);
+    stream->setAutoFormattingIndent(2);
+
+    stream->writeStartDocument();
+    stream->writeDTD("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+    stream->writeStartElement("html");
+    stream->writeDefaultNamespace("http://www.w3.org/1999/xhtml");
+
+    stream->writeStartElement("head");
+
     stream->writeStartElement("meta");
-    stream->writeAttribute("charset", "UTF-8");
-    stream->writeEndElement();
+    stream->writeAttribute("http-equiv", "Content-Type");
+    stream->writeAttribute("content", "text/html");
+    stream->writeAttribute("charset", "utf-8");
+    stream->writeEndElement(); // meta
 
     stream->writeStartElement("link");
     stream->writeAttribute("rel", "stylesheet");
     stream->writeAttribute("type", "text/css");
     stream->writeAttribute("href", "theme.css");
-    stream->writeEndElement();
+    stream->writeEndElement();  // link
+
+    // Caller needs to do writeEndElement for "head" and "html"
 }
 
 
@@ -710,22 +724,15 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
             qWarning() << "Failed to open output file for topic" << topic_file.fileName();
             return;
         }
-        topic_file.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">");
+
         stream = new QXmlStreamWriter(&topic_file);
-        stream->setAutoFormatting(true);
-        stream->setAutoFormattingIndent(2);
 
-        stream->writeStartElement("html");
-        stream->writeAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-        stream->writeStartElement("head");
-
-        // Put <meta charset="UTF-8"> into header.
-        // Note that lack of a proper "/>" at the end.
-        write_generic_header(stream);
+        start_file(stream);
 
         stream->writeTextElement("title", attribute("public_name"));
 
         stream->writeEndElement(); // head
+
         stream->writeStartElement("body");
     }
 
@@ -763,12 +770,14 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 
     if (separate_topic_files)
     {
+        // Complete the individual topic file
         stream->writeEndElement(); // body
         stream->writeEndElement(); // html
         header_level = prev_header_level + 1;
 
         delete stream;
         topic_file.close();
+
         stream = orig_stream;
 
         // Now write an entry into the main stream.
@@ -805,7 +814,7 @@ void XmlElement::writeTopic(QXmlStreamWriter *orig_stream) const
 }
 
 
-void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width, bool use_reveal_mask) const
+void XmlElement::toHtml(QXmlStreamWriter *stream, bool multi_page, int max_image_width, bool use_reveal_mask) const
 {
     image_max_width      = max_image_width;
     separate_topic_files = multi_page;
@@ -813,58 +822,49 @@ void XmlElement::toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image
 
     write_generic_css();
 
-    stream.setAutoFormatting(true);
-    stream.setAutoFormattingIndent(2);
     if (this->objectName() == "output")
     {
-        stream.writeStartElement("html");
-        stream.writeAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+        start_file(stream);
         for (XmlElement *child: xmlChildren())
         {
             if (child->objectName() == "definition")
             {
-                stream.writeStartElement("head");
-
-                // Put <meta charset="UTF-8"> into header.
-                // Note that lack of a proper "/>" at the end.
-                write_generic_header(&stream);
-
                 for (XmlElement *header: child->xmlChildren())
                 {
                     if (header->objectName() == "details")
                     {
-                        stream.writeTextElement("title", header->attribute("name"));
+                        stream->writeTextElement("title", header->attribute("name"));
                     }
                 }
-                stream.writeEndElement();  // head
+                stream->writeEndElement();  // head
             }
             else if (child->objectName() == "contents")
             {
-                stream.writeStartElement("body");
+                stream->writeStartElement("body");
 
                 // Outer wrapper for summary page
                 if (separate_topic_files)
                 {
                     // next level for the children
-                    stream.writeStartElement(QString("ul"));
-                    stream.writeAttribute("class", QString("summary1"));
+                    stream->writeStartElement(QString("ul"));
+                    stream->writeAttribute("class", QString("summary1"));
                 }
 
                 for (XmlElement *topic: child->xmlChildren("topic"))
                 {
-                    topic->writeTopic(&stream);
+                    topic->writeTopic(stream);
                 }
 
                 // Outer wrapper for summary page
                 if (separate_topic_files)
                 {
-                    stream.writeEndElement();   // ul
+                    stream->writeEndElement();   // ul
                 }
 
-                stream.writeEndElement(); // body
+                stream->writeEndElement(); // body
             }
         }
-        stream.writeEndElement(); // html
+        stream->writeEndElement(); // html
     }
 }
 

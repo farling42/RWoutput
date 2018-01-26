@@ -32,7 +32,7 @@ public:
 
     static XmlElement *readTree(QIODevice*);
 
-    void toHtml(QXmlStreamWriter &stream, bool multi_page, int max_image_width, bool use_reveal_mask) const;
+    void toHtml(QXmlStreamWriter *stream, bool multi_page, int max_image_width, bool use_reveal_mask) const;
 
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;
