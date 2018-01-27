@@ -83,3 +83,20 @@ INSTALLERS = Installer/config/config.xml
 
 RESOURCES += \
     rwout.qrc
+
+DISTFILES +=
+
+win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/ -lgumbo
+else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/debug/ -lgumbo
+else:win32:!win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/release/ -lgumbo
+else:win32:!win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/debug/ -lgumbo
+else:unix: LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/ -lgumbo
+
+INCLUDEPATH += $$PWD/../gumbo
+DEPENDPATH += $$PWD/../gumbo
+
+win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/libgumbo.a
+else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/debug/libgumbo.a
+else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/release/gumbo.lib
+else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/debug/gumbo.lib
+else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/libgumbo.a

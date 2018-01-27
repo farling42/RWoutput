@@ -23,12 +23,14 @@
 #include <QIODevice>
 #include <QXmlStreamReader>
 #include <QXmlStreamAttributes>
+#include "gumbo.h"
 
 class XmlElement : public QObject
 {
     Q_OBJECT
 public:
     XmlElement(QXmlStreamReader*, QObject *parent = 0);
+    XmlElement(GumboNode *info, QObject *parent);
 
     static XmlElement *readTree(QIODevice*);
 

@@ -24,6 +24,7 @@
 #include <QImage>
 #include <QMetaEnum>
 #include <QPainter>
+#include "gumbo.h"
 
 static int dump_indentation = 0;
 
@@ -77,6 +78,69 @@ XmlElement::XmlElement(const QString &fixed_text, QObject *parent) :
 }
 
 
+static void create_children(GumboNode *node, QObject *parent)
+{
+    GumboVector *children = &node->v.element.children;
+    for (unsigned i=0; i<children->length; i++)
+    {
+        GumboNode *child = static_cast<GumboNode*>(children->data[i]);
+        switch (child->type)
+        {
+        case GUMBO_NODE_TEXT:
+        case GUMBO_NODE_ELEMENT:
+            new XmlElement(child, parent);
+            break;
+
+        case GUMBO_NODE_WHITESPACE:
+            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_WHITESPACE";
+            break;
+        case GUMBO_NODE_DOCUMENT:
+            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_DOCUMENT";
+            break;
+        case GUMBO_NODE_CDATA:
+            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_CDATA";
+            break;
+        case GUMBO_NODE_COMMENT:
+            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_COMMENT";
+            break;
+        case GUMBO_NODE_TEMPLATE:
+            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_TEMPLATE";
+            break;
+        }
+    }
+}
+
+/**
+ * @brief XmlElement::XmlElement
+ * Creates an XmlElement tree from the provided GumboNode tree.
+ * @param node
+ * @param parent
+ */
+XmlElement::XmlElement(GumboNode *node, QObject *parent) :
+    QObject(parent)
+{
+    if (node->type == GUMBO_NODE_TEXT)
+    {
+        setObjectName(FIXED_STRING_NAME);
+        p_fixed_text = node->v.text.text;
+        return;
+    }
+    // otherwise it is a NODE
+    setObjectName(gumbo_normalized_tagname(node->v.element.tag));
+    //qDebug() << "XmlElement(gumbo) =" << objectName();
+
+    const GumboVector *attribs = &node->v.element.attributes;
+    for (unsigned i=0; i<attribs->length; i++)
+    {
+        GumboAttribute *at = static_cast<GumboAttribute*>(attribs->data[i]);
+        p_attributes.append(Attribute(at->name, at->value));
+        //qDebug() << "    attribute:" << at->name << "=" << at->value;
+    }
+
+    create_children(node, this);
+}
+
+
 QString XmlElement::childString() const
 {
     XmlElement *child = xmlChild(FIXED_STRING_NAME);
@@ -119,31 +183,33 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
             if (!reader->isWhitespace())
             {
                 //qDebug().noquote() << "Characters:" << reader->text();
-                QString body = reader->text().toString();
                 // Some things shouldn't be converted.
                 bool is_image = parent->objectName() == "asset" &&
                         objectName() != "annotation";
                 if (!is_image && reader->text().left(1) == "<")
                 {
-                    // Convert what was previously translated XML into new XmlElement objects
-                    // The stream reader requires a SINGLE top-level element
-                    body = "<ignoretop>" + body + "</ignoretop>";
-                    // Do some substitutions to try and convert into XHTML.
-                    body = body.replace("<br>","<br/>");
-                    body = body.replace("<hr>","<hr/>");
+                    //
+                    // Use the GUMBO library to parse the HTML5 code.
+                    //
+                    // It uses pointers into the original data, so we have to store
+                    // the QByteArray until gumbo_destroy_output is called.
+                    //
+                    QByteArray text(reader->text().toUtf8());
+                    GumboOutput *output = gumbo_parse(text);
+                    // The output will be
+                    // <html>
+                    //   <head/>
+                    //   <body>
+                    //     the nodes that we want
 
-                    QXmlStreamReader subreader(body);
-                    // Don't create an XmlElement for OUR top-level fake element
-                    if (subreader.readNextStartElement())
+                    // Check that HTML has at least 2 children: head and body
+                    if (output->root->v.element.children.length >= 2)
                     {
-                        while (!subreader.atEnd())
-                        {
-                            if (subreader.readNext() == QXmlStreamReader::StartElement)
-                            {
-                                new XmlElement(&subreader, this);
-                            }
-                        }
+                        GumboNode *body_node = static_cast<GumboNode*>(output->root->v.element.children.data[1]);
+                        create_children(body_node, this);
                     }
+                    // Get GUMBO to release all the memory
+                    gumbo_destroy_output(&kGumboDefaultOptions, output);
                 }
                 else
                     new XmlElement(reader->text().toString(), this);
