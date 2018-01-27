@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Installer>
     <Name>Realm Works Output Formatter</Name>
-    <Version>1.9</Version>
+    <Version>1.10</Version>
     <Title>Realm Works Output Formatter</Title>
     <Publisher>Martin Smith</Publisher>
     <ProductUrl>https://github.com/farling42/RWout</ProductUrl>
