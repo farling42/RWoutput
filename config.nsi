@@ -3,12 +3,8 @@
 
 !include "MUI2.nsh"
 
-!define APPNAME      "RW Output Converter"
+!define APPNAME      "Realm Works Output Converter"
 !define COMPANYNAME  "Amusing Time"
-# These three must be integers
-!define VERSIONMAJOR 1
-!define VERSIONMINOR 10
-!define VERSIONBUILD 0
 !define DESCRIPTION  "A tool to convert a Realm Works Output file into XHTML"
 
 #define name of installer
@@ -39,6 +35,10 @@ Section
    # create the uninstaller
    WriteUninstaller "$INSTDIR\uninstall.exe"
 
+   # Get the version of the file we just installed
+   var /GLOBAL VERSION
+   ${GetFileVersion} "$INSTDIR\RWout.exe" $VERSION
+
    # Start Menu
    CreateDirectory "$SMPROGRAMS\${COMPANYNAME}"
    CreateShortCut  "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk" "$INSTDIR\RWout.exe"
@@ -53,9 +53,7 @@ Section
    WriteRegStr HKLM "${ARP}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
    WriteRegStr HKLM "${ARP}" "InstallLocation" "$\"$INSTDIR$\""
    WriteRegStr HKLM "${ARP}" "Publisher"       "Amusing Time"
-   WriteRegStr HKLM "${ARP}" "DisplayVersion"  "$\"${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONBUILD}$\""
-   WriteRegStr HKLM "${ARP}" "VersionMajor"    ${VERSIONMAJOR}
-   WriteRegStr HKLM "${ARP}" "VersionMinor"    ${VERSIONMINOR}
+   WriteRegStr HKLM "${ARP}" "DisplayVersion"  "$\"$VERSION$\""
    # There is no option for modifying or repairing the install
    WriteRegDWORD HKLM "${ARP}" "NoModify" 1
    WriteRegDWORD HKLM "${ARP}" "NoRepair" 1
