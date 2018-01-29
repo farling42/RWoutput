@@ -51,6 +51,7 @@ private:
         Attribute(const QString &name, const QString &value) : name(name), value(value) {}
     };
     QString p_fixed_text;
+    QByteArray p_byte_data;
     QList<Attribute> p_attributes;
     void dump_tree() const;
     void writeHtml(QXmlStreamWriter *writer) const;
@@ -68,10 +69,10 @@ private:
     void writePara(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
     void writeParaChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
     int writeImage(QXmlStreamWriter *stream, const LinkageList &links, const QString &image_name,
-                   const QString &base64_data, XmlElement *mask_elem,
+                   const QByteArray &data, XmlElement *mask_elem,
                    const QString &filename, XmlElement *annotation, const QString &usemap = QString()) const;
     void writeExtObject(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix,
-                        const QString &base64_data, const QString &filename, XmlElement *annotation) const;
+                        const QByteArray &data, const QString &filename, XmlElement *annotation) const;
     QString snippetName() const;
     XmlElement(const QString &fixed_text, QObject *parent);
     QString childString() const;
