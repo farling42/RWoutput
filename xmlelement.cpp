@@ -141,10 +141,11 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
 }
 
 
-QString XmlElement::childString() const
+QString &XmlElement::childString() const
 {
     XmlElement *child = xmlChild(FIXED_STRING_NAME);
-    return child ? child->p_fixed_text : QString();
+    static QString no_value;
+    return child ? child->p_fixed_text : no_value;
 }
 
 
@@ -318,6 +319,7 @@ void XmlElement::writeSpan(QXmlStreamWriter *stream, const LinkageList &links, c
     //qDebug() << "write span";
     if (objectName() == FIXED_STRING_NAME)
     {
+        // TODO - the span containing the link might have style or class information!
         // Check to see if the fixed text should be replaced with a link.
         for (auto link : links)
         {
@@ -461,7 +463,7 @@ int XmlElement::writeImage(QXmlStreamWriter *stream, const LinkageList &links,
     {
         QImage image = QImage::fromData(orig_data, qPrintable(format));
 
-        if (mask_elem != nullptr || (image_max_width > 0 || image.width() > image_max_width))
+        if (mask_elem != nullptr || (image_max_width > 0 && image.width() > image_max_width))
         {
             // Apply mask, if supplied
             if (mask_elem && apply_reveal_mask)
@@ -620,7 +622,6 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                 stream->writeAttribute("name", usemap);
                 for (auto pin : pins)
                 {
-                    XmlElement *description = pin->xmlChild("description");
                     stream->writeStartElement("area");
                     stream->writeAttribute("shape", "circle");
                     stream->writeAttribute("coords", QString("%1,%2,%3")
@@ -631,6 +632,8 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
                     if (!title.isEmpty()) stream->writeAttribute("title", title);
                     QString link = pin->attribute("topic_id");
                     if (!link.isEmpty()) stream->writeAttribute("href", link + ".xhtml");
+
+                    XmlElement *description = pin->xmlChild("description");
                     if (description && !description->childString().isEmpty())
                     {
                         stream->writeAttribute("alt", description->childString());
@@ -683,7 +686,7 @@ void XmlElement::writeSnippet(QXmlStreamWriter *stream, const LinkageList &links
         XmlElement *annot = xmlChild("annotation");
         if (contents == nullptr) return;
 
-        QString bodytext = contents->childString();
+        const QString &bodytext = contents->childString();
         if (annot)
             annot->writeParaChildren(stream, "annotation", links, snippetName(), bodytext);
         else

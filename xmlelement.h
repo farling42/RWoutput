@@ -75,7 +75,7 @@ private:
                         const QByteArray &data, const QString &filename, XmlElement *annotation) const;
     QString snippetName() const;
     XmlElement(const QString &fixed_text, QObject *parent);
-    QString childString() const;
+    QString &childString() const;
     void writeChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &first_label, const QString &first_bodytext) const;
 };
 
