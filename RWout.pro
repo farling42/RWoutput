@@ -4,6 +4,8 @@
 #
 #-------------------------------------------------
 
+VERSION = 1.10
+
 QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
@@ -54,9 +56,9 @@ DESTDIR = packages/$${COMPANY}/data
 # The DISTFILE appears in the "Other files" section of Qt Creator
 DISTFILES += \
     Installer/config/config.xml \
-    Installer/packages/com.amusingtime.RWoutput/meta/package.xml \
-    Installer/packages/com.amusingtime.RWoutput/meta/installscript.qs \
-    Installer/packages/com.amusingtime.RWoutput/meta/LICENSE.txt
+    Installer/packages/$${COMPANY}/meta/package.xml \
+    Installer/packages/$${COMPANY}/meta/installscript.qs \
+    Installer/packages/$${COMPANY}/meta/LICENSE.txt
 
 # Put binarycreator packages files in the correct place
 bincre.path=$${OUT_PWD}
@@ -64,23 +66,6 @@ bincre.files=Installer/packages ${DISTFILES}
 INSTALLS += bincre
 
 # Add new rule that will run the binarycreator (needs adding in Projects/Build Steps)
-QMAKE_EXTRA_TARGETS += binarycreator
-#binarycreator.target = binarycreator
-#binarycreator.depends = $${PWD}/Installer/config/config.xml packages install
-#binarycreator.commands = D:\Qt\QtIFW-3.0.1\bin\binarycreator.exe --offline-only \
-#    -c $$shell_path($${PWD}/Installer/config/config.xml) \
-#    -p packages RWout.exe
-
-INSTALLERS = Installer/config/config.xml
-
-#binarycreator.input = INSTALLERS
-#binarycreator.name = binarycreator
-#binarycreator.depends = $$INSTALLERS install install_bincre
-#binarycreator.output = RWoutput.exe
-#binarycreator.variable_out = HEADERS
-#binarycreator.commands = D:\Qt\QtIFW-3.0.1\bin\binarycreator.exe --offline-only -c ${QMAKE_FILE_IN} -p packages ${QMAKE_FILE_OUT}
-
-#QMAKE_EXTRA_COMPILERS += binarycreator
 }
 
 RESOURCES += \

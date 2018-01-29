@@ -35,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->saveHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
     ui->htmlOutput->setEnabled(false);
+    ui->statusBar->showMessage(qApp->applicationName() + " version " + qApp->applicationVersion());
 }
 
 MainWindow::~MainWindow()
