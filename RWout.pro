@@ -37,8 +37,7 @@ HEADERS += \
     outputhtml.h
 
 FORMS += \
-        mainwindow.ui \
-    Installer/packages/com.amusingtime.RWoutput/meta/page.ui
+        mainwindow.ui
 
 macx {
 MACDEPLOYQT_OPTIONS = -verbose 3 -dmg
@@ -51,27 +50,25 @@ CONFIG += windeployqt
 
 COMPANY = com.amusingtime.RWOutput
 
-DESTDIR = packages/$${COMPANY}/data
+DESTDIR = install
 
 # The DISTFILE appears in the "Other files" section of Qt Creator
-DISTFILES += \
-    Installer/config/config.xml \
-    Installer/packages/$${COMPANY}/meta/package.xml \
-    Installer/packages/$${COMPANY}/meta/installscript.qs \
-    Installer/packages/$${COMPANY}/meta/LICENSE.txt
+DISTFILES += LICENSE \
+    config.nsi
 
-# Put binarycreator packages files in the correct place
-bincre.path=$${OUT_PWD}
-bincre.files=Installer/packages ${DISTFILES}
-INSTALLS += bincre
-
-# Add new rule that will run the binarycreator (needs adding in Projects/Build Steps)
+# Installation on Windows is performed using NSIS (see http://nsis.sourceforge.net/)
+# On Project page, under "Run" step.
+# 1 - add a "Make" step with the following:
+#     Make arguments = "-f Makefile.%{CurrentBuild:Name} windeployqt"
+# 2 - add a "Custom" step with the following:
+#     Command   = "C:\Program Files (x86)\NSIS\makeNSIS.exe"
+#     Arguments = "/nocd /DVERSION=%{Env:VERSION} %{CurrentProject:NativePath}\config.nsi"
+#     Working Directory = "%{buildDir}"
 }
 
 RESOURCES += \
     rwout.qrc
 
-DISTFILES +=
 
 win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/ -lgumbo
 else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/debug/ -lgumbo
