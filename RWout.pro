@@ -26,11 +26,13 @@ DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x051000    # disables all the APIs depr
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
-    xmlelement.cpp
+    xmlelement.cpp \
+    outputhtml.cpp
 
 HEADERS += \
         mainwindow.h \
-    xmlelement.h
+    xmlelement.h \
+    outputhtml.h
 
 FORMS += \
         mainwindow.ui \

@@ -22,6 +22,7 @@
 #include <QFileDialog>
 #include <QSettings>
 #include "xmlelement.h"
+#include "outputhtml.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -64,6 +65,7 @@ void MainWindow::on_loadFile_clicked()
     settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
 
     ui->htmlOutput->setEnabled(false);
+    ui->filename->setText(QFileInfo(in_file).fileName());
 
     ui->statusBar->showMessage("Loading RWoutput file...");
     root_element = XmlElement::readTree(&in_file);
@@ -109,6 +111,6 @@ void MainWindow::on_saveHtml_clicked()
     ui->statusBar->showMessage("Saving XHTML file...");
     QXmlStreamWriter out_stream(&out_file);
 
-    root_element->toHtml(&out_stream, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
+    OutputHtml::toHtml(&out_stream, root_element, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }

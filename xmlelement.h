@@ -34,16 +34,15 @@ public:
 
     static XmlElement *readTree(QIODevice*);
 
-    void toHtml(QXmlStreamWriter *stream, bool multi_page, int max_image_width, bool use_reveal_mask) const;
-
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;
+    bool isFixedString() const;
+    inline QString fixedText() const { return p_fixed_text; }
 
     QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
     QList<XmlElement *> childrenWithAttributes(const QString &attribute, const QString &value = QString()) const;
     XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
 
-private:
     // objectName == XML element title
     struct Attribute {
         QString name;
@@ -54,29 +53,10 @@ private:
     QByteArray p_byte_data;
     QList<Attribute> p_attributes;
     void dump_tree() const;
-    void writeHtml(QXmlStreamWriter *writer) const;
-    void writeTopic(QXmlStreamWriter *stream) const;
-    void writeAttributes(QXmlStreamWriter *stream) const;
-    struct Linkage {
-        QString name;
-        QString id;
-        Linkage(const QString &name, const QString &id) : name(name), id(id) {}
-    };
-    typedef QList<Linkage> LinkageList;
-    void writeSnippet(QXmlStreamWriter *stream, const LinkageList &links) const;
-    void writeSection(QXmlStreamWriter *stream, const LinkageList &links) const;
-    void writeSpan(QXmlStreamWriter *stream, const LinkageList &links, const QString &classname) const;
-    void writePara(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
-    void writeParaChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &prefix = QString(), const QString &value = QString()) const;
-    int writeImage(QXmlStreamWriter *stream, const LinkageList &links, const QString &image_name,
-                   const QByteArray &data, XmlElement *mask_elem,
-                   const QString &filename, XmlElement *annotation, const QString &usemap = QString()) const;
-    void writeExtObject(QXmlStreamWriter *stream, const LinkageList &links, const QString &prefix,
-                        const QByteArray &data, const QString &filename, XmlElement *annotation) const;
     QString snippetName() const;
+    QString childString() const;
+private:
     XmlElement(const QString &fixed_text, QObject *parent);
-    QString &childString() const;
-    void writeChildren(QXmlStreamWriter *stream, const QString &classname, const LinkageList &links, const QString &first_label, const QString &first_bodytext) const;
 };
 
 #endif // XMLELEMENT_H
