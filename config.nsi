@@ -20,6 +20,7 @@ InstallDir "$PROGRAMFILES\${COMPANYNAME}\${APPNAME}"
 
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
 
 !define ARP "Software\Microsoft\Windows\CurrentVersion\Uninstall\${COMPANYNAME} ${APPNAME}"
 !include "FileFunc.nsh"
