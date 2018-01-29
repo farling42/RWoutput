@@ -14,12 +14,16 @@ OutFile "RWoutput-installer.exe"
 # define installation directory
 InstallDir "$PROGRAMFILES\${COMPANYNAME}\${APPNAME}"
 
+# Pages for installing
 !insertmacro MUI_PAGE_LICENSE "..\RWoutput\LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 
+# Pages for uninstalling
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+
+# The language to be used for the above pages (must appear after the pages)
 !insertmacro MUI_LANGUAGE "English"
 
 !define ARP "Software\Microsoft\Windows\CurrentVersion\Uninstall\${COMPANYNAME} ${APPNAME}"
