@@ -610,17 +610,26 @@ static int header_level = 0;
 
 void writeTopicToIndex(XmlElement *topic)
 {
+    auto child_topics = topic->xmlChildren("topic");
+    bool has_kids = !child_topics.isEmpty();
+
     stream->writeStartElement("li");
+
+    if (has_kids)
+    {
+        stream->writeStartElement("details");
+        stream->writeAttribute("open", "true");
+        stream->writeStartElement("summary");
+    }
     stream->writeStartElement("a");
     stream->writeAttribute("href", topic->attribute("topic_id") + ".xhtml");
     stream->writeCharacters(topic->attribute("public_name"));
     stream->writeEndElement();   // a
-    stream->writeEndElement();   // li
 
-    auto child_topics = topic->xmlChildren("topic");
-
-    if (!child_topics.isEmpty())
+    if (has_kids)
     {
+        stream->writeEndElement();  // summary
+
         ++header_level;
 
         // next level for the children
@@ -634,7 +643,10 @@ void writeTopicToIndex(XmlElement *topic)
 
         stream->writeEndElement();   // ul
         --header_level;
+        stream->writeEndElement();  // details
     }
+
+    stream->writeEndElement();   // li
 }
 
 
