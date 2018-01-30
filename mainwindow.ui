@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>252</width>
-    <height>254</height>
+    <height>231</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -60,7 +60,7 @@ FILE</string>
             <property name="sizeHint" stdset="0">
              <size>
               <width>0</width>
-              <height>75</height>
+              <height>0</height>
              </size>
             </property>
            </spacer>
@@ -117,16 +117,6 @@ HTML</string>
               <string>2048</string>
              </property>
             </item>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="oneTopicPerFile">
-            <property name="toolTip">
-             <string>Put each topic into a separate file, and include a summary page</string>
-            </property>
-            <property name="text">
-             <string>One Topic Per File</string>
-            </property>
            </widget>
           </item>
           <item>

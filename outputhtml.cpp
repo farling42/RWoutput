@@ -28,7 +28,6 @@
 #include "xmlelement.h"
 
 static int image_max_width = -1;
-static bool separate_topic_files = false;
 static bool apply_reveal_mask = true;
 static QXmlStreamWriter *stream = 0;
 
@@ -57,8 +56,44 @@ typedef QList<Linkage> LinkageList;
  *   <H1 id="<target_id>">...</H1>
  * @return
  */
-static int header_level = 0;
-static int section_level = 0;
+
+static void write_generic_css()
+{
+    // Use the file that is stored in the resource file
+    QFile destfile("theme.css");
+    if (destfile.exists()) destfile.remove();
+    QFile::copy(":/theme.css", destfile.fileName());
+    // Qt copies the file and makes it read-only!
+    destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
+}
+
+
+static void start_file()
+{
+    stream->setAutoFormatting(true);
+    stream->setAutoFormattingIndent(2);
+
+    stream->writeStartDocument();
+    stream->writeDTD("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+    stream->writeStartElement("html");
+    stream->writeDefaultNamespace("http://www.w3.org/1999/xhtml");
+
+    stream->writeStartElement("head");
+
+    stream->writeStartElement("meta");
+    stream->writeAttribute("http-equiv", "Content-Type");
+    stream->writeAttribute("content", "text/html");
+    stream->writeAttribute("charset", "utf-8");
+    stream->writeEndElement(); // meta
+
+    stream->writeStartElement("link");
+    stream->writeAttribute("rel", "stylesheet");
+    stream->writeAttribute("type", "text/css");
+    stream->writeAttribute("href", "theme.css");
+    stream->writeEndElement();  // link
+
+    // Caller needs to do writeEndElement for "head" and "html"
+}
 
 
 void writeAttributes(XmlElement *elem)
@@ -89,10 +124,7 @@ void writeSpan(XmlElement *elem, const LinkageList &links, const QString &classn
             if (link.name.compare(elem->fixedText(), Qt::CaseInsensitive) == 0)
             {
                 stream->writeStartElement("a");
-                if (separate_topic_files)
-                    stream->writeAttribute("href", link.id + ".xhtml");
-                else
-                    stream->writeAttribute("href", "#" + link.id);
+                stream->writeAttribute("href", link.id + ".xhtml");
                 stream->writeCharacters(elem->fixedText());  // case might be different
                 stream->writeEndElement();  // a
                 return;
@@ -482,17 +514,17 @@ void writeSnippet(XmlElement *snippet, const LinkageList &links)
 }
 
 
+static int section_level = 0;
+
 void writeSection(XmlElement *section, const LinkageList &links)
 {
 #if DUMP_LEVEL > 2
     qDebug() << "..section" << section->attribute("name");
 #endif
 
-    int prev_section_level = section_level;
-
     // Start with HEADER for the section
     ++section_level;
-    stream->writeStartElement(QString("h%1").arg(header_level + section_level));
+    stream->writeStartElement(QString("h%1").arg(section_level));
     stream->writeAttribute("class", QString("section%1").arg(section_level));
     stream->writeCharacters(section->attribute("name"));
     stream->writeEndElement();
@@ -509,46 +541,7 @@ void writeSection(XmlElement *section, const LinkageList &links)
         writeSection(subsection, links);
     }
 
-    section_level = prev_section_level;
-}
-
-
-static void write_generic_css()
-{
-    // Use the file that is stored in the resource file
-    QFile destfile("theme.css");
-    if (destfile.exists()) destfile.remove();
-    QFile::copy(":/theme.css", destfile.fileName());
-    // Qt copies the file and makes it read-only!
-    destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
-}
-
-
-static void start_file()
-{
-    stream->setAutoFormatting(true);
-    stream->setAutoFormattingIndent(2);
-
-    stream->writeStartDocument();
-    stream->writeDTD("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
-    stream->writeStartElement("html");
-    stream->writeDefaultNamespace("http://www.w3.org/1999/xhtml");
-
-    stream->writeStartElement("head");
-
-    stream->writeStartElement("meta");
-    stream->writeAttribute("http-equiv", "Content-Type");
-    stream->writeAttribute("content", "text/html");
-    stream->writeAttribute("charset", "utf-8");
-    stream->writeEndElement(); // meta
-
-    stream->writeStartElement("link");
-    stream->writeAttribute("rel", "stylesheet");
-    stream->writeAttribute("type", "text/css");
-    stream->writeAttribute("href", "theme.css");
-    stream->writeEndElement();  // link
-
-    // Caller needs to do writeEndElement for "head" and "html"
+    --section_level;
 }
 
 
@@ -558,35 +551,26 @@ void writeTopic(XmlElement *topic)
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
 #endif
 
-    int prev_header_level = header_level;
-    QXmlStreamWriter *orig_stream = 0;
-    QFile topic_file;
-
-    section_level = 0;
-
-    if (separate_topic_files)
+    // Create a new file for this topic
+    QFile topic_file(topic->attribute("topic_id") + ".xhtml");
+    if (!topic_file.open(QFile::WriteOnly))
     {
-        header_level = 0;
-        topic_file.setFileName(topic->attribute("topic_id") + ".xhtml");
-        if (!topic_file.open(QFile::WriteOnly))
-        {
-            qWarning() << "Failed to open output file for topic" << topic_file.fileName();
-            return;
-        }
-
-        // Switch output to the new stream.
-        orig_stream = stream;
-        stream = new QXmlStreamWriter(&topic_file);
-
-        start_file();
-        stream->writeTextElement("title", topic->attribute("public_name"));
-        stream->writeEndElement(); // head
-
-        stream->writeStartElement("body");
+        qWarning() << "Failed to open output file for topic" << topic_file.fileName();
+        return;
     }
 
+    // Switch output to the new stream.
+    QXmlStreamWriter topic_stream(&topic_file);
+    stream = &topic_stream;
+
+    start_file();
+    stream->writeTextElement("title", topic->attribute("public_name"));
+    stream->writeEndElement(); // head
+
+    stream->writeStartElement("body");
+
     // Start with HEADER for the topic
-    stream->writeStartElement(QString("h%1").arg(++header_level));
+    stream->writeStartElement(QString("h1"));
     stream->writeAttribute("class", "topic");
     stream->writeAttribute("id", topic->attribute("topic_id"));
     if (topic->hasAttribute("prefix")) stream->writeAttribute("topic_prefix", topic->attribute("prefix"));
@@ -605,69 +589,65 @@ void writeTopic(XmlElement *topic)
     }
 
     // Process all <sections>, applying the linkage for this topic
+    section_level = 0;
     for (auto section: topic->xmlChildren("section"))
     {
         writeSection(section, links);
     }
 
+    // Complete the individual topic file
+    stream->writeEndElement(); // body
+    stream->writeEndElement(); // html
+
+    stream = 0;
+}
+
+/*
+ * Write entries into the INDEX file
+ */
+
+static int header_level = 0;
+
+void writeTopicToIndex(XmlElement *topic)
+{
+    stream->writeStartElement("li");
+    stream->writeStartElement("a");
+    stream->writeAttribute("href", topic->attribute("topic_id") + ".xhtml");
+    stream->writeCharacters(topic->attribute("public_name"));
+    stream->writeEndElement();   // a
+    stream->writeEndElement();   // li
+
     auto child_topics = topic->xmlChildren("topic");
 
-    if (separate_topic_files)
+    if (!child_topics.isEmpty())
     {
-        // Complete the individual topic file
-        stream->writeEndElement(); // body
-        stream->writeEndElement(); // html
-        header_level = prev_header_level + 1;
+        ++header_level;
 
-        delete stream;
-        topic_file.close();
+        // next level for the children
+        stream->writeStartElement(QString("ul"));
+        stream->writeAttribute("class", QString("summary%1").arg(header_level));
 
-        // Switch output back to the original stream.
-        stream = orig_stream;
-
-        // Now write an entry into the main stream.
-
-        stream->writeStartElement("li");
-        stream->writeStartElement("a");
-        stream->writeAttribute("href", topic_file.fileName());
-        stream->writeCharacters(topic->attribute("public_name"));
-        stream->writeEndElement();   // a
-        stream->writeEndElement();   // li
-        // UL not finished until after we do the child topics
-
-        if (!child_topics.isEmpty())
+        for (auto child_topic: child_topics)
         {
-            // next level for the children
-            stream->writeStartElement(QString("ul"));
-            stream->writeAttribute("class", QString("summary%1").arg(header_level+1));
+            writeTopicToIndex(child_topic);
         }
-    }
 
-    // Process <tag_assigns>
-    // Process all child topics
-    for (auto child_topic: child_topics)
-    {
-        writeTopic(child_topic);
-    }
-
-    if (separate_topic_files && !child_topics.isEmpty())
-    {
         stream->writeEndElement();   // ul
+        --header_level;
     }
-
-    header_level = prev_header_level;
 }
 
 
-void OutputHtml::toHtml(QXmlStreamWriter *out_stream, XmlElement *root_elem,
-                        bool multi_page, int max_image_width, bool use_reveal_mask)
+void writeIndex(XmlElement *root_elem)
 {
-    image_max_width      = max_image_width;
-    separate_topic_files = multi_page;
-    apply_reveal_mask    = use_reveal_mask;
-    stream               = out_stream;
-
-    write_generic_css();
+    QFile out_file("index.xhtml");
+    if (!out_file.open(QFile::WriteOnly))
+    {
+        qWarning() << "Failed to find file" << out_file.fileName();
+        return;
+    }
+    QXmlStreamWriter out_stream(&out_file);
+    stream = &out_stream;
 
     if (root_elem->objectName() == "output")
     {
@@ -694,29 +674,74 @@ void OutputHtml::toHtml(QXmlStreamWriter *out_stream, XmlElement *root_elem,
             else if (child->objectName() == "contents")
             {
                 stream->writeStartElement("body");
-
-                // Outer wrapper for summary page
-                if (separate_topic_files)
+#if 1
+                // Root level of topics
+                auto main_topics = child->xmlChildren("topic");
+                QMultiMap<QString,XmlElement*> categories;
+                for (auto topic: main_topics)
                 {
-                    // next level for the children
+                    categories.insert(topic->attribute("category_name"), topic);
+                }
+
+                QStringList unique_keys(categories.keys());
+                unique_keys.removeDuplicates();
+                unique_keys.sort();
+
+                for (auto cat : unique_keys)
+                {
+                    stream->writeStartElement("details");
+                    stream->writeAttribute("open", "true");
+                    stream->writeAttribute("class", "indexCategory");
+
+                    stream->writeStartElement("summary");
+                    stream->writeCharacters(cat);
+                    stream->writeEndElement();  // summary
+
                     stream->writeStartElement(QString("ul"));
                     stream->writeAttribute("class", QString("summary1"));
-                }
 
-                for (auto topic: child->xmlChildren("topic"))
-                {
-                    writeTopic(topic);
-                }
-
-                // Outer wrapper for summary page
-                if (separate_topic_files)
-                {
+                    for (auto topic: categories.values(cat))
+                    {
+                        writeTopicToIndex(topic);
+                    }
                     stream->writeEndElement();   // ul
+                    stream->writeEndElement();  // details
                 }
+#else
+                // Outer wrapper for summary page
+
+                for (auto topic: main_topics)
+                {
+                    writeTopicToIndex(topic);
+                }
+                // Outer wrapper for summary page
+#endif
 
                 stream->writeEndElement(); // body
             }
         }
         stream->writeEndElement(); // html
+    }
+
+    stream = 0;
+}
+
+
+void OutputHtml::toHtml(XmlElement *root_elem,
+                        int max_image_width, bool use_reveal_mask)
+{
+    image_max_width   = max_image_width;
+    apply_reveal_mask = use_reveal_mask;
+
+    writeIndex(root_elem);
+
+    write_generic_css();
+
+    // Write out the individual TOPIC files now:
+    // Note use of findChildren to find children at all levels,
+    // whereas xmlChildren returns only direct children.
+    for (auto topic : root_elem->findChildren<XmlElement*>("topic"))
+    {
+        writeTopic(topic);
     }
 }

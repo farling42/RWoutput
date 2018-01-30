@@ -80,38 +80,21 @@ void MainWindow::on_saveHtml_clicked()
     QSettings settings;
     const QString SAVE_DIRECTORY_PARAM("outputDirectory");
 
-    QFile out_file;
-    if (ui->oneTopicPerFile->isChecked())
-    {
-        // Choose a directory in which to generate all the files:
-        // we'll create index.html in that directory
-        QString out_directory = QFileDialog::getExistingDirectory(this, tr("Output Directory"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString());
-        if (out_directory.isEmpty()) return;
-        out_file.setFileName(out_directory + "/index.xhtml");
-    }
-    else
-    {
-        // Enter a filename to generate a single massive file
-        QString out_filename = QFileDialog::getSaveFileName(this, tr("XHTML File"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(), /*template*/ tr("XHTML Files (*.xhtml)"));
-        if (out_filename.isEmpty()) return;
-        out_file.setFileName(out_filename);
-    }
+    // Choose a directory in which to generate all the files:
+    // we'll create index.html in that directory
+    QString dir_name = QFileDialog::getExistingDirectory(this, tr("Output Directory"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString());
+    if (dir_name.isEmpty()) return;
 
-    if (!out_file.open(QFile::WriteOnly))
-    {
-        qWarning() << tr("Failed to find file") << out_file.fileName();
-        return;
-    }
-
-    settings.setValue(SAVE_DIRECTORY_PARAM, QFileInfo(out_file).absolutePath());
-    QDir::setCurrent(QFileInfo(out_file).path());
+    QFileInfo info(dir_name);
+    if (!info.exists()) return;
+    settings.setValue(SAVE_DIRECTORY_PARAM, dir_name);
+    QDir::setCurrent(dir_name);
 
     bool ok = true;
     int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
     if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving XHTML file...");
-    QXmlStreamWriter out_stream(&out_file);
 
-    OutputHtml::toHtml(&out_stream, root_element, ui->oneTopicPerFile->isChecked(), max_image_width, ui->revealMask->isChecked());
+    OutputHtml::toHtml(root_element, max_image_width, ui->revealMask->isChecked());
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }

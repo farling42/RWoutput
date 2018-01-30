@@ -26,7 +26,7 @@ class OutputHtml
 public:
     OutputHtml() {}
 
-    static void toHtml(QXmlStreamWriter *stream, XmlElement *elem, bool multi_page, int max_image_width, bool use_reveal_mask);
+    static void toHtml(XmlElement *elem, int max_image_width, bool use_reveal_mask);
 };
 
 #endif // OUTPUTHTML_H
