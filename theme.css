@@ -20,7 +20,15 @@
     background-color: floralwhite;
     border: 1px solid tan;
 }
-
+nav {
+    float: left;
+    border: 2px solid;
+    width: 20%;
+    margin-right: 10px;
+}
+section {
+    overflow:hidden;
+}
 /* Formatting for the prefix and/or suffix of Topics */
 .topic[topic_prefix]:before {
     content: attr(topic_prefix) " - ";

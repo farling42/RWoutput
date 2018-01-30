@@ -30,6 +30,7 @@
 static int image_max_width = -1;
 static bool apply_reveal_mask = true;
 static QXmlStreamWriter *stream = 0;
+static bool always_show_index = false;
 
 struct Linkage {
     QString name;
@@ -57,14 +58,20 @@ typedef QList<Linkage> LinkageList;
  * @return
  */
 
-static void write_generic_css()
+static void write_support_files()
 {
-    // Use the file that is stored in the resource file
-    QFile destfile("theme.css");
-    if (destfile.exists()) destfile.remove();
-    QFile::copy(":/theme.css", destfile.fileName());
-    // Qt copies the file and makes it read-only!
-    destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
+    // Use the files that are stored in the resource file
+    QStringList files;
+    files << "theme.css" << "scripts.js";
+
+    for (auto filename : files)
+    {
+        QFile destfile(filename);
+        if (destfile.exists()) destfile.remove();
+        QFile::copy(":/" + filename, destfile.fileName());
+        // Qt copies the file and makes it read-only!
+        destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
+    }
 }
 
 
@@ -77,6 +84,13 @@ static void start_file()
     stream->writeDTD("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
     stream->writeStartElement("html");
     stream->writeDefaultNamespace("http://www.w3.org/1999/xhtml");
+
+    // The script element MUST have a separate terminating token
+    // for DOMParser::parseFromString() to work properly.
+    stream->writeStartElement("script");
+    stream->writeAttribute("src", "scripts.js");
+    stream->writeCharacters(" ");  // to force generation of terminator
+    stream->writeEndElement();
 
     stream->writeStartElement("head");
 
@@ -570,13 +584,24 @@ void writeTopic(XmlElement *topic)
     stream->writeStartElement("body");
 
     // Start with HEADER for the topic
+    stream->writeStartElement("header");
     stream->writeStartElement(QString("h1"));
     stream->writeAttribute("class", "topic");
     stream->writeAttribute("id", topic->attribute("topic_id"));
     if (topic->hasAttribute("prefix")) stream->writeAttribute("topic_prefix", topic->attribute("prefix"));
     if (topic->hasAttribute("suffix")) stream->writeAttribute("topic_suffix", topic->attribute("suffix"));
     stream->writeCharacters(topic->attribute("public_name"));
-    stream->writeEndElement();
+    stream->writeEndElement();  // h1
+    stream->writeEndElement();  // header
+
+    if (always_show_index)
+    {
+        stream->writeStartElement("nav");
+        stream->writeAttribute("include-html", "index.xhtml");
+        stream->writeEndElement();  // nav
+    }
+
+    stream->writeStartElement("section");
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -595,6 +620,13 @@ void writeTopic(XmlElement *topic)
         writeSection(section, links);
     }
 
+    stream->writeEndElement();  // section
+
+    // Include the INDEX file
+    stream->writeStartElement("script");
+    stream->writeCharacters("includeHTML();");
+    stream->writeEndElement();
+
     // Complete the individual topic file
     stream->writeEndElement(); // body
     stream->writeEndElement(); // html
@@ -607,6 +639,13 @@ void writeTopic(XmlElement *topic)
  */
 
 static int header_level = 0;
+
+
+static bool sort_by_public_name(const XmlElement *left, const XmlElement *right)
+{
+    return left->attribute("public_name") < right->attribute("public_name");
+}
+
 
 void writeTopicToIndex(XmlElement *topic)
 {
@@ -635,6 +674,8 @@ void writeTopicToIndex(XmlElement *topic)
         // next level for the children
         stream->writeStartElement(QString("ul"));
         stream->writeAttribute("class", QString("summary%1").arg(header_level));
+
+        std::sort(child_topics.begin(), child_topics.end(), sort_by_public_name);
 
         for (auto child_topic: child_topics)
         {
@@ -702,7 +743,12 @@ void writeIndex(XmlElement *root_elem)
                 for (auto cat : unique_keys)
                 {
                     stream->writeStartElement("details");
-                    stream->writeAttribute("open", "true");
+                    // If we are displaying the index on each page,
+                    // then it is better to have categories not expanded.
+                    if (!always_show_index)
+                    {
+                        stream->writeAttribute("open", "true");
+                    }
                     stream->writeAttribute("class", "indexCategory");
 
                     stream->writeStartElement("summary");
@@ -712,7 +758,11 @@ void writeIndex(XmlElement *root_elem)
                     stream->writeStartElement(QString("ul"));
                     stream->writeAttribute("class", QString("summary1"));
 
-                    for (auto topic: categories.values(cat))
+                    // Organise topics alphabetically
+                    auto topics = categories.values(cat);
+                    std::sort(topics.begin(), topics.end(), sort_by_public_name);
+
+                    for (auto topic: topics)
                     {
                         writeTopicToIndex(topic);
                     }
@@ -740,14 +790,17 @@ void writeIndex(XmlElement *root_elem)
 
 
 void OutputHtml::toHtml(XmlElement *root_elem,
-                        int max_image_width, bool use_reveal_mask)
+                        int max_image_width,
+                        bool use_reveal_mask,
+                        bool index_on_every_page)
 {
     image_max_width   = max_image_width;
     apply_reveal_mask = use_reveal_mask;
+    always_show_index = index_on_every_page;
 
     writeIndex(root_elem);
 
-    write_generic_css();
+    write_support_files();
 
     // Write out the individual TOPIC files now:
     // Note use of findChildren to find children at all levels,

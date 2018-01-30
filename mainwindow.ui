@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>252</width>
-    <height>231</height>
+    <width>263</width>
+    <height>254</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -133,6 +133,13 @@ HTML</string>
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="indexOnEveryPage">
+            <property name="text">
+             <string>Index on every page</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="verticalSpacer_3">
             <property name="orientation">
              <enum>Qt::Vertical</enum>
@@ -158,7 +165,7 @@ HTML</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>252</width>
+     <width>263</width>
      <height>21</height>
     </rect>
    </property>

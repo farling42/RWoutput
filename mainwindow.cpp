@@ -95,6 +95,9 @@ void MainWindow::on_saveHtml_clicked()
     if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving XHTML file...");
 
-    OutputHtml::toHtml(root_element, max_image_width, ui->revealMask->isChecked());
+    OutputHtml::toHtml(root_element, max_image_width,
+                       ui->revealMask->isChecked(),
+                       ui->indexOnEveryPage->isChecked());
+
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }

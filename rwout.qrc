@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>theme.css</file>
+        <file>scripts.js</file>
     </qresource>
 </RCC>
