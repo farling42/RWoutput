@@ -588,10 +588,7 @@ void writeTopic(XmlElement *topic)
     // Start with HEADER for the topic
     stream->writeStartElement(QString("h%1").arg(++header_level));
     stream->writeAttribute("class", "topic");
-    if (!separate_topic_files)
-    {
-        stream->writeAttribute("id", topic->attribute("topic_id"));
-    }
+    stream->writeAttribute("id", topic->attribute("topic_id"));
     if (topic->hasAttribute("prefix")) stream->writeAttribute("topic_prefix", topic->attribute("prefix"));
     if (topic->hasAttribute("suffix")) stream->writeAttribute("topic_suffix", topic->attribute("suffix"));
     stream->writeCharacters(topic->attribute("public_name"));
