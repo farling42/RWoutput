@@ -29,7 +29,7 @@ class XmlElement : public QObject
 {
     Q_OBJECT
 public:
-    XmlElement(QXmlStreamReader*, QObject *parent = 0);
+    XmlElement(QXmlStreamReader*, QObject *parent = nullptr);
     XmlElement(GumboNode *info, QObject *parent);
 
     static XmlElement *readTree(QIODevice*);

@@ -21,13 +21,11 @@
 #include <QXmlStreamWriter>
 class XmlElement;
 
-class OutputHtml
-{
-public:
-    OutputHtml() {}
-
-    static void toHtml(XmlElement *elem, int max_image_width, bool use_reveal_mask,
-                       bool index_on_every_page);
-};
+void toHtml(const QString &path,
+            XmlElement *root_elem,
+            int max_image_width,
+            bool separate_files,
+            bool use_reveal_mask,
+            bool index_on_every_page);
 
 #endif // OUTPUTHTML_H

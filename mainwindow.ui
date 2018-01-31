@@ -120,6 +120,16 @@ HTML</string>
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="separateTopicFiles">
+            <property name="text">
+             <string>Separate Topic Files</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QCheckBox" name="revealMask">
             <property name="toolTip">
              <string>Have all smart images show the reveal mask</string>

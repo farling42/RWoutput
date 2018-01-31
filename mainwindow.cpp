@@ -82,22 +82,35 @@ void MainWindow::on_saveHtml_clicked()
 
     // Choose a directory in which to generate all the files:
     // we'll create index.html in that directory
-    QString dir_name = QFileDialog::getExistingDirectory(this, tr("Output Directory"), /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString());
-    if (dir_name.isEmpty()) return;
+    bool separate_files = ui->separateTopicFiles->isChecked();
+    QString path = (separate_files)
+            ? QFileDialog::getExistingDirectory(this, tr("Output Directory"),
+                                                /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString())
+            : path = QFileDialog::getSaveFileName(this, tr("Output File"),
+                                                  /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(),
+                                                  /*filter*/ "XHTML files (*.xhtml)");
 
-    QFileInfo info(dir_name);
-    if (!info.exists()) return;
-    settings.setValue(SAVE_DIRECTORY_PARAM, dir_name);
-    QDir::setCurrent(dir_name);
+    if (path.isEmpty()) return;
+    QDir dir(separate_files ? path : QFileInfo(path).absolutePath());
+
+    if (!dir.exists())
+    {
+        ui->statusBar->showMessage("The directory does not exist!");
+        return;
+    }
+    settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
+    QDir::setCurrent(dir.absolutePath());
 
     bool ok = true;
     int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
     if (!ok) max_image_width = -1;
     ui->statusBar->showMessage("Saving XHTML file...");
 
-    OutputHtml::toHtml(root_element, max_image_width,
-                       ui->revealMask->isChecked(),
-                       ui->indexOnEveryPage->isChecked());
+    toHtml(path, root_element,
+           max_image_width,
+           separate_files,
+           ui->revealMask->isChecked(),
+           ui->indexOnEveryPage->isChecked());
 
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }

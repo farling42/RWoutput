@@ -26,6 +26,9 @@ nav {
     width: 20%;
     margin-right: 10px;
 }
+header {
+    background-color: gainsboro;
+}
 section {
     overflow:hidden;
 }
@@ -36,9 +39,8 @@ section {
 .topic[topic_suffix]:after {
     content: " (" attr(topic_suffix) ")";
 }
-
 /* Auto-numbering of sections within topics */
-.topic {
+section {
     counter-reset: s1counter;
 }
 .section1:before {

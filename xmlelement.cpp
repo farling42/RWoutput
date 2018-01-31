@@ -254,14 +254,14 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 
 XmlElement *XmlElement::readTree(QIODevice *device)
 {
-    XmlElement *root_element = 0;
+    XmlElement *root_element = nullptr;
     QXmlStreamReader reader;
     reader.setDevice(device);
 
     // Move to the start of the first element
     if (reader.readNextStartElement())
     {
-        root_element = new XmlElement(&reader, 0);
+        root_element = new XmlElement(&reader, nullptr);
     }
 
     if (reader.hasError())
