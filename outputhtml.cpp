@@ -43,6 +43,11 @@ typedef QList<Linkage> LinkageList;
 
 #define DUMP_LEVEL 0
 
+static bool sort_by_public_name(const XmlElement *left, const XmlElement *right)
+{
+    return left->attribute("public_name") < right->attribute("public_name");
+}
+
 
 /**
  * @brief OutputHtml::toHtml
@@ -627,9 +632,35 @@ void writeTopicBody(XmlElement *topic)
         writeSection(section, links);
     }
 
+    // Provide summary of links to child topics
+    auto child_topics = topic->xmlChildren("topic");
+    std::sort(child_topics.begin(), child_topics.end(), sort_by_public_name);
+
+    if (!child_topics.isEmpty())
+    {
+        stream->writeStartElement("footer");
+        stream->writeStartElement("h2");
+        stream->writeAttribute("class", "childTopicsHeader");
+        stream->writeCharacters("Child Topics");
+        stream->writeEndElement();
+        stream->writeStartElement("ul");
+        for (auto child: child_topics)
+        {
+            stream->writeStartElement("li");
+            stream->writeAttribute("class", "childTopicsEntry");
+            stream->writeStartElement("a");
+            writeTopicHref(child->attribute("topic_id"));
+            stream->writeCharacters(child->attribute("public_name"));
+            stream->writeEndElement();   // a
+            stream->writeEndElement(); // li
+        }
+        stream->writeEndElement(); // ul
+        stream->writeEndElement(); // footer
+    }
+
     if (in_single_file)
     {
-        for (auto child_topic: topic->xmlChildren("topic"))
+        for (auto child_topic: child_topics)
         {
             writeTopicBody(child_topic);
         }
@@ -688,12 +719,6 @@ void writeTopicFile(XmlElement *topic)
 /*
  * Write entries into the INDEX file
  */
-
-static bool sort_by_public_name(const XmlElement *left, const XmlElement *right)
-{
-    return left->attribute("public_name") < right->attribute("public_name");
-}
-
 
 void writeTopicToIndex(XmlElement *topic)
 {

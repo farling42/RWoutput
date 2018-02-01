@@ -6,6 +6,9 @@
     font-size: 20px;
     text-align: center;
 }
+.childTopicsHeader {
+    background-color: lightgreen;
+}
 .section1 {
     background-color: lightblue;
 }

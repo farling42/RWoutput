@@ -36,6 +36,9 @@ MainWindow::MainWindow(QWidget *parent) :
     // No options available until a file has been loaded.
     ui->htmlOutput->setEnabled(false);
     ui->statusBar->showMessage(qApp->applicationName() + " version " + qApp->applicationVersion());
+
+    connect(ui->separateTopicFiles, &QCheckBox::clicked, ui->indexOnEveryPage, &QCheckBox::setEnabled);
+    ui->indexOnEveryPage->setEnabled(ui->separateTopicFiles->isChecked());
 }
 
 MainWindow::~MainWindow()
@@ -110,7 +113,7 @@ void MainWindow::on_saveHtml_clicked()
            max_image_width,
            separate_files,
            ui->revealMask->isChecked(),
-           ui->indexOnEveryPage->isChecked());
+           separate_files && ui->indexOnEveryPage->isChecked());
 
     ui->statusBar->showMessage("XHTML file SAVE complete.");
 }
