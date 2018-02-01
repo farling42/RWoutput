@@ -32,6 +32,13 @@ nav {
 header {
     background-color: gainsboro;
 }
+.nameAlias:before {
+    content: "Alias: ";
+    font-weight: bold;
+}
+.nameAlias {
+    font-style: italic;
+}
 section {
     overflow:hidden;
 }

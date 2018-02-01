@@ -50,7 +50,7 @@ void MainWindow::on_loadFile_clicked()
 {
     QSettings settings;
     const QString LOAD_DIRECTORY_PARAM("inputDirectory");
-    QString in_filename = QFileDialog::getOpenFileName(this, tr("RWoutput File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
+    QString in_filename = QFileDialog::getOpenFileName(this, tr("Realm Works Output File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
     if (in_filename.isEmpty()) return;
 
     // Delete any previously loaded data
@@ -60,7 +60,8 @@ void MainWindow::on_loadFile_clicked()
         root_element = nullptr;
     }
 
-    QFile in_file(in_filename);
+    in_file.setFileName(in_filename);
+
     if (!in_file.open(QFile::ReadOnly))
     {
         qWarning() << tr("Failed to find file") << in_file.fileName();
@@ -76,6 +77,7 @@ void MainWindow::on_loadFile_clicked()
     ui->statusBar->showMessage("RWoutput file LOAD complete.");
 
     ui->htmlOutput->setEnabled(true);
+    in_file.close();
 }
 
 void MainWindow::on_saveHtml_clicked()
@@ -86,12 +88,13 @@ void MainWindow::on_saveHtml_clicked()
     // Choose a directory in which to generate all the files:
     // we'll create index.html in that directory
     bool separate_files = ui->separateTopicFiles->isChecked();
-    QString path = (separate_files)
+    QString start_dir = settings.value(SAVE_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath()).toString();
+    QString path = separate_files
             ? QFileDialog::getExistingDirectory(this, tr("Output Directory"),
-                                                /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString())
-            : path = QFileDialog::getSaveFileName(this, tr("Output File"),
-                                                  /*dir*/ settings.value(SAVE_DIRECTORY_PARAM).toString(),
-                                                  /*filter*/ "XHTML files (*.xhtml)");
+                                                /*dir*/ start_dir)
+            : QFileDialog::getSaveFileName(this, tr("Output File"),
+                                           /*dir*/ start_dir + "/" + QFileInfo(in_file).baseName() + ".xhtml",
+                                           /*filter*/ "XHTML files (*.xhtml)");
 
     if (path.isEmpty()) return;
     QDir dir(separate_files ? path : QFileInfo(path).absolutePath());

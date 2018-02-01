@@ -19,6 +19,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QFile>
 
 namespace Ui {
 class MainWindow;
@@ -41,6 +42,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     XmlElement *root_element;
+    QFile in_file;
 };
 
 #endif // MAINWINDOW_H

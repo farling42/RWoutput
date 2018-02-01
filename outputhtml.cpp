@@ -604,6 +604,18 @@ void writeTopicBody(XmlElement *topic)
     if (topic->hasAttribute("suffix")) stream->writeAttribute("topic_suffix", topic->attribute("suffix"));
     stream->writeCharacters(topic->attribute("public_name"));
     stream->writeEndElement();  // h1
+    // Maybe some aliases
+    for (auto alias : topic->xmlChildren("alias"))
+    {
+        stream->writeStartElement("p");
+        // The RWoutput file puts the "true name" as the public_name of the topic.
+        // All other names are listed as aliases (with no attributes).
+        // If the RW topic has a "true name" defined then the actual name of the topic
+        // is reported as an alias.
+        stream->writeAttribute("class", "nameAlias");
+        stream->writeCharacters(alias->attribute("name"));
+        stream->writeEndElement(); // p
+    }
     stream->writeEndElement();  // header
 
     if (always_show_index)
