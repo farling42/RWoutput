@@ -673,6 +673,7 @@ void writeTopicFile(XmlElement *topic)
     if (always_show_index)
     {
         stream->writeStartElement("script");
+        stream->writeAttribute("type", "text/javascript");
         stream->writeCharacters("includeHTML();");
         stream->writeEndElement();
     }
@@ -775,6 +776,35 @@ void writeIndex(XmlElement *root_elem)
             else if (child->objectName() == "contents")
             {
                 stream->writeStartElement("body");
+
+                // A top-level button to collapse/expand the entire list
+                const QString expand_all   = "Expand All";
+                const QString collapse_all = "Collapse All";
+
+                stream->writeStartElement("button");
+                stream->writeAttribute("onclick", "toggleNavVis(this)");
+                stream->writeAttribute("checked", "false");
+                stream->writeCharacters(expand_all);
+                stream->writeEndElement();
+
+                stream->writeStartElement("script");
+                stream->writeAttribute("type", "text/javascript");
+                // This script isn't found when index.html is loaded into the NAV panel
+                // of children; so this script is duplicated inside scripts.js
+                stream->writeCharacters("function toggleNavVis(item) {\n"
+                                        "  var i, list, checked;\n"
+                                        "  checked = item.getAttribute('checked') !== 'true';\n"
+                                        "  list = document.getElementsByTagName('details');\n"
+                                        "  for (i=0; i < list.length; i++) {\n"
+                                        "     list[i].open = checked;\n"
+                                        "  }\n"
+                                        "  if (checked)\n"
+                                        "    item.textContent = '" + collapse_all + "'\n"
+                                        "  else\n"
+                                        "    item.textContent = '" + expand_all + "'\n"
+                                        "  item.setAttribute('checked', checked);\n"
+                                        "}");
+                stream->writeEndElement();
 #if 1
                 // Root level of topics
                 auto main_topics = child->xmlChildren("topic");

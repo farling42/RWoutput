@@ -28,3 +28,19 @@ includeHTML = function() {
         }
     }
 };
+
+
+
+function toggleNavVis(item) {
+  var i, list, checked;
+  checked = item.getAttribute('checked') !== 'true';
+  list = item.parentElement.getElementsByTagName('details');
+  for (i=0; i < list.length; i++) {
+     list[i].open = checked;
+  }
+  if (checked)
+    item.textContent = 'Collapse All'
+  else
+    item.textContent = 'Expand All'
+  item.setAttribute('checked', checked);
+};
