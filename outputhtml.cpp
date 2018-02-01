@@ -1021,7 +1021,6 @@ void toHtml(const QString &path,
         else
             class_of_style.insert(style, QString("rwStyle%1").arg(stylenumber++));
     }
-    qDebug() << styles_set;
 
     // Write out the individual TOPIC files now:
     // Note use of findChildren to find children at all levels,
