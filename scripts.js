@@ -1,4 +1,4 @@
-includeHTML = function() {
+ function includeHTML() {
     var z, i, j, elmnt, file, xhttp, parser, doc, body;
     z = document.getElementsByTagName("*");
     for (i = 0; i < z.length; i++) {

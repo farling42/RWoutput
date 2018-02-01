@@ -81,6 +81,45 @@ static void write_support_files()
 }
 
 
+static void write_meta_child(const QString &meta_name, XmlElement *details, const QString &child_name)
+{
+    XmlElement *child = details->xmlChild(child_name);
+    if (child)
+    {
+        stream->writeStartElement("meta");
+        stream->writeAttribute("name", meta_name);
+        stream->writeAttribute("content", child->childString());
+        stream->writeEndElement();
+    }
+
+}
+
+
+static void write_head_meta(XmlElement *root_elem)
+{
+    XmlElement *definition = root_elem->xmlChild("definition");
+    XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
+    if (details == nullptr) return;
+
+    stream->writeStartElement("meta");
+    stream->writeAttribute("name", "exportDate");
+    stream->writeAttribute("content", root_elem->attribute("export_date"));
+    stream->writeEndElement();
+
+    stream->writeStartElement("meta");
+    stream->writeAttribute("name", "author");
+    stream->writeAttribute("content", "RWoutput Tool");
+    stream->writeEndElement();
+
+    write_meta_child("summary",      details, "summary");
+    write_meta_child("description",  details, "description");
+    write_meta_child("requirements", details, "requirements");
+    write_meta_child("credits",      details, "credits");
+    write_meta_child("legal",        details, "legal");
+    write_meta_child("other_notes",  details, "other_notes");
+}
+
+
 static void start_file()
 {
     stream->setAutoFormatting(true);
@@ -131,7 +170,7 @@ static void start_file()
 }
 
 
-void writeAttributes(XmlElement *elem)
+static void writeAttributes(XmlElement *elem)
 {
     for (auto attr : elem->p_attributes)
     {
@@ -143,7 +182,7 @@ void writeAttributes(XmlElement *elem)
 }
 
 
-void writeTopicHref(const QString &topic)
+static void writeTopicHref(const QString &topic)
 {
     if (in_single_file)
         stream->writeAttribute("href", "#" + topic);
@@ -151,7 +190,8 @@ void writeTopicHref(const QString &topic)
         stream->writeAttribute("href", topic + ".xhtml");
 }
 
-void writeSpan(XmlElement *elem, const LinkageList &links, const QString &classname)
+
+static void writeSpan(XmlElement *elem, const LinkageList &links, const QString &classname)
 {
 #if DEBUG_LEVEL > 5
     qDebug() << "....span";
@@ -195,7 +235,7 @@ void writeSpan(XmlElement *elem, const LinkageList &links, const QString &classn
 }
 
 
-void writePara(XmlElement *elem, const QString &classname, const LinkageList &links,
+static void writePara(XmlElement *elem, const QString &classname, const LinkageList &links,
                const QString &label, const QString &bodytext)
 {
 #if DEBUG_LEVEL > 5
@@ -249,7 +289,7 @@ void writePara(XmlElement *elem, const QString &classname, const LinkageList &li
 }
 
 
-void writeParaChildren(XmlElement *parent, const QString &classname, const LinkageList &links,
+static void writeParaChildren(XmlElement *parent, const QString &classname, const LinkageList &links,
                        const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
 {
 #if DEBUG_LEVEL > 4
@@ -271,7 +311,7 @@ void writeParaChildren(XmlElement *parent, const QString &classname, const Linka
  * Return the divisor for the map's size
  */
 
-int writeImage(const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
+static int writeImage(const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
                const QString &filename, XmlElement *annotation, const LinkageList &links,
                const QString &usemap = QString())
 {
@@ -354,7 +394,7 @@ int writeImage(const QString &image_name, const QByteArray &orig_data, XmlElemen
 }
 
 
-void writeExtObject(const QString &obj_name, const QByteArray &data,
+static void writeExtObject(const QString &obj_name, const QByteArray &data,
                     const QString &filename, XmlElement *annotation, const LinkageList &links)
 {
     // Write the asset data to an external file
@@ -383,7 +423,7 @@ void writeExtObject(const QString &obj_name, const QByteArray &data,
 }
 
 
-void writeSnippet(XmlElement *snippet, const LinkageList &links)
+static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 {
     QString sn_type = snippet->attribute("type");
 #if DUMP_LEVEL > 3
@@ -559,7 +599,7 @@ void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
 static int section_level = 0;
 
-void writeSection(XmlElement *section, const LinkageList &links)
+static void writeSection(XmlElement *section, const LinkageList &links)
 {
 #if DUMP_LEVEL > 2
     qDebug() << "..section" << section->attribute("name");
@@ -588,7 +628,7 @@ void writeSection(XmlElement *section, const LinkageList &links)
 }
 
 
-void writeTopicBody(XmlElement *topic)
+static void writeTopicBody(XmlElement *topic)
 {
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
@@ -684,9 +724,7 @@ void writeTopicBody(XmlElement *topic)
 }
 
 
-
-
-void writeTopicFile(XmlElement *topic)
+static void writeTopicFile(XmlElement *topic)
 {
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
@@ -732,7 +770,7 @@ void writeTopicFile(XmlElement *topic)
  * Write entries into the INDEX file
  */
 
-void writeTopicToIndex(XmlElement *topic)
+static void writeTopicToIndex(XmlElement *topic)
 {
     static int index_header_level = 0;
     auto child_topics = topic->xmlChildren("topic");
@@ -777,7 +815,7 @@ void writeTopicToIndex(XmlElement *topic)
 }
 
 
-void writeIndex(XmlElement *root_elem)
+static void writeIndex(XmlElement *root_elem)
 {
     QFile out_file("index.xhtml");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
@@ -808,6 +846,7 @@ void writeIndex(XmlElement *root_elem)
                         stream->writeTextElement("title", header->attribute("name"));
                     }
                 }
+                write_head_meta(root_elem);
                 stream->writeEndElement();  // head
             }
             else if (child->objectName() == "contents")
@@ -916,17 +955,14 @@ void toHtml(const QString &path,
     always_show_index = index_on_every_page;
     in_single_file    = !separate_files;
 
-    if (separate_files)
-    {
-        write_support_files();
-        writeIndex(root_elem);
-    }
-
     // Write out the individual TOPIC files now:
     // Note use of findChildren to find children at all levels,
     // whereas xmlChildren returns only direct children.
     if (separate_files)
     {
+        write_support_files();
+        writeIndex(root_elem);
+
         // A separate file for every single topic
         for (auto topic : root_elem->findChildren<XmlElement*>("topic"))
         {
@@ -935,10 +971,10 @@ void toHtml(const QString &path,
     }
     else
     {
-        //XmlElement *output     = root_elem->xmlChild("output");
+        //XmlElement *output     = root_elem;
         XmlElement *definition = root_elem->xmlChild("definition");
-        XmlElement *contents   = root_elem->xmlChild("contents");
         XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
+        XmlElement *contents   = root_elem->xmlChild("contents");
 
         if (definition == nullptr ||
                 contents == nullptr || details == nullptr)
@@ -966,6 +1002,7 @@ void toHtml(const QString &path,
 
         start_file();
         stream->writeTextElement("title", details->attribute("name"));
+        write_head_meta(root_elem);
         stream->writeEndElement(); // head
 
         stream->writeStartElement("body");
