@@ -294,23 +294,6 @@ QString XmlElement::attribute(const QString &name) const
     return QString();
 }
 
-/**
- * @brief XmlElement::childrenWithAttributes
- * Find all the child elements which have a specified attribute with a specified value.
- * @param name
- * @param value
- * @return
- */
-QList<XmlElement *> XmlElement::childrenWithAttributes(const QString &name, const QString &value) const
-{
-    QList<XmlElement*> result;
-    for (auto child : xmlChildren())
-    {
-        if (child->attribute(name) == value) result.append(child);
-    }
-    return result;
-}
-
 
 QString XmlElement::snippetName() const
 {

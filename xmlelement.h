@@ -40,7 +40,6 @@ public:
     inline QString fixedText() const { return p_fixed_text; }
 
     QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
-    QList<XmlElement *> childrenWithAttributes(const QString &attribute, const QString &value = QString()) const;
     XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
 
     // objectName == XML element title

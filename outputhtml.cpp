@@ -40,6 +40,8 @@ struct Linkage {
 };
 typedef QList<Linkage> LinkageList;
 
+static QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
+static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
 
 #define DUMP_LEVEL 0
 
@@ -78,8 +80,34 @@ static void write_support_files()
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
     }
+
+    QFile styles("localStyles.css");
+    if (styles.open(QFile::WriteOnly|QFile::Text))
+    {
+        QTextStream ts(&styles);
+        for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
+        {
+            if (!predefined_styles.contains(iter.value()))
+            {
+                ts << "." + iter.value() + " {\n" + iter.key() + "\n}\n";
+            }
+        }
+    }
 }
 
+
+static void write_local_styles()
+{
+    //stream->writeStartElement("style");
+    for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
+    {
+        if (!predefined_styles.contains(iter.value()))
+        {
+            stream->writeCharacters("." + iter.value() + " {\n" + iter.key() + "\n}\n");
+        }
+    }
+    //stream->writeEndElement();
+}
 
 static void write_meta_child(const QString &meta_name, XmlElement *details, const QString &child_name)
 {
@@ -149,12 +177,13 @@ static void start_file()
     {
         // Put the style sheet in the same file
         QFile theme(":/theme.css");
+        stream->writeStartElement("style");
         if (theme.open(QFile::ReadOnly|QFile::Text))
         {
-            stream->writeStartElement("style");
             stream->writeCharacters(theme.readAll());
-            stream->writeEndElement();
         }
+        write_local_styles();
+        stream->writeEndElement();
     }
     else
     {
@@ -164,20 +193,37 @@ static void start_file()
         stream->writeAttribute("type", "text/css");
         stream->writeAttribute("href", "theme.css");
         stream->writeEndElement();  // link
+
+        // Locally generated styles
+        stream->writeStartElement("link");
+        stream->writeAttribute("rel", "stylesheet");
+        stream->writeAttribute("type", "text/css");
+        stream->writeAttribute("href", "localStyles.css");
+        stream->writeEndElement();  // link
     }
 
     // Caller needs to do writeEndElement for "head" and "html"
 }
 
 
-static void writeAttributes(XmlElement *elem)
+static void writeAttributes(XmlElement *elem, const QString &classname)
 {
+    QStringList class_names;
+    if (!classname.isEmpty()) class_names.append(classname);
     for (auto attr : elem->p_attributes)
     {
-        if (attr.name != "class")
+        if (attr.name == "style")
+        {
+            class_names.append(class_of_style.value(attr.value));
+        }
+        else if (attr.name != "class")  // ignore RWdefault, RWSnippet, RWLink
         {
             stream->writeAttribute(attr.name, attr.value);
         }
+    }
+    if (!class_names.isEmpty())
+    {
+        stream->writeAttribute("class", class_names.join(" "));
     }
 }
 
@@ -222,8 +268,7 @@ static void writeSpan(XmlElement *elem, const LinkageList &links, const QString 
     if (in_element)
     {
         stream->writeStartElement(elem->objectName());
-        writeAttributes(elem);
-        if (!classname.isEmpty()) stream->writeAttribute("class", classname);
+        writeAttributes(elem, classname);
     }
 
     // All sorts of HTML can appear inside the text
@@ -255,7 +300,7 @@ static void writePara(XmlElement *elem, const QString &classname, const LinkageL
     else
     {
         stream->writeStartElement(elem->objectName());
-        writeAttributes(elem);
+        writeAttributes(elem, classname);
     }
     // If there is no label, then set the class on the paragraph element,
     // otherwise we will put the text inside a span with the given class.
@@ -269,7 +314,8 @@ static void writePara(XmlElement *elem, const QString &classname, const LinkageL
     }
     else if (!classname.isEmpty())
     {
-        stream->writeAttribute("class", classname);
+        // class might already have been written by calling writeAttributes
+        if (elem->objectName() == "snippet") stream->writeAttribute("class", classname);
         class_set = true;
     }
 
@@ -312,7 +358,7 @@ static void writeParaChildren(XmlElement *parent, const QString &classname, cons
  */
 
 static int writeImage(const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
-               const QString &filename, XmlElement *annotation, const LinkageList &links,
+               const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
                const QString &usemap = QString())
 {
     QBuffer buffer;
@@ -325,7 +371,7 @@ static int writeImage(const QString &image_name, const QByteArray &orig_data, Xm
 
     stream->writeStartElement("figcaption");
     if (annotation)
-        writeParaChildren(annotation, "annotation", links, image_name);
+        writeParaChildren(annotation, "annotation " + class_name, links, image_name);
     else
         stream->writeCharacters(image_name);
     stream->writeEndElement();  // figcaption
@@ -395,7 +441,7 @@ static int writeImage(const QString &image_name, const QByteArray &orig_data, Xm
 
 
 static void writeExtObject(const QString &obj_name, const QByteArray &data,
-                    const QString &filename, XmlElement *annotation, const LinkageList &links)
+                    const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
 {
     // Write the asset data to an external file
     QFile file(filename);
@@ -418,7 +464,7 @@ static void writeExtObject(const QString &obj_name, const QByteArray &data,
     stream->writeEndElement();  // a
     stream->writeEndElement();  // span
 
-    if (annotation) writeParaChildren(annotation, "annotation", links);
+    if (annotation) writeParaChildren(annotation, "annotation " + class_name, links);
     stream->writeEndElement();  // p
 }
 
@@ -426,6 +472,7 @@ static void writeExtObject(const QString &obj_name, const QByteArray &data,
 static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 {
     QString sn_type = snippet->attribute("type");
+    QString sn_style = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout
 #if DUMP_LEVEL > 3
     qDebug() << "...snippet" << sn_type;
 #endif
@@ -434,17 +481,17 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
     {
         // child is either <contents> or <gm_directions> or both
         for (auto gm_directions: snippet->xmlChildren("gm_directions"))
-            writeParaChildren(gm_directions, "gm_directions", links);
+            writeParaChildren(gm_directions, "gm_directions " + sn_style, links);
 
         for (auto contents: snippet->xmlChildren("contents"))
-            writeParaChildren(contents, "contents", links);
+            writeParaChildren(contents, "contents " + sn_style, links);
     }
     else if (sn_type == "Labeled_Text")
     {
         for (auto contents: snippet->xmlChildren("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            writeParaChildren(contents, "contents", links, /*prefix*/snippet->snippetName());  // has its own 'p'
+            writeParaChildren(contents, "contents " + sn_style, links, /*prefix*/snippet->snippetName());  // has its own 'p'
         }
     }
     else if (sn_type == "Picture" ||
@@ -468,10 +515,10 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
                 {
                     if (sn_type == "Picture")
                         writeImage(ext_object->attribute("name"), contents->p_byte_data,
-                                   /*mask*/nullptr, filename, annotation, links);
+                                   /*mask*/nullptr, filename, sn_style, annotation, links);
                     else
                         writeExtObject(ext_object->attribute("name"), contents->p_byte_data,
-                                       filename, annotation, links);
+                                       filename, sn_style, annotation, links);
                 }
             }
         }
@@ -495,7 +542,7 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
             int divisor = writeImage(smart_image->attribute("name"), contents->p_byte_data,
-                                     mask, filename, annotation, links, usemap);
+                                     mask, filename, sn_style, annotation, links, usemap);
 
             if (!pins.isEmpty())
             {
@@ -534,9 +581,9 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
         QString bodytext = date->attribute("display");
         if (annotation)
-            writeParaChildren(annotation, "annotation", links, /*prefix*/snippet->snippetName(), bodytext);
+            writeParaChildren(annotation, "annotation " + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(snippet, /*no class*/QString(), links, /*prefix*/snippet->snippetName(), bodytext);
+            writePara(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Date_Range")
     {
@@ -546,9 +593,9 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
         if (annotation)
-            writeParaChildren(annotation, "annotation", links, /*prefix*/snippet->snippetName(), bodytext);
+            writeParaChildren(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(snippet, /*no class*/QString(), links, /*prefix*/snippet->snippetName(), bodytext);
+            writePara(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Tag_Standard")
     {
@@ -558,9 +605,9 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
         QString bodytext = tag->attribute("tag_name");
         if (annotation)
-            writeParaChildren(annotation, "annotation", links, /*prefix*/snippet->snippetName(), bodytext);
+            writeParaChildren(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(snippet, /*no class*/QString(), links, /*prefix*/snippet->snippetName(), bodytext);
+            writePara(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Numeric")
     {
@@ -570,9 +617,9 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
         const QString &bodytext = contents->childString();
         if (annotation)
-            writeParaChildren(annotation, "annotation", links, /*prefix*/snippet->snippetName(), bodytext);
+            writeParaChildren(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(snippet, /*no class*/QString(), links, /*prefix*/snippet->snippetName(), bodytext);
+            writePara(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
 
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -589,9 +636,9 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 
         XmlElement *annotation = snippet->xmlChild("annotation");
         if (annotation)
-            writeParaChildren(annotation, "annotation", links, /*prefix*/snippet->snippetName(), bodytext);
+            writeParaChildren(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(snippet, /*no class*/QString(), links, /*prefix*/snippet->snippetName(), bodytext);
+            writePara(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     // Hybrid_Tag
 }
@@ -954,6 +1001,27 @@ void toHtml(const QString &path,
     apply_reveal_mask = use_reveal_mask;
     always_show_index = index_on_every_page;
     in_single_file    = !separate_files;
+
+    // Get a full list of the individual STYLE attributes of every single topic,
+    // with a view to putting them into the CSS instead.
+    QSet<QString> styles_set;
+    for (auto child : root_elem->findChildren<XmlElement*>())
+    {
+        if (child->hasAttribute("style"))
+        {
+            styles_set.insert(child->attribute("style"));
+        }
+    }
+    class_of_style.clear();
+    int stylenumber=1;
+    for (auto style: styles_set)
+    {
+        if (predefined_styles.contains(style))
+            class_of_style.insert(style, style);
+        else
+            class_of_style.insert(style, QString("rwStyle%1").arg(stylenumber++));
+    }
+    qDebug() << styles_set;
 
     // Write out the individual TOPIC files now:
     // Note use of findChildren to find children at all levels,
