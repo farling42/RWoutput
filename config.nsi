@@ -36,6 +36,7 @@ Section
 
    # The files to be installed
    File /r install\*.*
+   File ..\quazip-0.7.3\quazip\release\quazip.dll
 
    # create the uninstaller
    WriteUninstaller "$INSTDIR\uninstall.exe"
