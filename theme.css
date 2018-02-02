@@ -9,6 +9,9 @@
 .childTopicsHeader {
     background-color: lightgreen;
 }
+.childTopicsList {
+    column-count: 3
+}
 .section1 {
     background-color: lightblue;
 }
@@ -28,6 +31,7 @@ nav {
     border: 2px solid;
     width: 20%;
     margin-right: 10px;
+    overflow:hidden;
 }
 header {
     background-color: gainsboro;

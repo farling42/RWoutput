@@ -24,6 +24,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QPixmap>
+#include <QApplication>
 
 #include "xmlelement.h"
 
@@ -172,6 +173,11 @@ static void start_file()
     stream->writeAttribute("content", "text/html");
     stream->writeAttribute("charset", "utf-8");
     stream->writeEndElement(); // meta
+
+    stream->writeStartElement("meta");
+    stream->writeAttribute("name", "generator");
+    stream->writeAttribute("content", qApp->applicationName() + " " + qApp->applicationVersion());
+    stream->writeEndElement();
 
     if (in_single_file)
     {
@@ -738,15 +744,19 @@ static void writeTopicBody(XmlElement *topic)
     if (!child_topics.isEmpty())
     {
         stream->writeStartElement("footer");
+
         stream->writeStartElement("h2");
         stream->writeAttribute("class", "childTopicsHeader");
         stream->writeCharacters("Child Topics");
-        stream->writeEndElement();
+        stream->writeEndElement(); // h2
+
         stream->writeStartElement("ul");
+        stream->writeAttribute("class", "childTopicsList");
         for (auto child: child_topics)
         {
             stream->writeStartElement("li");
             stream->writeAttribute("class", "childTopicsEntry");
+
             stream->writeStartElement("a");
             writeTopicHref(child->attribute("topic_id"));
             stream->writeCharacters(child->attribute("public_name"));
