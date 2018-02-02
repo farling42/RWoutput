@@ -22,6 +22,17 @@
     font-style: italic;
     margin-left: 20px;
 }
+.portfolioListing {
+    margin-left: 20px;
+}
+.portfolioEntry {
+    border: 1px solid tan;
+    padding: 2px;
+}
+.portfolioTitle {
+    font-weight: bold;
+    background-color: azure;
+}
 .gm_directions {
     background-color: floralwhite;
     border: 1px solid tan;

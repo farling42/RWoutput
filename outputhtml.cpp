@@ -26,10 +26,15 @@
 #include <QPixmap>
 #include <QApplication>
 
+#include "gumbo.h"
+#include <quazip/quazip.h>
+#include <quazip/quazipfile.h>
+
 #include "xmlelement.h"
 
 static int image_max_width = -1;
 static bool apply_reveal_mask = true;
+static QIODevice *out_device = 0;
 static QXmlStreamWriter *stream = 0;
 static bool always_show_index = false;
 static bool in_single_file = false;
@@ -451,7 +456,11 @@ static void writeExtObject(const QString &obj_name, const QByteArray &data,
 {
     // Write the asset data to an external file
     QFile file(filename);
-    if (!file.open(QFile::WriteOnly)) return;
+    if (!file.open(QFile::WriteOnly))
+    {
+        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
+        return;
+    }
     file.write (data);
     file.close();
 
@@ -472,6 +481,82 @@ static void writeExtObject(const QString &obj_name, const QByteArray &data,
 
     if (annotation) writeParaChildren(annotation, "annotation " + class_name, links);
     stream->writeEndElement();  // p
+}
+
+/**
+ * @brief output_gumbo_children
+ * Takes the GUMBO tree and calls the relevant methods of QXmlStreamWriter
+ * to reproduce it in XHTML.
+ * @param node
+ */
+
+static void output_gumbo_children(GumboNode *parent)
+{
+    GumboVector *children = &parent->v.element.children;
+    for (unsigned i=0; i<children->length; i++)
+    {
+        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        switch (node->type)
+        {
+        case GUMBO_NODE_TEXT:
+            //qDebug() << "GUMBO_NODE_TEXT:";
+        {
+            const QString text(node->v.text.text);
+            int pos = text.lastIndexOf(" - created with Hero Lab");
+            stream->writeCharacters((pos < 0) ? text : text.left(pos));
+        }
+            break;
+        case GUMBO_NODE_CDATA:
+            //qDebug() << "GUMBO_NODE_CDATA:";
+            stream->writeCDATA(node->v.text.text);
+            break;
+        case GUMBO_NODE_COMMENT:
+            //qDebug() << "GUMBO_NODE_COMMENT:";
+            stream->writeComment(node->v.text.text);
+            break;
+
+        case GUMBO_NODE_ELEMENT:
+            //qDebug() << "GUMBO_NODE_ELEMENT:";
+            stream->writeStartElement(gumbo_normalized_tagname(node->v.element.tag));
+        {
+            const GumboVector *attribs = &node->v.element.attributes;
+            for (unsigned i=0; i<attribs->length; i++)
+            {
+                GumboAttribute *at = static_cast<GumboAttribute*>(attribs->data[i]);
+                stream->writeAttribute(at->name, at->value);
+            }
+        }
+            output_gumbo_children(node);
+            stream->writeEndElement();
+            break;
+
+        case GUMBO_NODE_WHITESPACE:
+            //qDebug() << "GUMBO_NODE_WHITESPACE";
+            break;
+        case GUMBO_NODE_DOCUMENT:
+            //qDebug() << "GUMBO_NODE_DOCUMENT";
+            break;
+        case GUMBO_NODE_TEMPLATE:
+            //qDebug() << "GUMBO_NODE_TEMPLATE";
+            break;
+        }
+    }
+}
+
+
+static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
+{
+    GumboVector *children = &parent->v.element.children;
+    for (unsigned i=0; i<children->length; i++)
+    {
+        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        if (node->type == GUMBO_NODE_ELEMENT)
+        {
+            const QString tag = gumbo_normalized_tagname(node->v.element.tag);
+            if (tag == name) return node;
+        }
+    }
+    return nullptr;
 }
 
 
@@ -500,11 +585,78 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
             writeParaChildren(contents, "contents " + sn_style, links, /*prefix*/snippet->snippetName());  // has its own 'p'
         }
     }
+    else if (sn_type == "Portfolio")
+    {
+        // As for other EXT OBJECTS, but with unzipping involved to get statblocks
+        XmlElement *annotation = snippet->xmlChild("annotation");
+        for (auto ext_object: snippet->xmlChildren("ext_object"))
+        {
+            for (auto asset: ext_object->xmlChildren("asset"))
+            {
+                QString filename = asset->attribute("filename");
+                XmlElement *contents = asset->xmlChild("contents");
+                if (contents)
+                {
+                    writeExtObject(ext_object->attribute("name"), contents->p_byte_data,
+                                   filename, sn_style, annotation, links);
+
+                    // Put in markers for statblock
+                    QBuffer buffer(&contents->p_byte_data);
+                    QuaZip zip(&buffer);
+                    if (zip.open(QuaZip::mdUnzip))
+                    {
+                        stream->writeStartElement("section");
+                        stream->writeAttribute("class", "portfolioListing");
+                        for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
+                        {
+                            if (zip.getCurrentFileName().startsWith("statblocks_html/"))
+                            {
+                                QuaZipFile file(&zip);
+                                if (file.open(QuaZipFile::ReadOnly))
+                                {
+                                    // Put the children of the BODY into this frame.
+                                    GumboOutput *output = gumbo_parse(file.readAll());
+                                    if (output == 0)
+                                    {
+                                        qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
+                                        break;
+                                    }
+                                    GumboNode *head = get_gumbo_child(output->root, "head");
+                                    GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
+
+                                    stream->writeStartElement("details");
+                                    stream->writeAttribute("class", "portfolioEntry");
+
+                                    if (title)
+                                    {
+                                        stream->writeStartElement("summary");
+                                        stream->writeAttribute("id", zip.getCurrentFileName());
+                                        stream->writeAttribute("class", "portfolioTitle");
+                                        output_gumbo_children(title);  // it should only be text
+                                        stream->writeEndElement(); // summary
+                                    }
+
+                                    GumboNode *body = get_gumbo_child(output->root, "body");
+                                    if (body) output_gumbo_children(body);
+
+                                    stream->writeEndElement();  // details
+
+                                    // Get GUMBO to release all the memory
+                                    gumbo_destroy_output(&kGumboDefaultOptions, output);
+                                }
+                            }
+                        }
+                        stream->writeEndElement(); // section[class="portfolioListing"]
+                    }
+                }
+            }
+        }
+
+    }
     else if (sn_type == "Picture" ||
              sn_type == "PDF" ||
              sn_type == "Audio" ||
              sn_type == "Video" ||
-             sn_type == "Portfolio" ||
              sn_type == "Statblock" ||
              sn_type == "Foreign" ||
              sn_type == "Rich_Text")
@@ -797,6 +949,7 @@ static void writeTopicFile(XmlElement *topic)
 
     // Switch output to the new stream.
     QXmlStreamWriter topic_stream(&topic_file);
+    out_device = &topic_file;
     stream = &topic_stream;
 
     start_file();
@@ -881,6 +1034,7 @@ static void writeIndex(XmlElement *root_elem)
         return;
     }
     QXmlStreamWriter out_stream(&out_file);
+    out_device = &out_file;
     stream = &out_stream;
 
     if (root_elem->objectName() == "output")
@@ -996,6 +1150,7 @@ static void writeIndex(XmlElement *root_elem)
         stream->writeEndElement(); // html
     }
 
+    out_device = 0;
     stream = 0;
 }
 
@@ -1075,6 +1230,7 @@ void toHtml(const QString &path,
 
         // Switch output to the new stream.
         QXmlStreamWriter topic_stream(&single_file);
+        out_device = &single_file;
         stream = &topic_stream;
 
         start_file();
