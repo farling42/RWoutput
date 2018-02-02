@@ -25,13 +25,22 @@
 .portfolioListing {
     margin-left: 20px;
 }
-.portfolioEntry {
+.portfolioDetails {
     border: 1px solid tan;
     padding: 2px;
-}
-.portfolioTitle {
-    font-weight: bold;
     background-color: azure;
+}
+.portfolioSummary {
+    font-weight: bold;
+}
+.statblockDetails {
+    border: 1px solid tan;
+    padding: 2px;
+    background-color: azure;
+    margin-left: 20px;
+}
+.statblockSummary {
+    font-weight: bold;
 }
 .gm_directions {
     background-color: floralwhite;

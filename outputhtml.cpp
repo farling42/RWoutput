@@ -560,6 +560,60 @@ static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
 }
 
 
+static bool write_html(bool use_fixed_title, const QString &sntype, const QByteArray &data)
+{
+    // Put the children of the BODY into this frame.
+    GumboOutput *output = gumbo_parse(data);
+    if (output == 0)
+    {
+        return false;
+    }
+
+    stream->writeStartElement("details");
+    stream->writeAttribute("class", sntype.toLower() + "Details");
+
+    GumboNode *head = get_gumbo_child(output->root, "head");
+
+    // Maybe we have a CSS that we can put inline.
+    GumboNode *style = get_gumbo_child(head, "style");
+    if (style)
+    {
+        stream->writeStartElement("style");
+        stream->writeAttribute("type", "text/css");
+        output_gumbo_children(style);  // it should only be text
+        stream->writeEndElement();
+    }
+
+    if (use_fixed_title)
+    {
+        stream->writeStartElement("summary");
+        stream->writeAttribute("class", sntype + "Summary");
+        stream->writeCharacters(sntype);
+        stream->writeEndElement(); // summary
+    }
+    else
+    {
+        GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
+        if (title)
+        {
+            stream->writeStartElement("summary");
+            stream->writeAttribute("class", sntype.toLower() + "Summary");
+            output_gumbo_children(title);  // it should only be text
+            stream->writeEndElement(); // summary
+        }
+    }
+
+    GumboNode *body = get_gumbo_child(output->root, "body");
+    if (body) output_gumbo_children(body);
+
+    stream->writeEndElement();  // details
+
+    // Get GUMBO to release all the memory
+    gumbo_destroy_output(&kGumboDefaultOptions, output);
+    return true;
+}
+
+
 static void writeSnippet(XmlElement *snippet, const LinkageList &links)
 {
     QString sn_type = snippet->attribute("type");
@@ -612,37 +666,10 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
                             if (zip.getCurrentFileName().startsWith("statblocks_html/"))
                             {
                                 QuaZipFile file(&zip);
-                                if (file.open(QuaZipFile::ReadOnly))
+                                if (!file.open(QuaZipFile::ReadOnly) ||
+                                        !write_html(false, sn_type, file.readAll()))
                                 {
-                                    // Put the children of the BODY into this frame.
-                                    GumboOutput *output = gumbo_parse(file.readAll());
-                                    if (output == 0)
-                                    {
-                                        qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
-                                        break;
-                                    }
-                                    GumboNode *head = get_gumbo_child(output->root, "head");
-                                    GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
-
-                                    stream->writeStartElement("details");
-                                    stream->writeAttribute("class", "portfolioEntry");
-
-                                    if (title)
-                                    {
-                                        stream->writeStartElement("summary");
-                                        stream->writeAttribute("id", zip.getCurrentFileName());
-                                        stream->writeAttribute("class", "portfolioTitle");
-                                        output_gumbo_children(title);  // it should only be text
-                                        stream->writeEndElement(); // summary
-                                    }
-
-                                    GumboNode *body = get_gumbo_child(output->root, "body");
-                                    if (body) output_gumbo_children(body);
-
-                                    stream->writeEndElement();  // details
-
-                                    // Get GUMBO to release all the memory
-                                    gumbo_destroy_output(&kGumboDefaultOptions, output);
+                                    qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
                                 }
                             }
                         }
@@ -661,6 +688,8 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
              sn_type == "Foreign" ||
              sn_type == "Rich_Text")
     {
+        // TODO: if filename ends with .html then we can put it inline.
+
         // ext_object child, asset grand-child
         XmlElement *annotation = snippet->xmlChild("annotation");
         for (auto ext_object: snippet->xmlChildren("ext_object"))
@@ -677,6 +706,11 @@ static void writeSnippet(XmlElement *snippet, const LinkageList &links)
                     else
                         writeExtObject(ext_object->attribute("name"), contents->p_byte_data,
                                        filename, sn_style, annotation, links);
+
+                    if (filename.endsWith(".html") || filename.endsWith(".htm") ||filename.endsWith(".rtf"))
+                    {
+                        write_html(true, sn_type, contents->p_byte_data);
+                    }
                 }
             }
         }
