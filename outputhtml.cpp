@@ -15,6 +15,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#undef ALWAYS_SAVE_EXT_FILES
+#undef THREADED
+#undef TIME_CONVERSION
+
 #include "outputhtml.h"
 
 #include <QBitmap>
@@ -25,8 +29,10 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QApplication>
-//#include <QElapsedTimer>
 #include <future>
+#ifdef TIME_CONVERSION
+#include <QElapsedTimer>
+#endif
 
 #include "gumbo.h"
 #include <quazip/quazip.h>
@@ -102,19 +108,6 @@ static void write_support_files()
 }
 
 
-static void write_local_styles(QXmlStreamWriter *stream)
-{
-    //stream->writeStartElement("style");
-    for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
-    {
-        if (!predefined_styles.contains(iter.value()))
-        {
-            stream->writeCharacters("." + iter.value() + " {\n" + iter.key() + "\n}\n");
-        }
-    }
-    //stream->writeEndElement();
-}
-
 static void write_meta_child(QXmlStreamWriter *stream, const QString &meta_name, XmlElement *details, const QString &child_name)
 {
     XmlElement *child = details->xmlChild(child_name);
@@ -173,11 +166,17 @@ static void start_file(QXmlStreamWriter *stream)
 
     stream->writeStartElement("head");
 
+#if 0
     stream->writeStartElement("meta");
     stream->writeAttribute("http-equiv", "Content-Type");
     stream->writeAttribute("content", "text/html");
     stream->writeAttribute("charset", "utf-8");
     stream->writeEndElement(); // meta
+#else
+    stream->writeStartElement("meta");
+    stream->writeAttribute("charset", "utf-8");
+    stream->writeEndElement(); // meta
+#endif
 
     stream->writeStartElement("meta");
     stream->writeAttribute("name", "generator");
@@ -186,15 +185,24 @@ static void start_file(QXmlStreamWriter *stream)
 
     if (in_single_file)
     {
+        stream->writeStartElement("style");
+
         // Put the style sheet in the same file
         QFile theme(":/theme.css");
-        stream->writeStartElement("style");
         if (theme.open(QFile::ReadOnly|QFile::Text))
         {
             stream->writeCharacters(theme.readAll());
         }
-        write_local_styles(stream);
-        stream->writeEndElement();
+
+        // Also include all the locally found styles
+        for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
+        {
+            if (!predefined_styles.contains(iter.value()))
+            {
+                stream->writeCharacters("." + iter.value() + " {\n" + iter.key() + "\n}\n");
+            }
+        }
+        stream->writeEndElement(); // style
     }
     else
     {
@@ -368,20 +376,18 @@ static void writeParaChildren(QXmlStreamWriter *stream, XmlElement *parent, cons
  * Return the divisor for the map's size
  */
 
+#ifdef THREADED
 std::mutex image_mutex;
+#endif
 
 static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
                const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
                const QString &usemap = QString())
 {
-    return 1;
-
-    // Only one thread at a time can use QImage
-    std::unique_lock<std::mutex> lock{image_mutex};
-
     QBuffer buffer;
     QString format = filename.split(".").last();
     int divisor = 1;
+    bool in_buffer = false;
 
     stream->writeStartElement("p");
 
@@ -397,8 +403,12 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
     // See if possible image conversion is required
     if (mask_elem != nullptr || image_max_width > 0)
     {
-        QImage image = QImage::fromData(orig_data, qPrintable(format));
+#ifdef THREADED
+        // Only one thread at a time can use QImage
+        std::unique_lock<std::mutex> lock{image_mutex};
+#endif
 
+        QImage image = QImage::fromData(orig_data, qPrintable(format));
         if (mask_elem != nullptr || (image_max_width > 0 && image.width() > image_max_width))
         {
             // Apply mask, if supplied
@@ -427,29 +437,37 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
             }
 
             // Reduce width in a binary fashion, so maximum detail is kept.
-            int orig_width = image.size().width();
-            int new_width  = orig_width;
-            while (new_width > image_max_width)
+            if (image_max_width > 0)
             {
-                divisor = divisor << 1;
-                new_width = new_width >> 1;
-            }
-            if (divisor > 1)
-            {
-                image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
+                int orig_width = image.size().width();
+                int new_width  = orig_width;
+                while (new_width > image_max_width)
+                {
+                    divisor = divisor << 1;
+                    new_width = new_width >> 1;
+                }
+                if (divisor > 1)
+                {
+                    image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
+                }
             }
 
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, qPrintable(format));
             buffer.close();
+            in_buffer = true;
         }
     }
 
     stream->writeStartElement("img");
     if (!usemap.isEmpty()) stream->writeAttribute("usemap", "#" + usemap);
-    stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
-                           .arg(QString((buffer.data().isEmpty() ? orig_data : buffer.data()).toBase64())));
     stream->writeAttribute("alt", image_name);
+    if (in_buffer)
+        stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
+                               .arg(QString(buffer.data().toBase64())));
+    else
+        stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
+                               .arg(QString(orig_data.toBase64())));
     stream->writeEndElement();  // img
 
     stream->writeEndElement();  // figure
@@ -459,8 +477,44 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
 
 
 static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, const QByteArray &data,
-                    const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
+                           const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
 {
+#ifdef ALWAYS_SAVE_EXT_FILES
+    // TESTING ONLY: Write the asset data to an external file
+    QFile file(filename);
+    if (!file.open(QFile::WriteOnly))
+    {
+        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
+        return;
+    }
+    file.write (data);
+    file.close();
+#endif
+
+#define USE_INLINE
+#ifdef USE_INLINE
+    QString filetype = "image/" + filename.split(".").last();
+    QString mime_type = "binary/octet-stream";
+    if (filetype == "pdf") mime_type = "application/pdf";
+
+    stream->writeStartElement("p");
+
+    stream->writeStartElement("span");
+    stream->writeAttribute("class", "snippet_label");
+    stream->writeCharacters(obj_name + ": ");
+    stream->writeEndElement();  // span
+
+    stream->writeStartElement("span");
+    stream->writeStartElement("a");
+    stream->writeAttribute("download", filename);
+    stream->writeAttribute("href", QString("data:%1;base64,%2").arg(mime_type).arg(QString(data.toBase64())));
+    stream->writeCharacters(filename);
+    stream->writeEndElement();  // a
+    stream->writeEndElement();  // span
+
+    if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
+    stream->writeEndElement();  // p
+#else
     // Write the asset data to an external file
     QFile file(filename);
     if (!file.open(QFile::WriteOnly))
@@ -488,6 +542,7 @@ static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, co
 
     if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
     stream->writeEndElement();  // p
+#endif
 }
 
 /**
@@ -497,7 +552,7 @@ static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, co
  * @param node
  */
 
-static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent)
+static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, bool top=false)
 {
     GumboVector *children = &parent->v.element.children;
     for (unsigned i=0; i<children->length; i++)
@@ -506,45 +561,46 @@ static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent)
         switch (node->type)
         {
         case GUMBO_NODE_TEXT:
-            //qDebug() << "GUMBO_NODE_TEXT:";
         {
             const QString text(node->v.text.text);
+            //if (top) qDebug() << "GUMBO_NODE_TEXT:" << text;
             int pos = text.lastIndexOf(" - created with Hero Lab");
             stream->writeCharacters((pos < 0) ? text : text.left(pos));
         }
             break;
         case GUMBO_NODE_CDATA:
-            //qDebug() << "GUMBO_NODE_CDATA:";
             stream->writeCDATA(node->v.text.text);
+            //if (top) qDebug() << "GUMBO_NODE_CDATA:" << node->v.text.text;
             break;
         case GUMBO_NODE_COMMENT:
-            //qDebug() << "GUMBO_NODE_COMMENT:";
             stream->writeComment(node->v.text.text);
+            //if (top) qDebug() << "GUMBO_NODE_COMMENT:" << node->v.text.text;
             break;
 
         case GUMBO_NODE_ELEMENT:
-            //qDebug() << "GUMBO_NODE_ELEMENT:";
-            stream->writeStartElement(gumbo_normalized_tagname(node->v.element.tag));
         {
+            QString tag = gumbo_normalized_tagname(node->v.element.tag);
+            stream->writeStartElement(tag);
+            //if (top) qDebug() << "GUMBO_NODE_ELEMENT:" << tag;
             const GumboVector *attribs = &node->v.element.attributes;
             for (unsigned i=0; i<attribs->length; i++)
             {
                 GumboAttribute *at = static_cast<GumboAttribute*>(attribs->data[i]);
                 stream->writeAttribute(at->name, at->value);
             }
-        }
             output_gumbo_children(stream, node);
             stream->writeEndElement();
+        }
             break;
 
         case GUMBO_NODE_WHITESPACE:
-            //qDebug() << "GUMBO_NODE_WHITESPACE";
+            //if (top) qDebug() << "GUMBO_NODE_WHITESPACE";
             break;
         case GUMBO_NODE_DOCUMENT:
-            //qDebug() << "GUMBO_NODE_DOCUMENT";
+            //if (top) qDebug() << "GUMBO_NODE_DOCUMENT";
             break;
         case GUMBO_NODE_TEMPLATE:
-            //qDebug() << "GUMBO_NODE_TEMPLATE";
+            //if (top) qDebug() << "GUMBO_NODE_TEMPLATE:" << gumbo_normalized_tagname(node->v.element.tag);
             break;
         }
     }
@@ -567,13 +623,44 @@ static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
 }
 
 
-std::mutex gumbo_mutex;
+static void dump_children(const QString &from, GumboNode *parent)
+{
+    QStringList list;
+    GumboVector *children = &parent->v.element.children;
+    for (unsigned i=0; i<children->length; i++)
+    {
+        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        switch (node->type)
+        {
+        case GUMBO_NODE_ELEMENT:
+            list.append("element: " + QString(gumbo_normalized_tagname(node->v.element.tag)));
+            break;
+        case GUMBO_NODE_TEXT:
+            list.append("text: " + QString(node->v.text.text));
+            break;
+        case GUMBO_NODE_CDATA:
+            list.append("cdata: " + QString(node->v.text.text));
+            break;
+        case GUMBO_NODE_COMMENT:
+            list.append("comment: " + QString(node->v.text.text));
+            break;
+        case GUMBO_NODE_WHITESPACE:
+            list.append("whitespace");
+            break;
+        case GUMBO_NODE_DOCUMENT:
+            list.append("document");
+            break;
+        case GUMBO_NODE_TEMPLATE:
+            list.append("template: " + QString(gumbo_normalized_tagname(node->v.element.tag)));
+            break;
+        }
+    }
+    qDebug() << "   write_html:" << from << gumbo_normalized_tagname(parent->v.element.tag) << "has children" << list.join(", ");
+}
+
 
 static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
-    // Stop other tasks calling gumbo_parse
-    std::unique_lock<std::mutex> {gumbo_mutex};
-
     // Put the children of the BODY into this frame.
     GumboOutput *output = gumbo_parse(data);
     if (output == 0)
@@ -584,10 +671,18 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     stream->writeStartElement("details");
     stream->writeAttribute("class", sntype.toLower() + "Details");
 
+    //dump_children("ROOT", output->root);
+
     GumboNode *head = get_gumbo_child(output->root, "head");
+    GumboNode *body = get_gumbo_child(output->root, "body");
+
+    //dump_children("HEAD", head);
 
     // Maybe we have a CSS that we can put inline.
     GumboNode *style = get_gumbo_child(head, "style");
+#ifdef HANDLE_POOR_RTF
+    if (!style) style = get_gumbo_child(body, "style");
+#endif
     if (style)
     {
         stream->writeStartElement("style");
@@ -615,8 +710,11 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
         }
     }
 
-    GumboNode *body = get_gumbo_child(output->root, "body");
-    if (body) output_gumbo_children(stream, body);
+    if (body)
+    {
+        //dump_children("BODY", body);
+        output_gumbo_children(stream, body, /*top*/true);
+    }
 
     stream->writeEndElement();  // details
 
@@ -713,15 +811,21 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                 if (contents)
                 {
                     if (sn_type == "Picture")
+                    {
                         writeImage(stream, ext_object->attribute("name"), contents->p_byte_data,
                                    /*mask*/nullptr, filename, sn_style, annotation, links);
+                    }
+                    else if (filename.endsWith(".html") ||
+                             filename.endsWith(".htm")  ||
+                             filename.endsWith(".rtf"))
+                    {
+                        stream->writeComment("Decoded " + filename);
+                        write_html(stream, true, sn_type, contents->p_byte_data);
+                    }
                     else
+                    {
                         writeExtObject(stream, ext_object->attribute("name"), contents->p_byte_data,
                                        filename, sn_style, annotation, links);
-
-                    if (filename.endsWith(".html") || filename.endsWith(".htm") ||filename.endsWith(".rtf"))
-                    {
-                        write_html(stream, true, sn_type, contents->p_byte_data);
                     }
                 }
             }
@@ -879,10 +983,9 @@ static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
 #endif
-    if (in_single_file) stream->writeStartElement("section");
-
     // Start with HEADER for the topic
     stream->writeStartElement("header");
+
     stream->writeStartElement(QString("h1"));
     stream->writeAttribute("class", "topic");
     stream->writeAttribute("id", topic->attribute("topic_id"));
@@ -957,19 +1060,19 @@ static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
         }
         stream->writeEndElement(); // ul
         stream->writeEndElement(); // footer
-    }
 
-    if (in_single_file)
-    {
-        for (auto child_topic: child_topics)
+        if (in_single_file)
         {
-            writeTopicBody(stream, child_topic);
+            for (auto child_topic: child_topics)
+            {
+                stream->writeStartElement("section");
+                writeTopicBody(stream, child_topic);
+                stream->writeEndElement();
+            }
         }
     }
 
     stream->writeEndElement();  // section (for RW sections)
-
-    if (in_single_file) stream->writeEndElement(); // outermost <section>
 }
 
 
@@ -1060,7 +1163,7 @@ static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int l
 }
 
 
-static void writeIndex(XmlElement *root_elem)
+static void writeSeparateIndex(XmlElement *root_elem)
 {
     QFile out_file("index.xhtml");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
@@ -1185,15 +1288,17 @@ static void writeIndex(XmlElement *root_elem)
 }
 
 
+#ifdef THREADED
 static void write_topics(QList<XmlElement*> list, int first, int last)
 {
-    qDebug() << "THREAD for" << first << "to" << last << ".";
+    //qDebug() << "THREAD for" << first << "to" << last << ".";
     for (auto it = first; it < last; ++it)
     {
-        qDebug() << "topic" << it;
+        //qDebug() << "topic" << it;
         writeTopicFile(list.at(it));
     }
 }
+#endif
 
 
 void toHtml(const QString &path,
@@ -1203,8 +1308,10 @@ void toHtml(const QString &path,
             bool use_reveal_mask,
             bool index_on_every_page)
 {
-    //QElapsedTimer timer;
-    //timer.start();
+#ifdef TIME_CONVERSION
+    QElapsedTimer timer;
+    timer.start();
+#endif
 
     image_max_width   = max_image_width;
     apply_reveal_mask = use_reveal_mask;
@@ -1237,19 +1344,19 @@ void toHtml(const QString &path,
     if (separate_files)
     {
         write_support_files();
-        writeIndex(root_elem);
+        writeSeparateIndex(root_elem);
 
         // A separate file for every single topic
         auto topics = root_elem->findChildren<XmlElement*>("topic");
-#if 0
+#ifdef THREADED
         // This method speeds up the output of multiple files by creating separate
         // threads to handle each CHUNK of topics.
         // (Unfortunately, it only takes 4 seconds to write out the S&S campaign,
         //  so reducing this to 2.3 seconds doesn't help that much.)
         // Although on the first run, it is a lot slower (presumably due to O/S
         // not caching the files originally.
-        qDebug() << "Concurrency =" << std::thread::hardware_concurrency();
-        unsigned max_threads = std::thread::hardware_concurrency();
+        unsigned max_threads = 32; //std::thread::hardware_concurrency();
+        qDebug() << "Concurrency =" << max_threads;
         std::vector<std::future<void>> jobs;
         int last  = topics.size();
         int step  = (last + max_threads - 1) / max_threads;
@@ -1310,7 +1417,9 @@ void toHtml(const QString &path,
         // inside the parent topic.
         for (auto topic : contents->xmlChildren("topic"))
         {
+            stream.writeStartElement("section");
             writeTopicBody(&stream, topic);
+            stream.writeEndElement();
         }
 
         // Write footer for single file
@@ -1319,5 +1428,7 @@ void toHtml(const QString &path,
         stream.writeEndElement(); // html
     }
 
-    //qInfo() << "TIME TO GENERATE HTML =" << timer.elapsed() << "milliseconds";
+#ifdef TIME_CONVERSION
+    qInfo() << "TIME TO GENERATE HTML =" << timer.elapsed() << "milliseconds";
+#endif
 }
