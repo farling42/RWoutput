@@ -28,12 +28,14 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
     xmlelement.cpp \
-    outputhtml.cpp
+    outputhtml.cpp \
+    linefile.cpp
 
 HEADERS += \
         mainwindow.h \
     xmlelement.h \
-    outputhtml.h
+    outputhtml.h \
+    linefile.h
 
 FORMS += \
         mainwindow.ui
