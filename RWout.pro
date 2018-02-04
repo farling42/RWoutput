@@ -72,13 +72,18 @@ RESOURCES += \
 ZLIB = $$PWD/../zlib-1.2.11
 INCLUDEPATH += $$ZLIB
 LIBS += -L$$ZLIB -lz
+EXTRA_BINFILES += $$ZLIB/zlib1.dll
 
 # Add QUAZIP (used to open HL portfolio files)
 # (quazip.dll is not copied into the install directory!)
 QUAZIP = $$PWD/../quazip-0.7.3
 INCLUDEPATH += $$QUAZIP
 LIBS += -L$$QUAZIP/quazip/release -lquazip
-DISTFILES += $$QUAZIP/quazip/release/quazip.dll
+EXTRA_BINFILES += $$QUAZIP/quazip/release/quazip.dll
+
+for(FILE,EXTRA_BINFILES){
+QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expand(\n\t))
+}
 
 win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/ -lgumbo
 else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Debug/debug/ -lgumbo
