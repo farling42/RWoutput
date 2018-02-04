@@ -1,10 +1,24 @@
 .indexCategory {
     font-size: 20px;
 }
-.topic {
+.topicHeader {
     font-family: verdana;
     font-size: 20px;
+    font-weight: bold;
+    background-color: gainsboro;
+    padding-bottom: 5px;
+}
+header.topicHeader {
+    /* Only when each topic is in a separate file */
     text-align: center;
+}
+summary.topicHeader {
+    /* Only when all topics are in a single file */
+    padding-top: 15px;
+}
+.mainTopic > .mainTopic {
+    /* Child topics are indented */
+    margin-left: 20px;
 }
 .childTopicsHeader {
     background-color: lightgreen;
@@ -53,9 +67,6 @@ nav {
     margin-right: 10px;
     overflow:hidden;
 }
-header {
-    background-color: gainsboro;
-}
 .nameAlias:before {
     content: "Alias: ";
     font-weight: bold;
@@ -67,10 +78,10 @@ section {
     overflow:hidden;
 }
 /* Formatting for the prefix and/or suffix of Topics */
-.topic[topic_prefix]:before {
+.topicHeader[topic_prefix]:before {
     content: attr(topic_prefix) " - ";
 }
-.topic[topic_suffix]:after {
+.topicHeader[topic_suffix]:after {
     content: " (" attr(topic_suffix) ")";
 }
 /* Auto-numbering of sections within topics */

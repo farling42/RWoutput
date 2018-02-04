@@ -23,6 +23,7 @@
 
 #include <QBitmap>
 #include <QBuffer>
+#include <QCollator>
 #include <QDebug>
 #include <QFile>
 #include <QImage>
@@ -39,11 +40,20 @@
 #include <quazip/quazipfile.h>
 
 #include "xmlelement.h"
+#include "linefile.h"
 
 static int image_max_width = -1;
 static bool apply_reveal_mask = true;
 static bool always_show_index = false;
 static bool in_single_file = false;
+static bool sort_by_prefix = true;
+static QCollator collator;
+
+#if 1
+typedef QFile OurFile;
+#else
+typedef LineFile OurFile;
+#endif
 
 struct Linkage {
     QString name;
@@ -57,9 +67,31 @@ static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_
 
 #define DUMP_LEVEL 0
 
-static bool sort_by_public_name(const XmlElement *left, const XmlElement *right)
+// Sort topics, first by prefix, and then by topic name
+static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
 {
-    return left->attribute("public_name") < right->attribute("public_name");
+    if (sort_by_prefix)
+    {
+        // items with prefix come before items without prefix
+        const QString &left_prefix  = left->attribute("prefix");
+        const QString &right_prefix = right->attribute("prefix");
+        if (left_prefix != right_prefix)
+        {
+            if (right_prefix.isEmpty())
+            {
+                // left prefix is not empty, so must come first
+                return true;
+            }
+            if (left_prefix.isEmpty())
+            {
+                // right prefix is not empty, so must come first
+                return false;
+            }
+            return collator.compare(left_prefix, right_prefix) < 0;
+        }
+    }
+    // Both have the same prefix
+    return collator.compare(left->attribute("public_name"), right->attribute("public_name")) < 0;
 }
 
 
@@ -372,6 +404,18 @@ static void writeParaChildren(QXmlStreamWriter *stream, XmlElement *parent, cons
     }
 }
 
+/**
+ * @brief tobase64
+ * @param data
+ * @return
+ */
+static inline QString to_base64(const QByteArray &data)
+{
+    // use new LineFile class to insert \n at the appropriate points in the output
+    return QString{data.toBase64()};
+}
+
+
 /*
  * Return the divisor for the map's size
  */
@@ -401,7 +445,8 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
     stream->writeEndElement();  // figcaption
 
     // See if possible image conversion is required
-    if (mask_elem != nullptr || image_max_width > 0)
+    bool bad_format = (format == "bmp" || format == "tif");
+    if (mask_elem != nullptr || image_max_width > 0 || bad_format)
     {
 #ifdef THREADED
         // Only one thread at a time can use QImage
@@ -409,6 +454,12 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
 #endif
 
         QImage image = QImage::fromData(orig_data, qPrintable(format));
+        if (bad_format)
+        {
+            format = "png";
+            in_buffer = true;
+        }
+
         if (mask_elem != nullptr || (image_max_width > 0 && image.width() > image_max_width))
         {
             // Apply mask, if supplied
@@ -451,7 +502,12 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
                     image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
                 }
             }
-
+            //format = "png";   // not always better (especially if was JPG)
+            in_buffer = true;
+        }
+        // Do we need to put it in the buffer?
+        if (in_buffer)
+        {
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, qPrintable(format));
             buffer.close();
@@ -464,10 +520,10 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
     stream->writeAttribute("alt", image_name);
     if (in_buffer)
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
-                               .arg(QString(buffer.data().toBase64())));
+                               .arg(to_base64(buffer.data())));
     else
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
-                               .arg(QString(orig_data.toBase64())));
+                               .arg(to_base64(orig_data)));
     stream->writeEndElement();  // img
 
     stream->writeEndElement();  // figure
@@ -479,70 +535,73 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
 static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, const QByteArray &data,
                            const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
 {
+    // Don't inline objects which are more than 5MB in size
+    if (data.length() < 5*1000*1000)
+    {
 #ifdef ALWAYS_SAVE_EXT_FILES
-    // TESTING ONLY: Write the asset data to an external file
-    QFile file(filename);
-    if (!file.open(QFile::WriteOnly))
-    {
-        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
-        return;
-    }
-    file.write (data);
-    file.close();
+        // TESTING ONLY: Write the asset data to an external file
+        QFile file(filename);
+        if (!file.open(QFile::WriteOnly))
+        {
+            qWarning() << "writeExtObject: failed to open file for writing:" << filename;
+            return;
+        }
+        file.write (data);
+        file.close();
 #endif
 
-#define USE_INLINE
-#ifdef USE_INLINE
-    QString filetype = "image/" + filename.split(".").last();
-    QString mime_type = "binary/octet-stream";
-    if (filetype == "pdf") mime_type = "application/pdf";
+        QString mime_type = "binary/octet-stream";
+        QString filetype = filename.split(".").last();
+        if (filetype == "pdf") mime_type = "application/pdf";
 
-    stream->writeStartElement("p");
+        stream->writeStartElement("p");
 
-    stream->writeStartElement("span");
-    stream->writeAttribute("class", "snippet_label");
-    stream->writeCharacters(obj_name + ": ");
-    stream->writeEndElement();  // span
+        stream->writeStartElement("span");
+        stream->writeAttribute("class", "snippet_label");
+        stream->writeCharacters(obj_name + ": ");
+        stream->writeEndElement();  // span
 
-    stream->writeStartElement("span");
-    stream->writeStartElement("a");
-    stream->writeAttribute("download", filename);
-    stream->writeAttribute("href", QString("data:%1;base64,%2").arg(mime_type).arg(QString(data.toBase64())));
-    stream->writeCharacters(filename);
-    stream->writeEndElement();  // a
-    stream->writeEndElement();  // span
+        stream->writeStartElement("span");
+        stream->writeStartElement("a");
+        stream->writeAttribute("download", filename);
+        stream->writeAttribute("href", QString("data:%1;base64,%2").arg(mime_type).arg(to_base64(data)));
+        stream->writeCharacters(filename);
+        stream->writeEndElement();  // a
+        stream->writeEndElement();  // span
 
-    if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
-    stream->writeEndElement();  // p
-#else
-    // Write the asset data to an external file
-    QFile file(filename);
-    if (!file.open(QFile::WriteOnly))
-    {
-        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
-        return;
+        if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
+        stream->writeEndElement();  // p
     }
-    file.write (data);
-    file.close();
+    else
+    {
+        // Write the asset data to an external file
+        QFile file(filename);
+        if (!file.open(QFile::WriteOnly))
+        {
+            qWarning() << "writeExtObject: failed to open file for writing:" << filename;
+            return;
+        }
+        file.write (data);
+        file.close();
 
-    // Put a reference to the external file into the HTML output
-    stream->writeStartElement("p");
+        // Put a reference to the external file into the HTML output
+        stream->writeStartElement("p");
 
-    stream->writeStartElement("span");
-    stream->writeAttribute("class", "snippet_label");
-    stream->writeCharacters(obj_name + ": ");
-    stream->writeEndElement();  // span
+        stream->writeStartElement("span");
+        stream->writeAttribute("class", "snippet_label");
+        stream->writeCharacters(obj_name + ": ");
+        stream->writeEndElement();  // span
 
-    stream->writeStartElement("span");
-    stream->writeStartElement("a");
-    stream->writeAttribute("href", filename);
-    stream->writeCharacters(filename);
-    stream->writeEndElement();  // a
-    stream->writeEndElement();  // span
+        stream->writeStartElement("span");
+        stream->writeStartElement("a");
+        stream->writeAttribute("href", filename);
+        stream->writeCharacters(filename);
+        stream->writeEndElement();  // a
+        stream->writeEndElement();  // span
 
-    if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
-    stream->writeEndElement();  // p
-#endif
+        if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
+        stream->writeEndElement();  // p
+    }
 }
 
 /**
@@ -978,34 +1037,41 @@ static void writeSection(QXmlStreamWriter *stream, XmlElement *section, const Li
 }
 
 
-static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
+static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, XmlElement *topic, bool allinone)
 {
+    // The RWoutput file puts the "true name" as the public_name of the topic.
+    // All other names are listed as aliases (with no attributes).
+    // If the RW topic has a "true name" defined then the actual name of the topic
+    // is reported as an alias.
+
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
 #endif
     // Start with HEADER for the topic
-    stream->writeStartElement("header");
+    stream->writeStartElement(allinone ? "summary" : "header");
 
-    stream->writeStartElement(QString("h1"));
-    stream->writeAttribute("class", "topic");
+    stream->writeAttribute("class", "topicHeader");
     stream->writeAttribute("id", topic->attribute("topic_id"));
     if (topic->hasAttribute("prefix")) stream->writeAttribute("topic_prefix", topic->attribute("prefix"));
     if (topic->hasAttribute("suffix")) stream->writeAttribute("topic_suffix", topic->attribute("suffix"));
     stream->writeCharacters(topic->attribute("public_name"));
-    stream->writeEndElement();  // h1
-    // Maybe some aliases
-    for (auto alias : topic->xmlChildren("alias"))
+
+    auto aliases = topic->xmlChildren("alias");
+    // Maybe some aliases (in own section for smaller font?)
+    if (!aliases.isEmpty())
+    {
+        stream->writeEndElement();  // summary/header
+        stream->writeStartElement("header");
+        stream->writeAttribute("class", "nameAliasHeader");
+    }
+    for (auto alias : aliases)
     {
         stream->writeStartElement("p");
-        // The RWoutput file puts the "true name" as the public_name of the topic.
-        // All other names are listed as aliases (with no attributes).
-        // If the RW topic has a "true name" defined then the actual name of the topic
-        // is reported as an alias.
         stream->writeAttribute("class", "nameAlias");
         stream->writeCharacters(alias->attribute("name"));
         stream->writeEndElement(); // p
     }
-    stream->writeEndElement();  // header
+    stream->writeEndElement();  // header for aliases OR the summary/header for topic title
 
     if (always_show_index)
     {
@@ -1015,6 +1081,7 @@ static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
     }
 
     stream->writeStartElement("section"); // for all the RW sections
+    stream->writeAttribute("class", "topicBody");
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1032,13 +1099,16 @@ static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
         writeSection(stream, section, links, /*level*/ 1);
     }
 
+    stream->writeEndElement();  // section (for RW sections)
+
     // Provide summary of links to child topics
     auto child_topics = topic->xmlChildren("topic");
-    std::sort(child_topics.begin(), child_topics.end(), sort_by_public_name);
+    std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
 
     if (!child_topics.isEmpty())
     {
         stream->writeStartElement("footer");
+        stream->writeAttribute("class", "topicFooter");
 
         stream->writeStartElement("h2");
         stream->writeAttribute("class", "childTopicsHeader");
@@ -1065,14 +1135,14 @@ static void writeTopicBody(QXmlStreamWriter *stream, XmlElement *topic)
         {
             for (auto child_topic: child_topics)
             {
-                stream->writeStartElement("section");
-                writeTopicBody(stream, child_topic);
+                stream->writeStartElement("details");
+                stream->writeAttribute("class", "mainTopic");
+                stream->writeAttribute("open", "open");
+                writeTopicBody(stream, main_tag, child_topic, allinone);
                 stream->writeEndElement();
             }
         }
     }
-
-    stream->writeEndElement();  // section (for RW sections)
 }
 
 
@@ -1083,7 +1153,7 @@ static void writeTopicFile(XmlElement *topic)
 #endif
 
     // Create a new file for this topic
-    QFile topic_file(topic->attribute("topic_id") + ".xhtml");
+    OurFile topic_file(topic->attribute("topic_id") + ".xhtml");
     if (!topic_file.open(QFile::WriteOnly|QFile::Text))
     {
         qWarning() << "Failed to open output file for topic" << topic_file.fileName();
@@ -1100,7 +1170,7 @@ static void writeTopicFile(XmlElement *topic)
 
     stream->writeStartElement("body");
 
-    writeTopicBody(stream, topic);
+    writeTopicBody(stream, "header", topic, /*allinone*/ false);
 
     // Include the INDEX file
     if (always_show_index)
@@ -1148,7 +1218,7 @@ static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int l
         stream->writeStartElement(QString("ul"));
         stream->writeAttribute("class", QString("summary%1").arg(level));
 
-        std::sort(child_topics.begin(), child_topics.end(), sort_by_public_name);
+        std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
 
         for (auto child_topic: child_topics)
         {
@@ -1261,7 +1331,7 @@ static void writeSeparateIndex(XmlElement *root_elem)
 
                     // Organise topics alphabetically
                     auto topics = categories.values(cat);
-                    std::sort(topics.begin(), topics.end(), sort_by_public_name);
+                    std::sort(topics.begin(), topics.end(), sort_all_topics);
 
                     for (auto topic: topics)
                     {
@@ -1317,6 +1387,7 @@ void toHtml(const QString &path,
     apply_reveal_mask = use_reveal_mask;
     always_show_index = index_on_every_page;
     in_single_file    = !separate_files;
+    collator.setNumericMode(true);
 
     // Get a full list of the individual STYLE attributes of every single topic,
     // with a view to putting them into the CSS instead.
@@ -1396,7 +1467,7 @@ void toHtml(const QString &path,
 
         // Write header for single file
         // Create a new file for this topic
-        QFile single_file(path);
+        OurFile single_file(path);
         if (!single_file.open(QFile::WriteOnly|QFile::Text))
         {
             qWarning() << "Failed to open chosen output file" << single_file.fileName();
@@ -1413,13 +1484,18 @@ void toHtml(const QString &path,
 
         stream.writeStartElement("body");
 
-        // All topics in a single file, nesting child topics
-        // inside the parent topic.
-        for (auto topic : contents->xmlChildren("topic"))
+        // All topics in a single file, grouped by category,
+        // nesting child topics inside the parent topic.
+        auto children = contents->xmlChildren("topic");
+        std::sort(children.begin(), children.end(), sort_all_topics);
+
+        for (auto topic : children)
         {
-            stream.writeStartElement("section");
-            writeTopicBody(&stream, topic);
-            stream.writeEndElement();
+            stream.writeStartElement("details");
+            stream.writeAttribute("class", "mainTopic");
+            stream.writeAttribute("open", "open");
+            writeTopicBody(&stream, "summary", topic, /*allinone*/ true);
+            stream.writeEndElement();  // details
         }
 
         // Write footer for single file
