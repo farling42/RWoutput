@@ -6,7 +6,7 @@
 
 VERSION = 1.16
 
-QT       += core gui
+QT       += core gui printsupport
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -29,13 +29,15 @@ SOURCES += \
         mainwindow.cpp \
     xmlelement.cpp \
     outputhtml.cpp \
-    linefile.cpp
+    linefile.cpp \
+    outhtml4subset.cpp
 
 HEADERS += \
         mainwindow.h \
     xmlelement.h \
     outputhtml.h \
-    linefile.h
+    linefile.h \
+    outhtml4subset.h
 
 FORMS += \
         mainwindow.ui

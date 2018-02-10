@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>263</width>
-    <height>254</height>
+    <width>411</width>
+    <height>305</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,150 +23,208 @@
      </widget>
     </item>
     <item>
-     <widget class="QWidget" name="widget" native="true">
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QGroupBox" name="rwInput">
-         <property name="title">
-          <string>RW input</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <item>
-           <widget class="QPushButton" name="loadFile">
-            <property name="text">
-             <string>LOAD
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QGroupBox" name="rwInput">
+        <property name="title">
+         <string>RW input</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <item>
+          <widget class="QPushButton" name="loadFile">
+           <property name="text">
+            <string>LOAD
 rwoutput
 FILE</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer_2">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="htmlOutput">
-         <property name="title">
-          <string>HTML output</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout">
-          <item>
-           <widget class="QPushButton" name="saveHtml">
-            <property name="text">
-             <string>SAVE
-HTML</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="label">
-            <property name="text">
-             <string>Max. Image Width</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="maxImageWidth">
-            <property name="toolTip">
-             <string>Define the maximum picture width</string>
-            </property>
-            <property name="currentIndex">
-             <number>2</number>
-            </property>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="topicCount">
+           <property name="text">
+            <string>Topic Count: </string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="htmlOutput">
+        <property name="title">
+         <string>Output Options</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <widget class="QGroupBox" name="groupBox_3">
+           <property name="title">
+            <string>Images</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_6">
             <item>
-             <property name="text">
-              <string>Original Size</string>
-             </property>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>Max. Width (pixels)</string>
+              </property>
+             </widget>
             </item>
             <item>
-             <property name="text">
-              <string>512</string>
-             </property>
+             <widget class="QComboBox" name="maxImageWidth">
+              <property name="toolTip">
+               <string>Define the maximum picture width</string>
+              </property>
+              <property name="currentIndex">
+               <number>2</number>
+              </property>
+              <item>
+               <property name="text">
+                <string>Original Size</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>512</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>1024</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>2048</string>
+               </property>
+              </item>
+             </widget>
             </item>
             <item>
-             <property name="text">
-              <string>1024</string>
-             </property>
+             <widget class="QCheckBox" name="revealMask">
+              <property name="toolTip">
+               <string>Have all smart images show the reveal mask</string>
+              </property>
+              <property name="text">
+               <string>Apply Reveal Mask</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="groupBox_2">
+           <property name="title">
+            <string>HTML</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <item>
+             <widget class="QCheckBox" name="separateTopicFiles">
+              <property name="toolTip">
+               <string>For HTML output, produce a separate web page for each topic</string>
+              </property>
+              <property name="text">
+               <string>Separate Topic Files</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
             </item>
             <item>
-             <property name="text">
-              <string>2048</string>
-             </property>
+             <widget class="QCheckBox" name="indexOnEveryPage">
+              <property name="toolTip">
+               <string>Provide a navigation panel on each web page</string>
+              </property>
+              <property name="text">
+               <string>Index on every page</string>
+              </property>
+             </widget>
             </item>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="separateTopicFiles">
-            <property name="text">
-             <string>Separate Topic Files</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="revealMask">
-            <property name="toolTip">
-             <string>Have all smart images show the reveal mask</string>
-            </property>
-            <property name="text">
-             <string>Apply Reveal Mask</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="indexOnEveryPage">
-            <property name="text">
-             <string>Index on every page</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer_3">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
-       </item>
-      </layout>
-     </widget>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
+         <string>Output</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_4">
+         <item>
+          <widget class="QPushButton" name="saveHtml">
+           <property name="toolTip">
+            <string>Create one or more HTML files (HTML5)</string>
+           </property>
+           <property name="text">
+            <string>Create HTML file(s)</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="savePdf">
+           <property name="toolTip">
+            <string>Produce a single PDF document with all topics in alphabetical order</string>
+           </property>
+           <property name="text">
+            <string>Create PDF file</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="print">
+           <property name="toolTip">
+            <string>Print all the topics in alphabetical order</string>
+           </property>
+           <property name="text">
+            <string>Print</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="simpleHtml">
+           <property name="toolTip">
+            <string>This is the interim format for PDF and Print generation</string>
+           </property>
+           <property name="text">
+            <string>Create HTML4 file</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
@@ -175,7 +233,7 @@ HTML</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>263</width>
+     <width>411</width>
      <height>21</height>
     </rect>
    </property>

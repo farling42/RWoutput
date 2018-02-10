@@ -38,6 +38,9 @@ public:
 private slots:
     void on_loadFile_clicked();
     void on_saveHtml_clicked();
+    void on_savePdf_clicked();
+    void on_print_clicked();
+    void on_simpleHtml_clicked();
 
 private:
     Ui::MainWindow *ui;
