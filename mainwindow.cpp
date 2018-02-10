@@ -151,7 +151,7 @@ void MainWindow::on_savePdf_clicked()
     QDir::setCurrent(dir.absolutePath());
 
     QFile file(fileName);
-    if (file.open(QFile::WriteOnly))
+    if (file.open(QFile::WriteOnly|QFile::Text))
     {
         bool ok = true;
         int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
@@ -159,16 +159,22 @@ void MainWindow::on_savePdf_clicked()
 
         QTextDocument doc;
 
-        ui->statusBar->showMessage("Generating PDF contents...");
-        QString result;
-        QTextStream stream(&result, QIODevice::WriteOnly);
-        outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
-        doc.setHtml(result);
+        ui->statusBar->showMessage("Generating HTML4 subset contents...");
+        {
+            QString result;   // only keep long enough to call doc.setHtml
+            QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
+            outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
+            ui->statusBar->showMessage("Transferring to QTextDocument...");
+            doc.setHtml(result);
+        }
         //doc.setPageSize(printer.pageRect().size()); // This is necessary if you want to hide the page number
 
         ui->statusBar->showMessage("Saving PDF file...");
         QPdfWriter pdf(&file);
         pdf.setPageSize(QPrinter::A4);
+        // Try explicitly setting page size so that QTextDocument doesn't have to lay out
+        // the entire document itself. PDF viewer reports unrecognised font!
+        //doc.setPageSize(pdf.pageLayout().pageSize().size(QPageSize::Point));
         doc.print(&pdf);
         ui->statusBar->showMessage("PDF file SAVE complete.");
     }
@@ -198,11 +204,14 @@ void MainWindow::on_print_clicked()
 
         QTextDocument doc;
 
-        ui->statusBar->showMessage("Preparing to Print...");
-        QString result;
-        QTextStream stream(&result, QIODevice::WriteOnly);
-        outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
-        doc.setHtml(result);
+        ui->statusBar->showMessage("Generating HTML4 subset contents...");
+        {
+            QString result;   // only keep long enough to call doc.setHtml
+            QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
+            outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
+            ui->statusBar->showMessage("Transferring to QTextDocument...");
+            doc.setHtml(result);
+        }
         doc.setPageSize(dialog.printer()->pageRect().size()); // This is necessary if you want to hide the page number
 
         ui->statusBar->showMessage("Printing...");
@@ -231,13 +240,12 @@ void MainWindow::on_simpleHtml_clicked()
     QDir::setCurrent(dir.absolutePath());
 
     QFile file(fileName);
-    if (file.open(QFile::WriteOnly))
+    if (file.open(QFile::WriteOnly|QFile::Text))
     {
         bool ok = true;
         int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
         if (!ok) max_image_width = -1;
 
-        //ui->statusBar->showMessage("Generating HTML4 content...");
         ui->statusBar->showMessage("Saving HTML4 file...");
         QTextStream stream(&file);
         outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());

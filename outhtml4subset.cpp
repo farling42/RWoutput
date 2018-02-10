@@ -256,6 +256,10 @@ std::mutex image_mutex;
 static int writeImage(QTextStream &stream, const QString &image_name, const QByteArray &orig_data, const XmlElement *mask_elem,
                const QString &filename, const QString &class_name, const XmlElement *annotation)
 {
+#if DEBUG_LEVEL > 4
+    qDebug() << "....writeImage: image" << image_name << ", file" << filename << ", size" << orig_data.size();
+#endif
+
     QBuffer buffer;
     QString format = filename.split(".").last();
     int divisor = 1;
