@@ -8,6 +8,12 @@
     background-color: gainsboro;
     padding-bottom: 5px;
 }
+
+@media print {
+    /* When printing, start each topic on a new page */
+    .mainTopic { page-break-before: always; }
+}
+
 header.topicHeader {
     /* Only when each topic is in a separate file */
     text-align: center;

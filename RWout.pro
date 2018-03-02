@@ -55,7 +55,7 @@ COMPANY = com.amusingtime.RWOutput
 
 # Get the 32-bit compiler to allow 2GB or more of accessible memory.
 QMAKE_CXXFLAGS += -Wl,--large-address-aware
-QMAKE_LFLAGS += -Wl,--large-address-aware
+QMAKE_LFLAGS   += -Wl,--large-address-aware
 
 DESTDIR = install
 
