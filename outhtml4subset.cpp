@@ -382,6 +382,8 @@ static void writeExtObject(QTextStream &stream, const QString &obj_name, const Q
         if (annotation) writeParaChildren(stream, annotation, class_name);
     }
 #else
+    Q_UNUSED(data)
+    Q_UNUSED(filename)
     if (annotation) writeParaChildren(stream, annotation, class_name, /*prefix*/ obj_name);
 #endif
 }

@@ -55,6 +55,8 @@ typedef QFile OurFile;
 typedef LineFile OurFile;
 #endif
 
+#undef DUMP_CHILDREN
+
 struct Linkage {
     QString name;
     QString id;
@@ -613,6 +615,7 @@ static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, co
 
 static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, bool top=false)
 {
+    Q_UNUSED(top)
     GumboVector *children = &parent->v.element.children;
     for (unsigned i=0; i<children->length; i++)
     {
@@ -681,7 +684,7 @@ static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
     return nullptr;
 }
 
-
+#ifdef DUMP_CHILDREN
 static void dump_children(const QString &from, GumboNode *parent)
 {
     QStringList list;
@@ -716,7 +719,7 @@ static void dump_children(const QString &from, GumboNode *parent)
     }
     qDebug() << "   write_html:" << from << gumbo_normalized_tagname(parent->v.element.tag) << "has children" << list.join(", ");
 }
-
+#endif
 
 static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
@@ -730,12 +733,16 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     stream->writeStartElement("details");
     stream->writeAttribute("class", sntype.toLower() + "Details");
 
-    //dump_children("ROOT", output->root);
+#ifdef DUMP_CHILDREN
+    dump_children("ROOT", output->root);
+#endif
 
     GumboNode *head = get_gumbo_child(output->root, "head");
     GumboNode *body = get_gumbo_child(output->root, "body");
 
-    //dump_children("HEAD", head);
+#ifdef DUMP_CHILDREN
+    dump_children("HEAD", head);
+#endif
 
     // Maybe we have a CSS that we can put inline.
     GumboNode *style = get_gumbo_child(head, "style");
@@ -771,7 +778,9 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
 
     if (body)
     {
-        //dump_children("BODY", body);
+#ifdef DUMP_CHILDREN
+        dump_children("BODY", body);
+#endif
         output_gumbo_children(stream, body, /*top*/true);
     }
 

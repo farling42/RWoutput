@@ -8,6 +8,8 @@ VERSION = 1.16
 
 QT       += core gui printsupport
 
+CONFIG  += c++11
+
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = RWout
@@ -107,3 +109,5 @@ else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gu
 else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/release/gumbo.lib
 else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Debug/debug/gumbo.lib
 else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/libgumbo.a
+
+# %{CurrentKit:FileSystemName} = Desktop_...32bit

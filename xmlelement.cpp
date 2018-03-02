@@ -71,7 +71,7 @@ XmlElement::XmlElement(const QString &fixed_text, QObject *parent) :
 }
 
 
-static void create_children(GumboNode *node, QObject *parent)
+static void create_children_from_gumbo(GumboNode *node, QObject *parent)
 {
     GumboVector *children = &node->v.element.children;
     for (unsigned i=0; i<children->length; i++)
@@ -130,7 +130,7 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
         //qDebug() << "    attribute:" << at->name << "=" << at->value;
     }
 
-    create_children(node, this);
+    create_children_from_gumbo(node, this);
 }
 
 
@@ -212,7 +212,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     if (output->root->v.element.children.length >= 2)
                     {
                         GumboNode *body_node = static_cast<GumboNode*>(output->root->v.element.children.data[1]);
-                        create_children(body_node, this);
+                        create_children_from_gumbo(body_node, this);
                     }
                     // Get GUMBO to release all the memory
                     gumbo_destroy_output(&kGumboDefaultOptions, output);
