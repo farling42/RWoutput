@@ -95,19 +95,22 @@ for(FILE,EXTRA_BINFILES){
 QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expand(\n\t))
 }
 
-win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/ -lgumbo
-else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Debug/debug/ -lgumbo
-else:win32:!win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/release/ -lgumbo
-else:win32:!win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Debug/debug/ -lgumbo
-else:unix: LIBS += -L$$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/ -lgumbo
+MYMINGW = Desktop_Qt_5_10_1_MinGW_32bit
+MYMSVC  = Desktop_Qt_5_10_1_MSVC2015_64bit
+
+win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Release/release/ -lgumbo
+else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Debug/debug/ -lgumbo
+else:win32:!win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMSVC}-Release/release/ -lgumbo
+else:win32:!win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMSVC}-Debug/debug/ -lgumbo
+else:unix: LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Release/ -lgumbo
 
 INCLUDEPATH += $$PWD/../gumbo
 DEPENDPATH += $$PWD/../gumbo
 
-win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/release/libgumbo.a
-else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Debug/debug/libgumbo.a
-else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Release/release/gumbo.lib
-else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MSVC2015_64bit-Debug/debug/gumbo.lib
-else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-Desktop_Qt_5_9_2_MinGW_32bit-Release/libgumbo.a
+win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMINGW}-Release/release/libgumbo.a
+else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMINGW}-Debug/debug/libgumbo.a
+else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Release/release/gumbo.lib
+else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Debug/debug/gumbo.lib
+else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMINGW}-Release/libgumbo.a
 
 # %{CurrentKit:FileSystemName} = Desktop_...32bit
