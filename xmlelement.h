@@ -32,31 +32,35 @@ public:
     XmlElement(QXmlStreamReader*, QObject *parent = nullptr);
     XmlElement(GumboNode *info, QObject *parent);
 
-    static XmlElement *readTree(QIODevice*);
-
-    bool hasAttribute(const QString &name) const;
-    QString attribute(const QString &name) const;
-    bool isFixedString() const { return !p_fixed_text.isEmpty(); }
-    inline QString fixedText() const { return p_fixed_text; }
-
-    QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
-    XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
-
     // objectName == XML element title
     struct Attribute {
         QString name;
         QString value;
         Attribute(const QString &name, const QString &value) : name(name), value(value) {}
     };
-    QByteArray p_byte_data;
-    QList<Attribute> p_attributes;
+
+    static XmlElement *readTree(QIODevice*);
+
+    bool hasAttribute(const QString &name) const;
+    QString attribute(const QString &name) const;
+    bool isFixedString() const { return is_fixed_text; }
+    inline const QString fixedText() const { return QString(p_byte_data); }
+    inline const QByteArray &byteData() const { return p_byte_data; }
+    inline const QList<Attribute> &attributes() const { return p_attributes; }
+
+    QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
+    XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
+
     void dump_tree() const;
     QString snippetName() const;
     QString childString() const;
 private:
-    XmlElement(const QString &fixed_text, QObject *parent);
+    XmlElement(const QByteArray &fixed_text, QObject *parent);
     void createGumboChildren(GumboNode *node);
-    const QString p_fixed_text;
+    // Real data is...
+    QByteArray p_byte_data;
+    QList<Attribute> p_attributes;
+    const bool is_fixed_text{false};
 };
 
 #endif // XMLELEMENT_H

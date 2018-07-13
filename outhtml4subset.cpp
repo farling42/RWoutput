@@ -72,7 +72,7 @@ QString writeAttributes(const XmlElement *elem, const QString &style)
     QTextStream stream(&result);
     bool done_style = false;
 
-    for (auto attr : elem->p_attributes)
+    for (auto attr : elem->attributes())
     {
         // Ignore attributes which won't do anything in the HTML4 subset.
         if (attr.name == "style")
@@ -295,7 +295,7 @@ static int writeImage(QTextStream &stream, const QString &image_name, const QByt
             {
                 // If the mask is empty, then don't use it
                 // (if the image is JPG, the mask isn't necessarily JPG
-                QImage mask = QImage::fromData(mask_elem->p_byte_data);
+                QImage mask = QImage::fromData(mask_elem->byteData());
 
                 // Ensure we have a 32-bit image to convert
                 image = image.convertToFormat(QImage::Format_RGB32);
@@ -448,7 +448,8 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                     stream << "</u></b>\n";
 
                     // Put in markers for statblock
-                    QBuffer buffer(&contents->p_byte_data);
+                    QByteArray store = contents->byteData();
+                    QBuffer buffer(&store);
                     QuaZip zip(&buffer);
                     if (zip.open(QuaZip::mdUnzip))
                     {
@@ -497,7 +498,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                 {
                     if (sn_type == "Picture")
                     {
-                        writeImage(stream, ext_object->attribute("name"), contents->p_byte_data,
+                        writeImage(stream, ext_object->attribute("name"), contents->byteData(),
                                    /*mask*/nullptr, filename, sn_style, annotation);
                     }
                     else if (filename.endsWith(".html") ||
@@ -508,12 +509,12 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                         //if (annotation) writeParaChildren(stream, annotation, sn_type, image_name);
 
                         stream << "<div>";
-                        stream << get_body(contents->p_byte_data);
+                        stream << get_body(contents->byteData());
                         stream << "</div>\n";
                     }
                     else
                     {
-                        writeExtObject(stream, ext_object->attribute("name"), contents->p_byte_data, filename, sn_style, annotation);
+                        writeExtObject(stream, ext_object->attribute("name"), contents->byteData(), filename, sn_style, annotation);
                     }
                 }
             }
@@ -535,7 +536,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
 
-            writeImage(stream, smart_image->attribute("name"), contents->p_byte_data,
+            writeImage(stream, smart_image->attribute("name"), contents->byteData(),
                                      mask, filename, sn_style, annotation);
 #if 0
             if (!pins.isEmpty())

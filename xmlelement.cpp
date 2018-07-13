@@ -20,7 +20,7 @@
 #include <QDebug>
 #include "gumbo.h"
 
-#define PRINT_ON_LOAD
+//#define PRINT_ON_LOAD
 //#define DEBUG_XMLELEMENT_CONSTRUCTOR
 
 static int dump_indentation = 0;
@@ -30,10 +30,10 @@ void XmlElement::dump_tree() const
 {
     QString indentation(dump_indentation, QChar(QChar::Space));
 
-    if (!p_fixed_text.isEmpty())
+    if (!fixedText().isEmpty())
     {
         // A simple fixed string
-        qDebug().noquote().nospace() << indentation << p_fixed_text;
+        qDebug().noquote().nospace() << indentation << fixedText();
     }
     else
     {
@@ -75,9 +75,10 @@ void XmlElement::dump_tree() const
  * @param parent
  */
 
-XmlElement::XmlElement(const QString &fixed_text, QObject *parent) :
+XmlElement::XmlElement(const QByteArray &fixed_text, QObject *parent) :
     QObject(parent),
-    p_fixed_text(fixed_text)
+    p_byte_data(fixed_text),
+    is_fixed_text(true)
 {
 #ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
     qDebug() << "XmlElement(string) =" << fixed_text;
@@ -242,7 +243,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     gumbo_destroy_output(&kGumboDefaultOptions, output);
                 }
                 else
-                    new XmlElement(reader->text().toString(), this);
+                    new XmlElement(reader->text().toString().toUtf8(), this);
             }
             break;
 

@@ -15,9 +15,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#undef ALWAYS_SAVE_EXT_FILES
-#undef THREADED
-#undef TIME_CONVERSION
+//#define ALWAYS_SAVE_EXT_FILES
+//#define THREADED
+//#define TIME_CONVERSION
 
 #include "outputhtml.h"
 
@@ -263,7 +263,7 @@ static void writeAttributes(QXmlStreamWriter *stream, XmlElement *elem, const QS
 {
     QStringList class_names;
     if (!classname.isEmpty()) class_names.append(classname);
-    for (auto attr : elem->p_attributes)
+    for (auto attr : elem->attributes())
     {
         if (attr.name == "style")
         {
@@ -300,19 +300,20 @@ static void writeSpan(QXmlStreamWriter *stream, XmlElement *elem, const LinkageL
     {
         // TODO - the span containing the link might have style or class information!
         // Check to see if the fixed text should be replaced with a link.
+        const QString text = elem->fixedText();
         for (auto link : links)
         {
             // Ignore case during the test
-            if (link.name.compare(elem->fixedText(), Qt::CaseInsensitive) == 0)
+            if (link.name.compare(text, Qt::CaseInsensitive) == 0)
             {
                 stream->writeStartElement("a");
                 writeTopicHref(stream, link.id);
-                stream->writeCharacters(elem->fixedText());  // case might be different
+                stream->writeCharacters(text);  // case might be different
                 stream->writeEndElement();  // a
                 return;
             }
         }
-        stream->writeCharacters(elem->fixedText());
+        stream->writeCharacters(text);
     }
     else
     {
@@ -470,7 +471,7 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
             {
                 // If the mask is empty, then don't use it
                 // (if the image is JPG, the mask isn't necessarily JPG
-                QImage mask = QImage::fromData(mask_elem->p_byte_data);
+                QImage mask = QImage::fromData(mask_elem->byteData());
 
                 // Ensure we have a 32-bit image to convert
                 image = image.convertToFormat(QImage::Format_RGB32);
@@ -830,11 +831,12 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                 XmlElement *contents = asset->xmlChild("contents");
                 if (contents)
                 {
-                    writeExtObject(stream, ext_object->attribute("name"), contents->p_byte_data,
+                    writeExtObject(stream, ext_object->attribute("name"), contents->byteData(),
                                    filename, sn_style, annotation, links);
 
                     // Put in markers for statblock
-                    QBuffer buffer(&contents->p_byte_data);
+                    QByteArray store = contents->byteData();
+                    QBuffer buffer(&store);
                     QuaZip zip(&buffer);
                     if (zip.open(QuaZip::mdUnzip))
                     {
@@ -881,7 +883,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                 {
                     if (sn_type == "Picture")
                     {
-                        writeImage(stream, ext_object->attribute("name"), contents->p_byte_data,
+                        writeImage(stream, ext_object->attribute("name"), contents->byteData(),
                                    /*mask*/nullptr, filename, sn_style, annotation, links);
                     }
                     else if (filename.endsWith(".html") ||
@@ -889,11 +891,11 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                              filename.endsWith(".rtf"))
                     {
                         stream->writeComment("Decoded " + filename);
-                        write_html(stream, true, sn_type, contents->p_byte_data);
+                        write_html(stream, true, sn_type, contents->byteData());
                     }
                     else
                     {
-                        writeExtObject(stream, ext_object->attribute("name"), contents->p_byte_data,
+                        writeExtObject(stream, ext_object->attribute("name"), contents->byteData(),
                                        filename, sn_style, annotation, links);
                     }
                 }
@@ -918,7 +920,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
             QString usemap;
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            int divisor = writeImage(stream, smart_image->attribute("name"), contents->p_byte_data,
+            int divisor = writeImage(stream, smart_image->attribute("name"), contents->byteData(),
                                      mask, filename, sn_style, annotation, links, usemap);
 
             if (!pins.isEmpty())
@@ -940,9 +942,10 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                     if (!link.isEmpty()) writeTopicHref(stream, link);
 
                     XmlElement *description = pin->xmlChild("description");
-                    if (description && !description->childString().isEmpty())
+                    if (description)
                     {
-                        stream->writeAttribute("alt", description->childString());
+                        const QString &bodytext = description->childString();
+                        if (!bodytext.isEmpty()) stream->writeAttribute("alt", bodytext);
                     }
                     stream->writeEndElement();  // area
                 }
