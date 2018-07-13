@@ -313,23 +313,24 @@ static void writeSpan(QXmlStreamWriter *stream, XmlElement *elem, const LinkageL
             }
         }
         stream->writeCharacters(elem->fixedText());
-        return;
     }
-
-    // Only put in span if we really require it
-    bool in_element = elem->objectName() != "span" || elem->hasAttribute("style") || !classname.isEmpty();
-    if (in_element)
+    else
     {
-        stream->writeStartElement(elem->objectName());
-        writeAttributes(stream, elem, classname);
-    }
+        // Only put in span if we really require it
+        bool in_element = elem->objectName() != "span" || elem->hasAttribute("style") || !classname.isEmpty();
+        if (in_element)
+        {
+            stream->writeStartElement(elem->objectName());
+            writeAttributes(stream, elem, classname);
+        }
 
-    // All sorts of HTML can appear inside the text
-    for (auto child: elem->xmlChildren())
-    {
-        writeSpan(stream, child, links, QString());
+        // All sorts of HTML can appear inside the text
+        for (auto child: elem->xmlChildren())
+        {
+            writeSpan(stream, child, links, QString());
+        }
+        if (in_element) stream->writeEndElement(); // span
     }
-    if (in_element) stream->writeEndElement(); // span
 }
 
 

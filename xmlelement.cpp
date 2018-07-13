@@ -20,58 +20,77 @@
 #include <QDebug>
 #include "gumbo.h"
 
-#undef PRINT_ON_LOAD
+#define PRINT_ON_LOAD
+//#define DEBUG_XMLELEMENT_CONSTRUCTOR
 
 static int dump_indentation = 0;
-
-const QString FIXED_STRING_NAME("FIXED-STRING");
 
 
 void XmlElement::dump_tree() const
 {
     QString indentation(dump_indentation, QChar(QChar::Space));
 
-    QString line;
-
-    if (objectName() == FIXED_STRING_NAME)
-    {
-        qDebug().noquote().nospace() << indentation << p_fixed_text;
-        return;
-    }
-
-    line = "<" + objectName();
-    for (auto iter : p_attributes)
-    {
-        line.append(" " + iter.name + "=\"" + iter.value + "\"");
-    }
-    QList<XmlElement*> child_items = findChildren<XmlElement*>(QString(), Qt::FindDirectChildrenOnly);
-    bool is_empty = (p_fixed_text.isEmpty() && children().count() == 0);
-    line.append(is_empty ? "/>" : ">");
-    qDebug().noquote().nospace() << indentation << line;
-
     if (!p_fixed_text.isEmpty())
-        qDebug().noquote().nospace() << indentation << p_fixed_text;
-
-    dump_indentation += 3;
-    foreach (XmlElement *child, child_items)
     {
-        child->dump_tree();
+        // A simple fixed string
+        qDebug().noquote().nospace() << indentation << p_fixed_text;
     }
-    dump_indentation -= 3;
-    if (!is_empty)
-        qDebug().noquote().nospace() << indentation << "</" << objectName() << ">";
+    else
+    {
+        // A proper XML element
+        QString line = "<" + objectName();
+        for (auto iter : p_attributes)
+        {
+            line.append(" " + iter.name + "=\"" + iter.value + "\"");
+        }
+        QList<XmlElement*> child_items = findChildren<XmlElement*>(QString(), Qt::FindDirectChildrenOnly);
+
+        if (child_items.count() == 0)
+        {
+            // No contents, so a terminated start element
+            qDebug().noquote().nospace() << indentation << line << "/>";
+        }
+        else
+        {
+            // Terminate the opening of the parent element
+            qDebug().noquote().nospace() << indentation << line << ">";
+
+            dump_indentation += 3;
+            foreach (XmlElement *child, child_items)
+            {
+                child->dump_tree();
+            }
+            dump_indentation -= 3;
+
+            // Close the parent element
+            qDebug().noquote().nospace() << indentation << "</" << objectName() << ">";
+        }
+    }
 }
 
+/**
+ * @brief XmlElement::XmlElement
+ * Create a simple fixed-string element in the XmlElement tree.
+ * @param fixed_text
+ * @param parent
+ */
 
 XmlElement::XmlElement(const QString &fixed_text, QObject *parent) :
-    QObject(parent)
+    QObject(parent),
+    p_fixed_text(fixed_text)
 {
-    setObjectName(FIXED_STRING_NAME);
-    p_fixed_text = fixed_text;
+#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
+    qDebug() << "XmlElement(string) =" << fixed_text;
+#endif
 }
 
+/**
+ * @brief XmlElement::create_children_from_gumbo
+ * Read all the GUMBO nodes, looking for TEXT and ELEMENT nodes to convert to XmlElements.
+ * @param node
+ */
 
-static void create_children_from_gumbo(GumboNode *node, QObject *parent)
+void XmlElement::createGumboChildren(GumboNode *node)
 {
     GumboVector *children = &node->v.element.children;
     for (unsigned i=0; i<children->length; i++)
@@ -80,8 +99,13 @@ static void create_children_from_gumbo(GumboNode *node, QObject *parent)
         switch (child->type)
         {
         case GUMBO_NODE_TEXT:
+            //qDebug() << "XmlElement(Gumbo) : GUMBO_NODE_TEXT = " << child->v.text.text;
+            new XmlElement(child->v.text.text, this);
+            break;
+
         case GUMBO_NODE_ELEMENT:
-            new XmlElement(child, parent);
+            //qDebug() << "XmlElement(Gumbo) : GUMBO_NODE_ELEMENT";
+            new XmlElement(child, this);
             break;
 
         case GUMBO_NODE_WHITESPACE:
@@ -105,47 +129,47 @@ static void create_children_from_gumbo(GumboNode *node, QObject *parent)
 
 /**
  * @brief XmlElement::XmlElement
- * Creates an XmlElement tree from the provided GumboNode tree.
- * @param node
+ * Creates an XmlElement tree from the HTML embedded within the text part of an element.
+ * @param node the GumboNode to be decoded
  * @param parent
  */
 XmlElement::XmlElement(GumboNode *node, QObject *parent) :
     QObject(parent)
 {
-    if (node->type == GUMBO_NODE_TEXT)
-    {
-        setObjectName(FIXED_STRING_NAME);
-        p_fixed_text = node->v.text.text;
-        return;
-    }
-    // otherwise it is a NODE
     setObjectName(gumbo_normalized_tagname(node->v.element.tag));
-    //qDebug() << "XmlElement(gumbo) =" << objectName();
 
+#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
+    qDebug() << "XmlElement(gumbo ) =" << objectName();
+#endif
+
+    // Collect up all the attributes
     const GumboVector *attribs = &node->v.element.attributes;
     for (unsigned i=0; i<attribs->length; i++)
     {
-        GumboAttribute *at = static_cast<GumboAttribute*>(attribs->data[i]);
-        p_attributes.append(Attribute(at->name, at->value));
+        GumboAttribute *attr = static_cast<GumboAttribute*>(attribs->data[i]);
+        p_attributes.append(Attribute(attr->name, attr->value));
         //qDebug() << "    attribute:" << at->name << "=" << at->value;
     }
 
-    create_children_from_gumbo(node, this);
+    createGumboChildren(node);
 }
 
-
-QString XmlElement::childString() const
-{
-    XmlElement *child = xmlChild(FIXED_STRING_NAME);
-    return child ? child->p_fixed_text : QString();
-}
-
+/**
+ * @brief XmlElement::XmlElement
+ * Read the next XML element from the RW export file
+ * @param reader
+ * @param parent
+ */
 
 XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
     QObject(parent)
 {
     // Extract common data from this XML element
     setObjectName(reader->name().toString());
+
+#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
+    qDebug() << "XmlElement(reader)" << objectName();
+#endif
 
     //p_namespace_uri = reader->namespaceUri().toString();
 
@@ -212,7 +236,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     if (output->root->v.element.children.length >= 2)
                     {
                         GumboNode *body_node = static_cast<GumboNode*>(output->root->v.element.children.data[1]);
-                        create_children_from_gumbo(body_node, this);
+                        createGumboChildren(body_node);
                     }
                     // Get GUMBO to release all the memory
                     gumbo_destroy_output(&kGumboDefaultOptions, output);
@@ -251,7 +275,12 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
     }
 }
 
-
+/**
+ * @brief XmlElement::readTree
+ * Read an entire export file into a single tree of XmlElements
+ * @param device
+ * @return
+ */
 XmlElement *XmlElement::readTree(QIODevice *device)
 {
     XmlElement *root_element = nullptr;
@@ -270,12 +299,32 @@ XmlElement *XmlElement::readTree(QIODevice *device)
                       reader.lineNumber() << ", column" <<
                       reader.columnNumber() << "error:" <<
                       reader.errorString();
-        return root_element;
     }
 #ifdef PRINT_ON_LOAD
-    root_element->dump_tree();
+    else
+    {
+        root_element->dump_tree();
+    }
 #endif
     return root_element;
+}
+
+/**
+ * @brief XmlElement::childString
+ * Finds the single child element which is a fixed string, and returns that value.
+ * @return
+ */
+QString XmlElement::childString() const
+{
+    for (auto child : children())
+    {
+        XmlElement *elem = qobject_cast<XmlElement*>(child);
+        if (elem && elem->isFixedString())
+        {
+            return elem->fixedText();
+        }
+    }
+    return QString();
 }
 
 
@@ -298,10 +347,4 @@ QString XmlElement::attribute(const QString &name) const
 QString XmlElement::snippetName() const
 {
     return hasAttribute("facet_name") ? attribute("facet_name") : attribute("label");
-}
-
-
-bool XmlElement::isFixedString() const
-{
-    return objectName() == FIXED_STRING_NAME;
 }

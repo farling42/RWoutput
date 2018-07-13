@@ -36,7 +36,7 @@ public:
 
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;
-    bool isFixedString() const;
+    bool isFixedString() const { return !p_fixed_text.isEmpty(); }
     inline QString fixedText() const { return p_fixed_text; }
 
     QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
@@ -48,7 +48,6 @@ public:
         QString value;
         Attribute(const QString &name, const QString &value) : name(name), value(value) {}
     };
-    QString p_fixed_text;
     QByteArray p_byte_data;
     QList<Attribute> p_attributes;
     void dump_tree() const;
@@ -56,6 +55,8 @@ public:
     QString childString() const;
 private:
     XmlElement(const QString &fixed_text, QObject *parent);
+    void createGumboChildren(GumboNode *node);
+    const QString p_fixed_text;
 };
 
 #endif // XMLELEMENT_H
