@@ -43,13 +43,13 @@ public:
 
     bool hasAttribute(const QString &name) const;
     QString attribute(const QString &name) const;
-    bool isFixedString() const { return is_fixed_text; }
+    inline bool isFixedString() const { return is_fixed_text; }
     inline const QString fixedText() const { return QString(p_byte_data); }
     inline const QByteArray &byteData() const { return p_byte_data; }
     inline const QList<Attribute> &attributes() const { return p_attributes; }
 
-    QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
-    XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
+    inline QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
+    inline XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
 
     void dump_tree() const;
     QString snippetName() const;
