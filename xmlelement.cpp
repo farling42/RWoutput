@@ -152,6 +152,7 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
 
     // Collect up all the attributes
     const GumboVector *attribs = &node->v.element.attributes;
+    p_attributes.reserve(attribs->length);
     for (unsigned i=0; i<attribs->length; i++)
     {
         GumboAttribute *attr = static_cast<GumboAttribute*>(attribs->data[i]);
@@ -187,11 +188,11 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 #if 0
     // time = 20572, 20272
     for (auto attr : attribs)
-        p_attributes.append(Attribute(attr.name().toString(), attr.value().toString()));
+        p_attributes.append(Attribute(attr.name(), attr.value()));
 #else
     // time = 20410, 20306
     for (int idx=0; idx<attribs.size(); idx++)
-        p_attributes.append(Attribute(attribs.at(idx).name().toString(), attribs.at(idx).value().toString()));
+        p_attributes.append(Attribute(attribs.at(idx).name(), attribs.at(idx).value()));
 #endif
 
     // Now read the rest of this element

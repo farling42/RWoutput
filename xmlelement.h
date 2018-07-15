@@ -36,7 +36,9 @@ public:
     struct Attribute {
         const QString name;
         const QString value;
-        Attribute(const QString &name, const QString &value) : name(name), value(value) {}
+        Attribute() {}
+        Attribute(const char *name, const char *value) : name(name), value(value) {}
+        Attribute(const QStringRef &name, const QStringRef &value) : name(name.toString()), value(value.toString()) {}
     };
 
     static XmlElement *readTree(QIODevice*);
@@ -46,7 +48,7 @@ public:
     inline bool isFixedString() const { return is_fixed_text; }
     inline const QString fixedText() const { return QString(p_byte_data); }
     inline const QByteArray &byteData() const { return p_byte_data; }
-    inline const QList<Attribute> &attributes() const { return p_attributes; }
+    inline const QVector<Attribute> &attributes() const { return p_attributes; }
 
     inline QList<XmlElement *> xmlChildren(const QString &name = QString()) const { return findChildren<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
     inline XmlElement *xmlChild(const QString &name = QString()) const { return findChild<XmlElement*>(name, Qt::FindDirectChildrenOnly); }
@@ -59,7 +61,7 @@ private:
     void parse_gumbo_nodes(GumboNode *node);
     // Real data is...
     QByteArray p_byte_data;
-    QList<Attribute> p_attributes;
+    QVector<Attribute> p_attributes;
     const bool is_fixed_text{false};
 };
 
