@@ -4,10 +4,10 @@
 #
 #-------------------------------------------------
 
+# Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
+
 VERSION = 1.17
 
-# Qt 5.11 generates a link error referring to some qml activity.
-# This is because the resource file has *.js or *.css files in it.
 QT       += core gui printsupport
 
 CONFIG  += c++11
@@ -91,6 +91,7 @@ for(FILE,EXTRA_BINFILES){
 QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expand(\n\t))
 }
 
+# %{CurrentKit:FileSystemName} = Desktop_...32bit
 MYMINGW = Desktop_Qt_5_11_1_MinGW_32bit
 MYMSVC  = Desktop_Qt_5_11_1_MSVC2015_64bit
 
@@ -108,5 +109,3 @@ else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gu
 else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Release/release/gumbo.lib
 else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Debug/debug/gumbo.lib
 else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMINGW}-Release/libgumbo.a
-
-# %{CurrentKit:FileSystemName} = Desktop_...32bit

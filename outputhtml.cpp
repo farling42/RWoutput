@@ -115,14 +115,13 @@ static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
 static void write_support_files()
 {
     // Use the files that are stored in the resource file
-    QStringList files;
-    files << "theme.css" << "scripts.js";
+    QStringList files{"theme.css","scripts.js"};
 
     for (auto filename : files)
     {
         QFile destfile(filename);
         if (destfile.exists()) destfile.remove();
-        QFile::copy(":/" + filename + ".template", destfile.fileName());
+        QFile::copy(":/" + filename, destfile.fileName());
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
     }
