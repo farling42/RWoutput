@@ -35,7 +35,8 @@ HEADERS += \
     xmlelement.h \
     outputhtml.h \
     linefile.h \
-    outhtml4subset.h
+    outhtml4subset.h \
+    linkage.h
 
 FORMS += \
         mainwindow.ui

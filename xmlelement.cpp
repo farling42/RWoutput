@@ -23,10 +23,10 @@
 
 //#define PRINT_ON_LOAD
 //#define PRINT_XMLELEMENT_CONSTRUCTOR
+//#define PRINT_GUMBO
 #define PRINT_LOAD_TIME
 
 static int dump_indentation = 0;
-
 
 void XmlElement::dump_tree() const
 {
@@ -98,38 +98,56 @@ XmlElement::XmlElement(const QByteArray &fixed_text, QObject *parent) :
  * @param node
  */
 
-void XmlElement::parse_gumbo_nodes(GumboNode *node)
+void XmlElement::parse_gumbo_nodes(const GumboNode *node)
 {
-    GumboVector *children = &node->v.element.children;
-    for (unsigned i=0; i<children->length; i++)
+    GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
+    for (unsigned int max = node->v.element.children.length; max > 0; --max, ++children)
     {
-        GumboNode *child = static_cast<GumboNode*>(children->data[i]);
+        const GumboNode *child = *children;
         switch (child->type)
         {
         case GUMBO_NODE_TEXT:
-            //qDebug() << "XmlElement(Gumbo) : GUMBO_NODE_TEXT = " << child->v.text.text;
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_TEXT: " << child->v.text.text;
+#endif
             new XmlElement(child->v.text.text, this);
             break;
 
         case GUMBO_NODE_ELEMENT:
-            //qDebug() << "XmlElement(Gumbo) : GUMBO_NODE_ELEMENT";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_ELEMENT";
+#endif
             new XmlElement(child, this);
             break;
 
         case GUMBO_NODE_WHITESPACE:
-            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_WHITESPACE";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_WHITESPACE ignored";
+#endif
             break;
+
         case GUMBO_NODE_DOCUMENT:
-            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_DOCUMENT";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_DOCUMENT ignored";
+#endif
             break;
+
         case GUMBO_NODE_CDATA:
-            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_CDATA";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_CDATA ignored";
+#endif
             break;
+
         case GUMBO_NODE_COMMENT:
-            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_COMMENT";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_COMMENT ignored";
+#endif
             break;
+
         case GUMBO_NODE_TEMPLATE:
-            //qDebug() << "XmlElement(Gumbo) : ignoring GUMBO_NODE_TEMPLATE";
+#ifdef PRINT_GUMBO
+            qDebug() << "GUMBO_NODE_TEMPLATE ignored";
+#endif
             break;
         }
     }
@@ -141,7 +159,7 @@ void XmlElement::parse_gumbo_nodes(GumboNode *node)
  * @param node the GumboNode to be decoded
  * @param parent
  */
-XmlElement::XmlElement(GumboNode *node, QObject *parent) :
+XmlElement::XmlElement(const GumboNode *node, QObject *parent) :
     QObject(parent)
 {
     setObjectName(gumbo_normalized_tagname(node->v.element.tag));
@@ -151,13 +169,16 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
 #endif
 
     // Collect up all the attributes
-    const GumboVector *attribs = &node->v.element.attributes;
-    p_attributes.reserve(attribs->length);
-    for (unsigned i=0; i<attribs->length; i++)
+    unsigned int max = node->v.element.attributes.length;
+    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+    p_attributes.reserve(max);
+    for (; max > 0; --max, ++attributes)
     {
-        GumboAttribute *attr = static_cast<GumboAttribute*>(attribs->data[i]);
+        const GumboAttribute *attr = *attributes;
         p_attributes.append(Attribute(attr->name, attr->value));
-        //qDebug() << "    attribute:" << at->name << "=" << at->value;
+#ifdef PRINT_GUMBO
+        qDebug() << "GUMBO     " << attr->name << "=" << attr->value;
+#endif
     }
 
     parse_gumbo_nodes(node);
@@ -185,15 +206,8 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
     // Transfer all attributes into a map
     const QXmlStreamAttributes attribs{reader->attributes()};
     p_attributes.reserve(attribs.size());
-#if 0
-    // time = 20572, 20272
     for (auto attr : attribs)
         p_attributes.append(Attribute(attr.name(), attr.value()));
-#else
-    // time = 20410, 20306
-    for (int idx=0; idx<attribs.size(); idx++)
-        p_attributes.append(Attribute(attribs.at(idx).name(), attribs.at(idx).value()));
-#endif
 
     // Now read the rest of this element
     while (!reader->atEnd())
@@ -249,13 +263,18 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     //   <head/>
                     //   <body>
                     //     the nodes that we want
-
+#ifdef PRINT_GUMBO
+                    qDebug() << "---GUMBO start---";
+#endif
                     // Check that HTML has at least 2 children: head and body
                     if (output->root->v.element.children.length >= 2)
                     {
-                        GumboNode *body_node = static_cast<GumboNode*>(output->root->v.element.children.data[1]);
+                        GumboNode *body_node = reinterpret_cast<GumboNode*>(output->root->v.element.children.data[1]);
                         parse_gumbo_nodes(body_node);
                     }
+#ifdef PRINT_GUMBO
+                    qDebug() << "---GUMBO finish---";
+#endif
                     // Get GUMBO to release all the memory
                     gumbo_destroy_output(&kGumboDefaultOptions, output);
                 }
@@ -344,7 +363,6 @@ XmlElement *XmlElement::readTree(QIODevice *device)
  */
 QString XmlElement::childString() const
 {
-#if 1
     // 20,092 + 20,466 + 20,289 ms for 900 MB data
     for (auto child : xmlChildren())
     {
@@ -353,17 +371,6 @@ QString XmlElement::childString() const
             return child->fixedText();
         }
     }
-#else
-    // 20,220 + 21,143 + 20,227 ms for 900MB data
-    for (auto child : children())
-    {
-        XmlElement *elem = qobject_cast<XmlElement*>(child);
-        if (elem && elem->isFixedString())
-        {
-            return elem->fixedText();
-        }
-    }
-#endif
     return QString();
 }
 

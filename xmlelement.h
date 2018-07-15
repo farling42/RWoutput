@@ -30,7 +30,7 @@ class XmlElement : public QObject
     Q_OBJECT
 public:
     XmlElement(QXmlStreamReader*, QObject *parent = nullptr);
-    XmlElement(GumboNode *info, QObject *parent);
+    XmlElement(const GumboNode *info, QObject *parent);
 
     // objectName == XML element title
     struct Attribute {
@@ -46,7 +46,7 @@ public:
     bool hasAttribute(const QString &name) const;
     const QString &attribute(const QString &name) const;
     inline bool isFixedString() const { return is_fixed_text; }
-    inline const QString fixedText() const { return QString(p_byte_data); }
+    inline const QString fixedText() const { return p_byte_data; }
     inline const QByteArray &byteData() const { return p_byte_data; }
     inline const QVector<Attribute> &attributes() const { return p_attributes; }
 
@@ -58,7 +58,7 @@ public:
     QString childString() const;
 private:
     XmlElement(const QByteArray &fixed_text, QObject *parent);
-    void parse_gumbo_nodes(GumboNode *node);
+    void parse_gumbo_nodes(const GumboNode *node);
     // Real data is...
     QByteArray p_byte_data;
     QVector<Attribute> p_attributes;

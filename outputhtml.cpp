@@ -41,6 +41,7 @@
 
 #include "xmlelement.h"
 #include "linefile.h"
+#include "linkage.h"
 
 static int image_max_width = -1;
 static bool apply_reveal_mask = true;
@@ -56,13 +57,6 @@ typedef LineFile OurFile;
 #endif
 
 #undef DUMP_CHILDREN
-
-struct Linkage {
-    QString name;
-    QString id;
-    Linkage(const QString &name, const QString &id) : name(name), id(id) {}
-};
-typedef QList<Linkage> LinkageList;
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
@@ -300,17 +294,14 @@ static void write_span(QXmlStreamWriter *stream, XmlElement *elem, const Linkage
         // TODO - the span containing the link might have style or class information!
         // Check to see if the fixed text should be replaced with a link.
         const QString text = elem->fixedText();
-        for (auto link : links)
+        const QString link_text = links.find(text);
+        if (!link_text.isNull())
         {
-            // Ignore case during the test
-            if (link.name.compare(text, Qt::CaseInsensitive) == 0)
-            {
-                stream->writeStartElement("a");
-                write_topic_href(stream, link.id);
-                stream->writeCharacters(text);  // case might be different
-                stream->writeEndElement();  // a
-                return;
-            }
+            stream->writeStartElement("a");
+            write_topic_href(stream, link_text);
+            stream->writeCharacters(text);  // case might be different
+            stream->writeEndElement();  // a
+            return;
         }
         stream->writeCharacters(text);
     }
@@ -617,7 +608,7 @@ static void write_ext_object(QXmlStreamWriter *stream, const QString &obj_name, 
 static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, bool top=false)
 {
     Q_UNUSED(top)
-    GumboVector *children = &parent->v.element.children;
+    const GumboVector *children = &parent->v.element.children;
     for (unsigned i=0; i<children->length; i++)
     {
         GumboNode *node = static_cast<GumboNode*>(children->data[i]);
@@ -672,7 +663,7 @@ static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, b
 
 static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
 {
-    GumboVector *children = &parent->v.element.children;
+    const GumboVector *children = &parent->v.element.children;
     for (unsigned i=0; i<children->length; i++)
     {
         GumboNode *node = static_cast<GumboNode*>(children->data[i]);
@@ -1101,7 +1092,7 @@ static void write_topic_body(QXmlStreamWriter *stream, const QString &main_tag, 
     {
         if (link->attribute("direction") != "Inbound")
         {
-            links.append(Linkage(link->attribute("target_name"), link->attribute("target_id")));
+            links.add(link->attribute("target_name"), link->attribute("target_id"));
         }
     }
 

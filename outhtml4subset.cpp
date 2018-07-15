@@ -1,5 +1,7 @@
 #include "outhtml4subset.h"
 
+#define TIME_CONVERSION
+
 #include <QTextStream>
 #include <QBitmap>
 #include <QBuffer>
@@ -12,6 +14,10 @@
 #include <QApplication>
 #include <QProgressDialog>
 #include <future>
+#include "linkage.h"
+#ifdef TIME_CONVERSION
+#include <QElapsedTimer>
+#endif
 
 #include <quazip/quazip.h>
 #include <quazip/quazipfile.h>
@@ -30,12 +36,6 @@ static const QString HANDOUT_STYLE{"background-color: rgb(232,225,217);"};
 static const QString CALLOUT_STYLE{"background-color: rgb(190,190,190);"};
 static const QString ANNOTATION_STYLE{"font-style: italic; margin-left: 10px;"};
 
-struct Linkage {
-    QString name;
-    QString id;
-    Linkage(const QString &name, const QString &id) : name(name), id(id) {}
-};
-typedef QList<Linkage> LinkageList;
 static LinkageList links;
 
 // Sort topics, first by prefix, and then by topic name
@@ -107,14 +107,10 @@ static void write_span(QTextStream &stream, const XmlElement *elem, const QStrin
         QString text = elem->fixedText();
         // TODO - the span containing the link might have style or class information!
         // Check to see if the fixed text should be replaced with a link.
-        for (auto link : links)
+        QString link_text = links.find(text);
+        if (!link_text.isNull())
         {
-            // Ignore case during the test
-            if (link.name.compare(text, Qt::CaseInsensitive) == 0)
-            {
-                text = QString("<a href='#%1'>%2</a>").arg(link.id).arg(text);
-                break;
-            }
+            text = QString("<a href='#%1'>%2</a>").arg(link_text).arg(text);
         }
         if (style.isEmpty())
             stream << text;
@@ -231,19 +227,6 @@ static void write_para_children(QTextStream &stream, const XmlElement *parent, c
         first = false;
     }
 }
-
-
-/**
- * @brief tobase64
- * @param data
- * @return
- */
-static inline QString to_base64(const QByteArray &data)
-{
-    // use new LineFile class to insert \n at the appropriate points in the output
-    return QString{data.toBase64()};
-}
-
 
 /*
  * Return the divisor for the map's size
@@ -389,10 +372,9 @@ static void write_ext_object(QTextStream &stream, const QString &obj_name, const
 }
 
 
-static QString get_body(const QByteArray &data)
+static QByteArray get_body(const QByteArray &source)
 {
-    QString source{data};
-    int start = source.indexOf("<body>");
+    int start  = source.indexOf("<body>");
     int finish = source.indexOf("</body>");
     if (start < 0 || finish < 0) return source;
     start += 6;
@@ -477,7 +459,6 @@ static void write_snippet(QTextStream &stream, const XmlElement *snippet)
                 }
             }
         }
-
     }
     else if (sn_type == "Picture" ||
              sn_type == "PDF" ||
@@ -570,7 +551,6 @@ static void write_snippet(QTextStream &stream, const XmlElement *snippet)
                 stream->writeEndElement();  // map
             }
 #endif
-
         }
     }
     else if (sn_type == "Date_Game")
@@ -678,7 +658,7 @@ static void write_topic(QTextStream &stream, const XmlElement *topic)
     {
         if (link->attribute("direction") != "Inbound")
         {
-            links.append(Linkage(link->attribute("target_name"), link->attribute("target_id")));
+            links.add(link->attribute("target_name"), link->attribute("target_id"));
         }
     }
 
@@ -774,6 +754,10 @@ void outHtml4Subset(QTextStream &stream,
                     int max_image_width,
                     bool use_reveal_mask)
 {
+#ifdef TIME_CONVERSION
+    QElapsedTimer timer;
+    timer.start();
+#endif
     image_max_width   = max_image_width;
     apply_reveal_mask = use_reveal_mask;
     collator.setNumericMode(true);
@@ -795,4 +779,7 @@ void outHtml4Subset(QTextStream &stream,
         write_topic(stream, topic);
         qApp->processEvents();
     }
+#ifdef TIME_CONVERSION
+    qInfo() << "TIME TO GENERATE HTML =" << timer.elapsed() << "milliseconds";
+#endif
 }
