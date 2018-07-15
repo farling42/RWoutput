@@ -28,5 +28,13 @@ int main(int argc, char *argv[])
     MainWindow w;
     w.show();
 
+    // See if we have a file to load
+    QStringList args = qApp->arguments();
+    if (args.size() > 1)
+    {
+        a.processEvents();
+        w.loadFile(args.at(1));
+    }
+
     return a.exec();
 }

@@ -53,6 +53,11 @@ Section
    # point the new shortcut at the program uninstaller
    CreateShortCut "$SMPROGRAMS\Uninstall Realm Works Output Converter.lnk" "$INSTDIR\uninstall.exe"
 
+   # Register a file extension which we can load automatically
+   WriteRegStr HKCR ".rwexport" "" "${APPNAME}.Document"
+   WriteRegStr HKCR "${APPNAME}.Document" "" "Realm Works Export File"
+   WriteRegStr HKCR "${APPNAME}.Document\shell\open\command" "" '"$INSTDIR\RWout.exe" "%1"'
+
    # Put into the "Add/Remove" menu
    WriteRegStr HKLM "${ARP}" "DisplayName"     "${APPNAME}"
    WriteRegStr HKLM "${ARP}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
@@ -76,6 +81,16 @@ SectionEnd
 
 # uninstaller section start
 Section "uninstall"
+
+    !macro AssocDeleteFileExtAndProgId _hkey _dotext _pid
+    ReadRegStr $R0 ${_hkey} "Software\Classes\${_dotext}" ""
+    StrCmp $R0 "${_pid}" 0 +2
+        DeleteRegKey ${_hkey} "Software\Classes\${_dotext}"
+        DeleteRegKey ${_hkey} "Software\Classes\${_pid}"
+    !macroend
+
+    # Unregister a file extension which we can load automatically
+    !insertmacro AssocDeleteFileExtAndProgId HKLM ".rwexport" "${APPNAME}.Document"
 
     # Remove Start Menu launcher
     Delete "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk"

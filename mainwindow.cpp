@@ -37,6 +37,9 @@ MainWindow::MainWindow(QWidget *parent) :
     root_element(nullptr)
 {
     ui->setupUi(this);
+
+    setWindowTitle(QString("%1   v%2").arg(windowTitle()).arg(qApp->applicationVersion()));
+
     // Set icons that can't be set in Designer.
     ui->loadFile->setIcon(style()->standardIcon(QStyle::SP_FileDialogStart));
     ui->saveHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
@@ -45,7 +48,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->simpleHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
     ui->htmlOutput->setEnabled(false);
-    ui->statusBar->showMessage(qApp->applicationName() + " version " + qApp->applicationVersion());
 
     connect(ui->separateTopicFiles, &QCheckBox::clicked, ui->indexOnEveryPage, &QCheckBox::setEnabled);
     ui->indexOnEveryPage->setEnabled(ui->separateTopicFiles->isChecked());
@@ -56,12 +58,9 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_loadFile_clicked()
+bool MainWindow::loadFile(const QString &in_filename)
 {
-    QSettings settings;
-    const QString LOAD_DIRECTORY_PARAM("inputDirectory");
-    QString in_filename = QFileDialog::getOpenFileName(this, tr("Realm Works Output File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
-    if (in_filename.isEmpty()) return;
+    qDebug() << "Loading file" << in_filename;
 
     // Delete any previously loaded data
     if (root_element != nullptr)
@@ -75,9 +74,8 @@ void MainWindow::on_loadFile_clicked()
     if (!in_file.open(QFile::ReadOnly))
     {
         qWarning() << tr("Failed to find file") << in_file.fileName();
-        return;
+        return false;
     }
-    settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
 
     ui->htmlOutput->setEnabled(false);
     ui->filename->setText(QFileInfo(in_file).fileName());
@@ -89,6 +87,20 @@ void MainWindow::on_loadFile_clicked()
     ui->topicCount->setText(QString("Topic Count: %1").arg(root_element->findChildren<XmlElement*>("topic").count()));
     ui->htmlOutput->setEnabled(true);
     in_file.close();
+    return true;
+}
+
+void MainWindow::on_loadFile_clicked()
+{
+    const QString LOAD_DIRECTORY_PARAM("inputDirectory");
+    QSettings settings;
+    QString in_filename = QFileDialog::getOpenFileName(this, tr("Realm Works Output File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
+    if (in_filename.isEmpty()) return;
+
+    if (loadFile(in_filename))
+    {
+        settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
+    }
 }
 
 void MainWindow::on_saveHtml_clicked()
