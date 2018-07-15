@@ -6,6 +6,7 @@
 !define APPNAME      "Realm Works Output Converter"
 !define COMPANYNAME  "Amusing Time"
 !define DESCRIPTION  "A tool to convert a Realm Works Output file into XHTML"
+!define EXENAME      "RWout.exe"
 
 #define name of installer
 Name "${COMPANYNAME} - ${APPNAME}"
@@ -43,20 +44,20 @@ Section
 
    # Get the version of the file we just installed
    var /GLOBAL VERSION
-   ${GetFileVersion} "$INSTDIR\RWout.exe" $VERSION
+   ${GetFileVersion} "$INSTDIR\${EXENAME}" $VERSION
 
    # Start Menu
    CreateDirectory "$SMPROGRAMS\${COMPANYNAME}"
-   CreateShortCut  "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk" "$INSTDIR\RWout.exe"
+   CreateShortCut  "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk" "$INSTDIR\${EXENAME}"
 
    # create a shortcut named "new shortcut" in the start menu programs directory
    # point the new shortcut at the program uninstaller
    CreateShortCut "$SMPROGRAMS\Uninstall Realm Works Output Converter.lnk" "$INSTDIR\uninstall.exe"
 
-   # Register a file extension which we can load automatically
-   WriteRegStr HKCR ".rwexport" "" "${APPNAME}.Document"
-   WriteRegStr HKCR "${APPNAME}.Document" "" "Realm Works Export File"
-   WriteRegStr HKCR "${APPNAME}.Document\shell\open\command" "" '"$INSTDIR\RWout.exe" "%1"'
+   # Add the program to the "Open With" list for the ".rwexport" extension
+   WriteRegStr HKCR "Applications\${EXENAME}\shell\open" "FriendlyAppName" "${APPNAME}"
+   WriteRegStr HKCR "Applications\${EXENAME}\shell\open\command" "" '"$INSTDIR\${EXENAME}" "%1"'
+   WriteRegStr HKCR ".rwexport\OpenWithList\${EXENAME}" "" ""
 
    # Put into the "Add/Remove" menu
    WriteRegStr HKLM "${ARP}" "DisplayName"     "${APPNAME}"
@@ -82,15 +83,9 @@ SectionEnd
 # uninstaller section start
 Section "uninstall"
 
-    !macro AssocDeleteFileExtAndProgId _hkey _dotext _pid
-    ReadRegStr $R0 ${_hkey} "Software\Classes\${_dotext}" ""
-    StrCmp $R0 "${_pid}" 0 +2
-        DeleteRegKey ${_hkey} "Software\Classes\${_dotext}"
-        DeleteRegKey ${_hkey} "Software\Classes\${_pid}"
-    !macroend
-
-    # Unregister a file extension which we can load automatically
-    !insertmacro AssocDeleteFileExtAndProgId HKLM ".rwexport" "${APPNAME}.Document"
+    # Unregister our interest in the file extension
+    DeleteRegKey HKCR ".rwexport\OpenWithList\${EXENAME}"
+    DeleteRegKey HKCR "Applications\${EXENAME}"
 
     # Remove Start Menu launcher
     Delete "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk"
