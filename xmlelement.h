@@ -34,15 +34,15 @@ public:
 
     // objectName == XML element title
     struct Attribute {
-        QString name;
-        QString value;
+        const QString name;
+        const QString value;
         Attribute(const QString &name, const QString &value) : name(name), value(value) {}
     };
 
     static XmlElement *readTree(QIODevice*);
 
     bool hasAttribute(const QString &name) const;
-    QString attribute(const QString &name) const;
+    const QString &attribute(const QString &name) const;
     inline bool isFixedString() const { return is_fixed_text; }
     inline const QString fixedText() const { return QString(p_byte_data); }
     inline const QByteArray &byteData() const { return p_byte_data; }
@@ -56,7 +56,7 @@ public:
     QString childString() const;
 private:
     XmlElement(const QByteArray &fixed_text, QObject *parent);
-    void createGumboChildren(GumboNode *node);
+    void parse_gumbo_nodes(GumboNode *node);
     // Real data is...
     QByteArray p_byte_data;
     QList<Attribute> p_attributes;

@@ -16,7 +16,7 @@ protected:
     virtual qint64 writeData(const char *data, qint64 len);
 private:
     void init();
-    qint64 linelen = 0;
+    qint64 linelen{0};
 };
 
 #endif // LINEFILE_H

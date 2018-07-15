@@ -22,7 +22,7 @@
 class XmlElement;
 
 void toHtml(const QString &path,
-            XmlElement *root_elem,
+            const XmlElement *root_elem,
             int max_image_width,
             bool separate_files,
             bool use_reveal_mask,

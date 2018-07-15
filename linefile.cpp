@@ -2,6 +2,15 @@
 
 //#include <QDebug>
 
+/**
+ * @class LineFile::LineFile
+ *
+ * This class is sub-classed from QFile and guarantees that no line in the file will be
+ * longer than 1,000 characters in length.
+ *
+ * This helps reading XML files since otherwise some lines might be VERY long.
+ */
+
 LineFile::LineFile() : QFile() {init();}
 
 LineFile::LineFile(const QString &name) : QFile(name) {init();}
@@ -46,7 +55,7 @@ qint64 LineFile::writeData(const char *data, qint64 maxsize)
         result += QFile::writeData(&data[start], maxsize - start);
     }
 
-    // QXmlStreamWriter requires the result to be the same as passed in,
+    // QXmlStreamWriter requires the result to be the same as passed in (not "result"),
     // even though we might inject some additional new-lines.
     return maxsize;
 }

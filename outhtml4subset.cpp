@@ -66,7 +66,7 @@ static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
 }
 
 
-QString writeAttributes(const XmlElement *elem, const QString &style)
+static QString write_attributes(const XmlElement *elem, const QString &style)
 {
     QString result;
     QTextStream stream(&result);
@@ -97,7 +97,7 @@ QString writeAttributes(const XmlElement *elem, const QString &style)
 
 
 
-static void writeSpan(QTextStream &stream, const XmlElement *elem, const QString &style)
+static void write_span(QTextStream &stream, const XmlElement *elem, const QString &style)
 {
 #if DEBUG_LEVEL > 5
     qDebug() << "....writeSpan" << elem->objectName() << elem->isFixedString();
@@ -127,21 +127,21 @@ static void writeSpan(QTextStream &stream, const XmlElement *elem, const QString
         bool in_element = elem->objectName() != "span" || elem->hasAttribute("style") || !style.isEmpty();
         if (in_element)
         {
-            stream << QString("<%1 %2>").arg(elem->objectName()).arg(writeAttributes(elem, style));
+            stream << QString("<%1 %2>").arg(elem->objectName()).arg(write_attributes(elem, style));
         }
 
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
         {
-            writeSpan(stream, child, /*no additional style*/QString());
+            write_span(stream, child, /*no additional style*/QString());
         }
         if (in_element) stream << QString("</%1>").arg(elem->objectName());
     }
 }
 
 
-static void writePara(QTextStream &stream, const XmlElement *elem, const QString &style,
-               const QString &label, const QString &bodytext)
+static void write_para(QTextStream &stream, const XmlElement *elem, const QString &style,
+                       const QString &label, const QString &bodytext)
 {
 #if DEBUG_LEVEL > 5
     qDebug() << "....writePara" << elem->objectName();
@@ -149,7 +149,7 @@ static void writePara(QTextStream &stream, const XmlElement *elem, const QString
     if (elem->isFixedString())
     {
         // No fixed text will have a "snippet_style_type"
-        writeSpan(stream, elem, style);
+        write_span(stream, elem, style);
         return;
     }
 
@@ -182,7 +182,7 @@ static void writePara(QTextStream &stream, const XmlElement *elem, const QString
     }
 #endif
 
-    stream << QString("<%1 %2>").arg(tag).arg(writeAttributes(elem, styletext));
+    stream << QString("<%1 %2>").arg(tag).arg(write_attributes(elem, styletext));
 
     // If there is no label, then set the class on the paragraph element,
     // otherwise we will put the text inside a span with the given class.
@@ -199,18 +199,18 @@ static void writePara(QTextStream &stream, const XmlElement *elem, const QString
     {
         if (child->objectName() == "span")
         {
-            writeSpan(stream, child, styletext.isEmpty() ? style : QString());
+            write_span(stream, child, styletext.isEmpty() ? style : QString());
         }
         else if (child->objectName() != "tag_assign")
             // Ignore certain children
-            writePara(stream, child, styletext, /*no prefix*/QString(), QString());
+            write_para(stream, child, styletext, /*no prefix*/QString(), QString());
     }
     stream << QString("</%1>\n").arg(tag);  // terminate the paragraph
 }
 
 
-static void writeParaChildren(QTextStream &stream, const XmlElement *parent, const QString &classname,
-                       const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
+static void write_para_children(QTextStream &stream, const XmlElement *parent, const QString &classname,
+                                const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children" << parent->objectName();
@@ -225,9 +225,9 @@ static void writeParaChildren(QTextStream &stream, const XmlElement *parent, con
     for (auto para: parent->xmlChildren())
     {
         if (first)
-            writePara(stream, para, useclass, /*prefix*/prefix_label, prefix_bodytext);
+            write_para(stream, para, useclass, /*prefix*/prefix_label, prefix_bodytext);
         else
-            writePara(stream, para, useclass, /*no prefix*/QString(), QString());
+            write_para(stream, para, useclass, /*no prefix*/QString(), QString());
         first = false;
     }
 }
@@ -253,8 +253,8 @@ static inline QString to_base64(const QByteArray &data)
 std::mutex image_mutex;
 #endif
 
-static int writeImage(QTextStream &stream, const QString &image_name, const QByteArray &orig_data, const XmlElement *mask_elem,
-               const QString &filename, const QString &class_name, const XmlElement *annotation)
+static int write_image(QTextStream &stream, const QString &image_name, const QByteArray &orig_data, const XmlElement *mask_elem,
+                       const QString &filename, const QString &class_name, const XmlElement *annotation)
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "....writeImage: image" << image_name << ", file" << filename << ", size" << orig_data.size();
@@ -268,7 +268,7 @@ static int writeImage(QTextStream &stream, const QString &image_name, const QByt
     stream << "<p>";
 
     if (annotation)
-        writeParaChildren(stream, annotation, class_name, image_name);
+        write_para_children(stream, annotation, class_name, image_name);
     else
         stream << QString("<b>Image: %1</b>").arg(image_name);
 
@@ -350,7 +350,7 @@ static int writeImage(QTextStream &stream, const QString &image_name, const QByt
     return divisor;
 }
 
-static void writeExtObject(QTextStream &stream, const QString &obj_name, const QByteArray &data,
+static void write_ext_object(QTextStream &stream, const QString &obj_name, const QByteArray &data,
                            const QString &filename, const QString &class_name, XmlElement *annotation)
 {
 #if 0
@@ -384,7 +384,7 @@ static void writeExtObject(QTextStream &stream, const QString &obj_name, const Q
 #else
     Q_UNUSED(data)
     Q_UNUSED(filename)
-    if (annotation) writeParaChildren(stream, annotation, class_name, /*prefix*/ obj_name);
+    if (annotation) write_para_children(stream, annotation, class_name, /*prefix*/ obj_name);
 #endif
 }
 
@@ -400,7 +400,7 @@ static QString get_body(const QByteArray &data)
 }
 
 
-static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
+static void write_snippet(QTextStream &stream, const XmlElement *snippet)
 {
     QString sn_type = snippet->attribute("type");
     QString sn_style = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout
@@ -412,20 +412,23 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
     {
         // child is either <contents> or <gm_directions> or both
         auto gm = snippet->xmlChildren("gm_directions");
-        if (!gm.isEmpty()) stream << "<div style='background-color: floralwhite; border: 1px solid tan;'>";
-        for (auto gm_directions: gm)
-            writeParaChildren(stream, gm_directions, sn_style);
-        if (!gm.isEmpty()) stream << "</div>\n";
+        if (!gm.isEmpty())
+        {
+            stream << "<div style='background-color: floralwhite; border: 1px solid tan;'>";
+            for (auto gm_directions: gm)
+                write_para_children(stream, gm_directions, sn_style);
+            stream << "</div>\n";
+        }
 
         for (auto contents: snippet->xmlChildren("contents"))
-            writeParaChildren(stream, contents, sn_style);
+            write_para_children(stream, contents, sn_style);
     }
     else if (sn_type == "Labeled_Text")
     {
         for (auto contents: snippet->xmlChildren("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            writeParaChildren(stream, contents, sn_style, /*prefix*/snippet->snippetName());  // has its own 'p'
+            write_para_children(stream, contents, sn_style, /*prefix*/snippet->snippetName());  // has its own 'p'
         }
     }
     else if (sn_type == "Portfolio")
@@ -444,7 +447,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                     //               filename, sn_style, annotation);
 
                     stream << "<p style='font-style:large'><b><u>";
-                    if (annotation) writeParaChildren(stream, annotation, sn_type, /*prefix*/ "Portfolio");
+                    if (annotation) write_para_children(stream, annotation, sn_type, /*prefix*/ "Portfolio");
                     stream << "</u></b>\n";
 
                     // Put in markers for statblock
@@ -498,7 +501,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                 {
                     if (sn_type == "Picture")
                     {
-                        writeImage(stream, ext_object->attribute("name"), contents->byteData(),
+                        write_image(stream, ext_object->attribute("name"), contents->byteData(),
                                    /*mask*/nullptr, filename, sn_style, annotation);
                     }
                     else if (filename.endsWith(".html") ||
@@ -514,7 +517,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
                     }
                     else
                     {
-                        writeExtObject(stream, ext_object->attribute("name"), contents->byteData(), filename, sn_style, annotation);
+                        write_ext_object(stream, ext_object->attribute("name"), contents->byteData(), filename, sn_style, annotation);
                     }
                 }
             }
@@ -536,7 +539,7 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
 
-            writeImage(stream, smart_image->attribute("name"), contents->byteData(),
+            write_image(stream, smart_image->attribute("name"), contents->byteData(),
                                      mask, filename, sn_style, annotation);
 #if 0
             if (!pins.isEmpty())
@@ -578,9 +581,9 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
         QString bodytext = date->attribute("display");
         if (annotation)
-            writeParaChildren(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Date_Range")
     {
@@ -590,9 +593,9 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
         if (annotation)
-            writeParaChildren(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Tag_Standard")
     {
@@ -605,9 +608,9 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
             tag_text.append(tag->attribute("tag_name"));
         QString bodytext = tag_text.join(", ");
         if (annotation)
-            writeParaChildren(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Numeric")
     {
@@ -617,9 +620,9 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
         const QString &bodytext = contents->childString();
         if (annotation)
-            writeParaChildren(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
 
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -636,15 +639,15 @@ static void writeSnippet(QTextStream &stream, const XmlElement *snippet)
 
         XmlElement *annotation = snippet->xmlChild("annotation");
         if (annotation)
-            writeParaChildren(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, sn_style, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, /*prefix*/snippet->snippetName(), bodytext);
     }
     // Hybrid_Tag
 }
 
 
-static void writeSection(QTextStream &stream, const XmlElement *section, int level)
+static void write_section(QTextStream &stream, const XmlElement *section, int level)
 {
     // Start with HEADER for the section
     stream << QString("<h%1>%2</h%1>\n").arg(level+1).arg(section->attribute("name"));
@@ -652,18 +655,18 @@ static void writeSection(QTextStream &stream, const XmlElement *section, int lev
     // Write snippets
     for (auto snippet: section->xmlChildren("snippet"))
     {
-        writeSnippet(stream, snippet);
+        write_snippet(stream, snippet);
     }
 
     // Write following sections
     for (auto subsection: section->xmlChildren("section"))
     {
-        writeSection(stream, subsection, level+1);
+        write_section(stream, subsection, level+1);
     }
 }
 
 
-void writeTopic(QTextStream &stream, const XmlElement *topic)
+static void write_topic(QTextStream &stream, const XmlElement *topic)
 {
 #if DEBUG_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
@@ -687,9 +690,8 @@ void writeTopic(QTextStream &stream, const XmlElement *topic)
     if (topic->hasAttribute("suffix")) stream << QString(" (%1)").arg(topic->attribute("suffix"));
     stream << "</a></h1>\n";
 
-    auto aliases = topic->xmlChildren("alias");
     // Maybe some aliases (in own section for smaller font?)
-    for (auto alias : aliases)
+    for (auto alias : topic->xmlChildren("alias"))
     {
         stream << "<p><i>" << alias->attribute("name") << "</i>\n";
     }
@@ -697,7 +699,7 @@ void writeTopic(QTextStream &stream, const XmlElement *topic)
     // Process all <sections>, applying the linkage for this topic
     for (auto section: topic->xmlChildren("section"))
     {
-        writeSection(stream, section, /*level*/ 1);
+        write_section(stream, section, /*level*/ 1);
     }
 
     // Provide summary of links to child topics
@@ -757,7 +759,16 @@ static void write_first_page(QTextStream &stream, const XmlElement *root_elem)
         stream << QString("<h2>Other Notes</h2>\n<p>%1\n").arg(details->attribute("other_notes"));
 }
 
-
+/**
+ * @brief outHtml4Subset
+ * This routine puts the supplied XmlElement tree into the supplied QTextStream using the HTML 4
+ * subset that is supported by Qt.
+ * This writes directly into a QTextStream because QXmlStreamWriter would put closing element tags everywhere.
+ * @param stream
+ * @param root
+ * @param max_image_width
+ * @param use_reveal_mask
+ */
 void outHtml4Subset(QTextStream &stream,
                     const XmlElement *root,
                     int max_image_width,
@@ -781,7 +792,7 @@ void outHtml4Subset(QTextStream &stream,
     for (auto topic : topics)
     {
         pbar.setValue(++count);
-        writeTopic(stream, topic);
+        write_topic(stream, topic);
         qApp->processEvents();
     }
 }

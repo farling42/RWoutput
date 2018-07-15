@@ -18,10 +18,12 @@
 #include "xmlelement.h"
 
 #include <QDebug>
+#include <QElapsedTimer>
 #include "gumbo.h"
 
 //#define PRINT_ON_LOAD
-//#define DEBUG_XMLELEMENT_CONSTRUCTOR
+//#define PRINT_XMLELEMENT_CONSTRUCTOR
+#define PRINT_LOAD_TIME
 
 static int dump_indentation = 0;
 
@@ -30,7 +32,7 @@ void XmlElement::dump_tree() const
 {
     QString indentation(dump_indentation, QChar(QChar::Space));
 
-    if (!fixedText().isEmpty())
+    if (isFixedString())
     {
         // A simple fixed string
         qDebug().noquote().nospace() << indentation << fixedText();
@@ -45,7 +47,7 @@ void XmlElement::dump_tree() const
         }
         QList<XmlElement*> child_items = findChildren<XmlElement*>(QString(), Qt::FindDirectChildrenOnly);
 
-        if (child_items.count() == 0)
+        if (child_items.count() == 0 && byteData().isEmpty())
         {
             // No contents, so a terminated start element
             qDebug().noquote().nospace() << indentation << line << "/>";
@@ -55,8 +57,13 @@ void XmlElement::dump_tree() const
             // Terminate the opening of the parent element
             qDebug().noquote().nospace() << indentation << line << ">";
 
+            if (!byteData().isEmpty())
+            {
+                qDebug().noquote().nospace() << QString(dump_indentation+3, QChar(QChar::Space)) << "... " << byteData().size() << " bytes of binary data...";
+            }
+
             dump_indentation += 3;
-            foreach (XmlElement *child, child_items)
+            for (auto child: child_items)
             {
                 child->dump_tree();
             }
@@ -80,8 +87,8 @@ XmlElement::XmlElement(const QByteArray &fixed_text, QObject *parent) :
     p_byte_data(fixed_text),
     is_fixed_text(true)
 {
-#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
-    qDebug() << "XmlElement(string) =" << fixed_text;
+#ifdef PRINT_XMLELEMENT_CONSTRUCTOR
+    qDebug().noquote().nospace() << "XmlElement(string)       " << fixed_text;
 #endif
 }
 
@@ -91,7 +98,7 @@ XmlElement::XmlElement(const QByteArray &fixed_text, QObject *parent) :
  * @param node
  */
 
-void XmlElement::createGumboChildren(GumboNode *node)
+void XmlElement::parse_gumbo_nodes(GumboNode *node)
 {
     GumboVector *children = &node->v.element.children;
     for (unsigned i=0; i<children->length; i++)
@@ -139,8 +146,8 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
 {
     setObjectName(gumbo_normalized_tagname(node->v.element.tag));
 
-#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
-    qDebug() << "XmlElement(gumbo ) =" << objectName();
+#ifdef PRINT_XMLELEMENT_CONSTRUCTOR
+    qDebug().noquote().nospace() << "XmlElement(gumbo)     <" << objectName() << ">";
 #endif
 
     // Collect up all the attributes
@@ -152,7 +159,7 @@ XmlElement::XmlElement(GumboNode *node, QObject *parent) :
         //qDebug() << "    attribute:" << at->name << "=" << at->value;
     }
 
-    createGumboChildren(node);
+    parse_gumbo_nodes(node);
 }
 
 /**
@@ -168,17 +175,24 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
     // Extract common data from this XML element
     setObjectName(reader->name().toString());
 
-#ifdef DEBUG_XMLELEMENT_CONSTRUCTOR
-    qDebug() << "XmlElement(reader)" << objectName();
+#ifdef PRINT_XMLELEMENT_CONSTRUCTOR
+    qDebug().noquote().nospace() << "XmlElement(reader) <" << objectName() << ">";
 #endif
 
     //p_namespace_uri = reader->namespaceUri().toString();
 
     // Transfer all attributes into a map
-    const QXmlStreamAttributes attr = reader->attributes();
-    p_attributes.reserve(attr.size());
-    for (int idx=0; idx<attr.size(); idx++)
-        p_attributes.append(Attribute(attr.at(idx).name().toString(), attr.at(idx).value().toString()));
+    const QXmlStreamAttributes attribs{reader->attributes()};
+    p_attributes.reserve(attribs.size());
+#if 0
+    // time = 20572, 20272
+    for (auto attr : attribs)
+        p_attributes.append(Attribute(attr.name().toString(), attr.value().toString()));
+#else
+    // time = 20410, 20306
+    for (int idx=0; idx<attribs.size(); idx++)
+        p_attributes.append(Attribute(attribs.at(idx).name().toString(), attribs.at(idx).value().toString()));
+#endif
 
     // Now read the rest of this element
     while (!reader->atEnd())
@@ -215,6 +229,8 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 
                 if (is_binary)
                 {
+                    // Convert from BASE64 to BINARY, to reduce memory usage
+                    // (is_fixed_text is NOT set, so later we'll convert it to the proper "thing")
                     p_byte_data = QByteArray::fromBase64(reader->text().toLocal8Bit());
                 }
                 else if (reader->text().left(1) == "<")
@@ -237,13 +253,15 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     if (output->root->v.element.children.length >= 2)
                     {
                         GumboNode *body_node = static_cast<GumboNode*>(output->root->v.element.children.data[1]);
-                        createGumboChildren(body_node);
+                        parse_gumbo_nodes(body_node);
                     }
                     // Get GUMBO to release all the memory
                     gumbo_destroy_output(&kGumboDefaultOptions, output);
                 }
                 else
+                {
                     new XmlElement(reader->text().toString().toUtf8(), this);
+                }
             }
             break;
 
@@ -278,7 +296,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 
 /**
  * @brief XmlElement::readTree
- * Read an entire export file into a single tree of XmlElements
+ * Read an entire RWEXPORT file into a single tree of XmlElement nodes
  * @param device
  * @return
  */
@@ -288,11 +306,19 @@ XmlElement *XmlElement::readTree(QIODevice *device)
     QXmlStreamReader reader;
     reader.setDevice(device);
 
+#ifdef PRINT_LOAD_TIME
+    QElapsedTimer timer;
+    timer.start();
+#endif
+
     // Move to the start of the first element
     if (reader.readNextStartElement())
     {
         root_element = new XmlElement(&reader, nullptr);
     }
+#ifdef PRINT_LOAD_TIME
+    qDebug() << "FILE READ took" << timer.elapsed() << "milliseconds";
+#endif
 
     if (reader.hasError())
     {
@@ -317,6 +343,17 @@ XmlElement *XmlElement::readTree(QIODevice *device)
  */
 QString XmlElement::childString() const
 {
+#if 1
+    // 20,092 + 20,466 + 20,289 ms for 900 MB data
+    for (auto child : xmlChildren())
+    {
+        if (child->isFixedString())
+        {
+            return child->fixedText();
+        }
+    }
+#else
+    // 20,220 + 21,143 + 20,227 ms for 900MB data
     for (auto child : children())
     {
         XmlElement *elem = qobject_cast<XmlElement*>(child);
@@ -325,6 +362,7 @@ QString XmlElement::childString() const
             return elem->fixedText();
         }
     }
+#endif
     return QString();
 }
 
@@ -337,11 +375,13 @@ bool XmlElement::hasAttribute(const QString &name) const
 }
 
 
-QString XmlElement::attribute(const QString &name) const
+const QString &XmlElement::attribute(const QString &name) const
 {
-    for (auto attr : p_attributes)
+    for (const Attribute &attr : p_attributes)
         if (attr.name == name) return attr.value;
-    return QString();
+    // Return reference to a null string
+    static const QString null_string;
+    return null_string;
 }
 
 

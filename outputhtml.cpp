@@ -141,7 +141,7 @@ static void write_support_files()
 }
 
 
-static void write_meta_child(QXmlStreamWriter *stream, const QString &meta_name, XmlElement *details, const QString &child_name)
+static void write_meta_child(QXmlStreamWriter *stream, const QString &meta_name, const XmlElement *details, const QString &child_name)
 {
     XmlElement *child = details->xmlChild(child_name);
     if (child)
@@ -155,7 +155,7 @@ static void write_meta_child(QXmlStreamWriter *stream, const QString &meta_name,
 }
 
 
-static void write_head_meta(QXmlStreamWriter *stream, XmlElement *root_elem)
+static void write_head_meta(QXmlStreamWriter *stream, const XmlElement *root_elem)
 {
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
@@ -258,7 +258,7 @@ static void start_file(QXmlStreamWriter *stream)
 }
 
 
-static void writeAttributes(QXmlStreamWriter *stream, XmlElement *elem, const QString &classname)
+static void write_attributes(QXmlStreamWriter *stream, const XmlElement *elem, const QString &classname)
 {
     QStringList class_names;
     if (!classname.isEmpty()) class_names.append(classname);
@@ -280,7 +280,7 @@ static void writeAttributes(QXmlStreamWriter *stream, XmlElement *elem, const QS
 }
 
 
-static void writeTopicHref(QXmlStreamWriter *stream, const QString &topic)
+static void write_topic_href(QXmlStreamWriter *stream, const QString &topic)
 {
     if (in_single_file)
         stream->writeAttribute("href", "#" + topic);
@@ -289,7 +289,7 @@ static void writeTopicHref(QXmlStreamWriter *stream, const QString &topic)
 }
 
 
-static void writeSpan(QXmlStreamWriter *stream, XmlElement *elem, const LinkageList &links, const QString &classname)
+static void write_span(QXmlStreamWriter *stream, XmlElement *elem, const LinkageList &links, const QString &classname)
 {
 #if DEBUG_LEVEL > 5
     qDebug() << "....span";
@@ -306,7 +306,7 @@ static void writeSpan(QXmlStreamWriter *stream, XmlElement *elem, const LinkageL
             if (link.name.compare(text, Qt::CaseInsensitive) == 0)
             {
                 stream->writeStartElement("a");
-                writeTopicHref(stream, link.id);
+                write_topic_href(stream, link.id);
                 stream->writeCharacters(text);  // case might be different
                 stream->writeEndElement();  // a
                 return;
@@ -321,21 +321,21 @@ static void writeSpan(QXmlStreamWriter *stream, XmlElement *elem, const LinkageL
         if (in_element)
         {
             stream->writeStartElement(elem->objectName());
-            writeAttributes(stream, elem, classname);
+            write_attributes(stream, elem, classname);
         }
 
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
         {
-            writeSpan(stream, child, links, QString());
+            write_span(stream, child, links, QString());
         }
         if (in_element) stream->writeEndElement(); // span
     }
 }
 
 
-static void writePara(QXmlStreamWriter *stream, XmlElement *elem, const QString &classname, const LinkageList &links,
-               const QString &label, const QString &bodytext)
+static void write_para(QXmlStreamWriter *stream, XmlElement *elem, const QString &classname, const LinkageList &links,
+                       const QString &label, const QString &bodytext)
 {
 #if DEBUG_LEVEL > 5
     qDebug() << "....paragraph";
@@ -343,7 +343,7 @@ static void writePara(QXmlStreamWriter *stream, XmlElement *elem, const QString 
 
     if (elem->isFixedString())
     {
-        writeSpan(stream, elem, links, classname);
+        write_span(stream, elem, links, classname);
         return;
     }
 
@@ -354,7 +354,7 @@ static void writePara(QXmlStreamWriter *stream, XmlElement *elem, const QString 
     else
     {
         stream->writeStartElement(elem->objectName());
-        writeAttributes(stream, elem, classname);
+        write_attributes(stream, elem, classname);
     }
     // If there is no label, then set the class on the paragraph element,
     // otherwise we will put the text inside a span with the given class.
@@ -380,17 +380,17 @@ static void writePara(QXmlStreamWriter *stream, XmlElement *elem, const QString 
     for (auto child : elem->xmlChildren())
     {
         if (child->objectName() == "span")
-            writeSpan(stream, child, links, class_set ? QString() : classname);
+            write_span(stream, child, links, class_set ? QString() : classname);
         else if (child->objectName() != "tag_assign")
             // Ignore certain children
-            writePara(stream, child, classname, links, /*no prefix*/QString(), QString());
+            write_para(stream, child, classname, links, /*no prefix*/QString(), QString());
     }
     stream->writeEndElement();  // p
 }
 
 
-static void writeParaChildren(QXmlStreamWriter *stream, XmlElement *parent, const QString &classname, const LinkageList &links,
-                       const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
+static void write_para_children(QXmlStreamWriter *stream, XmlElement *parent, const QString &classname, const LinkageList &links,
+                                const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children";
@@ -400,9 +400,9 @@ static void writeParaChildren(QXmlStreamWriter *stream, XmlElement *parent, cons
     for (auto para: parent->xmlChildren())
     {
         if (first)
-            writePara(stream, para, classname, links, /*prefix*/prefix_label, prefix_bodytext);
+            write_para(stream, para, classname, links, /*prefix*/prefix_label, prefix_bodytext);
         else
-            writePara(stream, para, classname, links, /*no prefix*/QString(), QString());
+            write_para(stream, para, classname, links, /*no prefix*/QString(), QString());
         first = false;
     }
 }
@@ -427,9 +427,9 @@ static inline QString to_base64(const QByteArray &data)
 std::mutex image_mutex;
 #endif
 
-static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
-               const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
-               const QString &usemap = QString())
+static int write_image(QXmlStreamWriter *stream, const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
+                       const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
+                       const QString &usemap = QString())
 {
     QBuffer buffer;
     QString format = filename.split(".").last();
@@ -442,7 +442,7 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
 
     stream->writeStartElement("figcaption");
     if (annotation)
-        writeParaChildren(stream, annotation, "annotation " + class_name, links, image_name);
+        write_para_children(stream, annotation, "annotation " + class_name, links, image_name);
     else
         stream->writeCharacters(image_name);
     stream->writeEndElement();  // figcaption
@@ -535,8 +535,8 @@ static int writeImage(QXmlStreamWriter *stream, const QString &image_name, const
 }
 
 
-static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, const QByteArray &data,
-                           const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
+static void write_ext_object(QXmlStreamWriter *stream, const QString &obj_name, const QByteArray &data,
+                             const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
 {
     // Don't inline objects which are more than 5MB in size
     if (data.length() < 5*1000*1000)
@@ -572,7 +572,7 @@ static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, co
         stream->writeEndElement();  // a
         stream->writeEndElement();  // span
 
-        if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
+        if (annotation) write_para_children(stream, annotation, "annotation " + class_name, links);
         stream->writeEndElement();  // p
     }
     else
@@ -602,7 +602,7 @@ static void writeExtObject(QXmlStreamWriter *stream, const QString &obj_name, co
         stream->writeEndElement();  // a
         stream->writeEndElement();  // span
 
-        if (annotation) writeParaChildren(stream, annotation, "annotation " + class_name, links);
+        if (annotation) write_para_children(stream, annotation, "annotation " + class_name, links);
         stream->writeEndElement();  // p
     }
 }
@@ -793,7 +793,7 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
 }
 
 
-static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const LinkageList &links)
+static void write_snippet(QXmlStreamWriter *stream, XmlElement *snippet, const LinkageList &links)
 {
     QString sn_type = snippet->attribute("type");
     QString sn_style = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout
@@ -805,17 +805,17 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
     {
         // child is either <contents> or <gm_directions> or both
         for (auto gm_directions: snippet->xmlChildren("gm_directions"))
-            writeParaChildren(stream, gm_directions, "gm_directions " + sn_style, links);
+            write_para_children(stream, gm_directions, "gm_directions " + sn_style, links);
 
         for (auto contents: snippet->xmlChildren("contents"))
-            writeParaChildren(stream, contents, "contents " + sn_style, links);
+            write_para_children(stream, contents, "contents " + sn_style, links);
     }
     else if (sn_type == "Labeled_Text")
     {
         for (auto contents: snippet->xmlChildren("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            writeParaChildren(stream, contents, "contents " + sn_style, links, /*prefix*/snippet->snippetName());  // has its own 'p'
+            write_para_children(stream, contents, "contents " + sn_style, links, /*prefix*/snippet->snippetName());  // has its own 'p'
         }
     }
     else if (sn_type == "Portfolio")
@@ -830,7 +830,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                 XmlElement *contents = asset->xmlChild("contents");
                 if (contents)
                 {
-                    writeExtObject(stream, ext_object->attribute("name"), contents->byteData(),
+                    write_ext_object(stream, ext_object->attribute("name"), contents->byteData(),
                                    filename, sn_style, annotation, links);
 
                     // Put in markers for statblock
@@ -882,7 +882,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                 {
                     if (sn_type == "Picture")
                     {
-                        writeImage(stream, ext_object->attribute("name"), contents->byteData(),
+                        write_image(stream, ext_object->attribute("name"), contents->byteData(),
                                    /*mask*/nullptr, filename, sn_style, annotation, links);
                     }
                     else if (filename.endsWith(".html") ||
@@ -894,7 +894,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                     }
                     else
                     {
-                        writeExtObject(stream, ext_object->attribute("name"), contents->byteData(),
+                        write_ext_object(stream, ext_object->attribute("name"), contents->byteData(),
                                        filename, sn_style, annotation, links);
                     }
                 }
@@ -919,7 +919,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
             QString usemap;
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            int divisor = writeImage(stream, smart_image->attribute("name"), contents->byteData(),
+            int divisor = write_image(stream, smart_image->attribute("name"), contents->byteData(),
                                      mask, filename, sn_style, annotation, links, usemap);
 
             if (!pins.isEmpty())
@@ -938,7 +938,7 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
                     QString title = pin->attribute("pin_name");
                     if (!title.isEmpty()) stream->writeAttribute("title", title);
                     QString link = pin->attribute("topic_id");
-                    if (!link.isEmpty()) writeTopicHref(stream, link);
+                    if (!link.isEmpty()) write_topic_href(stream, link);
 
                     XmlElement *description = pin->xmlChild("description");
                     if (description)
@@ -960,9 +960,9 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
 
         QString bodytext = date->attribute("display");
         if (annotation)
-            writeParaChildren(stream, annotation, "annotation " + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, "annotation " + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Date_Range")
     {
@@ -972,9 +972,9 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
 
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
         if (annotation)
-            writeParaChildren(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Tag_Standard")
     {
@@ -984,9 +984,9 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
 
         QString bodytext = tag->attribute("tag_name");
         if (annotation)
-            writeParaChildren(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     else if (sn_type == "Numeric")
     {
@@ -996,9 +996,9 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
 
         const QString &bodytext = contents->childString();
         if (annotation)
-            writeParaChildren(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
 
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -1015,15 +1015,15 @@ static void writeSnippet(QXmlStreamWriter *stream, XmlElement *snippet, const Li
 
         XmlElement *annotation = snippet->xmlChild("annotation");
         if (annotation)
-            writeParaChildren(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para_children(stream, annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
         else
-            writePara(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            write_para(stream, snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
     }
     // Hybrid_Tag
 }
 
 
-static void writeSection(QXmlStreamWriter *stream, XmlElement *section, const LinkageList &links, int level)
+static void write_section(QXmlStreamWriter *stream, XmlElement *section, const LinkageList &links, int level)
 {
 #if DUMP_LEVEL > 2
     qDebug() << "..section" << section->attribute("name");
@@ -1038,18 +1038,18 @@ static void writeSection(QXmlStreamWriter *stream, XmlElement *section, const Li
     // Write snippets
     for (auto snippet: section->xmlChildren("snippet"))
     {
-        writeSnippet(stream, snippet, links);
+        write_snippet(stream, snippet, links);
     }
 
     // Write following sections
     for (auto subsection: section->xmlChildren("section"))
     {
-        writeSection(stream, subsection, links, level+1);
+        write_section(stream, subsection, links, level+1);
     }
 }
 
 
-static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, XmlElement *topic, bool allinone)
+static void write_topic_body(QXmlStreamWriter *stream, const QString &main_tag, XmlElement *topic, bool allinone)
 {
     // The RWoutput file puts the "true name" as the public_name of the topic.
     // All other names are listed as aliases (with no attributes).
@@ -1108,17 +1108,17 @@ static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, Xm
     // Process all <sections>, applying the linkage for this topic
     for (auto section: topic->xmlChildren("section"))
     {
-        writeSection(stream, section, links, /*level*/ 1);
+        write_section(stream, section, links, /*level*/ 1);
     }
 
     stream->writeEndElement();  // section (for RW sections)
 
     // Provide summary of links to child topics
     auto child_topics = topic->xmlChildren("topic");
-    std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
-
     if (!child_topics.isEmpty())
     {
+        std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
+
         stream->writeStartElement("footer");
         stream->writeAttribute("class", "topicFooter");
 
@@ -1135,7 +1135,7 @@ static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, Xm
             stream->writeAttribute("class", "childTopicsEntry");
 
             stream->writeStartElement("a");
-            writeTopicHref(stream, child->attribute("topic_id"));
+            write_topic_href(stream, child->attribute("topic_id"));
             stream->writeCharacters(child->attribute("public_name"));
             stream->writeEndElement();   // a
             stream->writeEndElement(); // li
@@ -1150,7 +1150,7 @@ static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, Xm
                 stream->writeStartElement("details");
                 stream->writeAttribute("class", "mainTopic");
                 stream->writeAttribute("open", "open");
-                writeTopicBody(stream, main_tag, child_topic, allinone);
+                write_topic_body(stream, main_tag, child_topic, allinone);
                 stream->writeEndElement();
             }
         }
@@ -1158,7 +1158,7 @@ static void writeTopicBody(QXmlStreamWriter *stream, const QString &main_tag, Xm
 }
 
 
-static void writeTopicFile(XmlElement *topic)
+static void write_topic_file(XmlElement *topic)
 {
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
@@ -1182,7 +1182,7 @@ static void writeTopicFile(XmlElement *topic)
 
     stream->writeStartElement("body");
 
-    writeTopicBody(stream, "header", topic, /*allinone*/ false);
+    write_topic_body(stream, "header", topic, /*allinone*/ false);
 
     // Include the INDEX file
     if (always_show_index)
@@ -1204,7 +1204,7 @@ static void writeTopicFile(XmlElement *topic)
  * Write entries into the INDEX file
  */
 
-static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int level)
+static void write_topic_to_index(QXmlStreamWriter *stream, XmlElement *topic, int level)
 {
     auto child_topics = topic->xmlChildren("topic");
     bool has_kids = !child_topics.isEmpty();
@@ -1218,7 +1218,7 @@ static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int l
         stream->writeStartElement("summary");
     }
     stream->writeStartElement("a");
-    writeTopicHref(stream, topic->attribute("topic_id"));
+    write_topic_href(stream, topic->attribute("topic_id"));
     stream->writeCharacters(topic->attribute("public_name"));
     stream->writeEndElement();   // a
 
@@ -1234,7 +1234,7 @@ static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int l
 
         for (auto child_topic: child_topics)
         {
-            writeTopicToIndex(stream, child_topic, level+1);
+            write_topic_to_index(stream, child_topic, level+1);
         }
 
         stream->writeEndElement();   // ul
@@ -1245,7 +1245,7 @@ static void writeTopicToIndex(QXmlStreamWriter *stream, XmlElement *topic, int l
 }
 
 
-static void writeSeparateIndex(XmlElement *root_elem)
+static void write_separate_index(const XmlElement *root_elem)
 {
     QFile out_file("index.xhtml");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
@@ -1312,9 +1312,8 @@ static void writeSeparateIndex(XmlElement *root_elem)
                 stream.writeEndElement();
 #if 1
                 // Root level of topics
-                auto main_topics = child->xmlChildren("topic");
                 QMultiMap<QString,XmlElement*> categories;
-                for (auto topic: main_topics)
+                for (auto topic: child->xmlChildren("topic"))
                 {
                     categories.insert(topic->attribute("category_name"), topic);
                 }
@@ -1347,7 +1346,7 @@ static void writeSeparateIndex(XmlElement *root_elem)
 
                     for (auto topic: topics)
                     {
-                        writeTopicToIndex(&stream, topic, 1);
+                        write_topic_to_index(&stream, topic, 1);
                     }
                     stream.writeEndElement();   // ul
                     stream.writeEndElement();  // details
@@ -1370,7 +1369,7 @@ static void writeSeparateIndex(XmlElement *root_elem)
 }
 
 
-static void writeFirstPage(QXmlStreamWriter *stream, const XmlElement *root_elem)
+static void write_first_page(QXmlStreamWriter *stream, const XmlElement *root_elem)
 {
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
@@ -1458,9 +1457,18 @@ static void write_topics(QList<XmlElement*> list, int first, int last)
 }
 #endif
 
-
+/**
+ * @brief toHtml
+ * Generate HTML 5 (XHTML) representation of the supplied XmlElement tree
+ * @param path
+ * @param root_elem
+ * @param max_image_width
+ * @param separate_files
+ * @param use_reveal_mask
+ * @param index_on_every_page
+ */
 void toHtml(const QString &path,
-            XmlElement *root_elem,
+            const XmlElement *root_elem,
             int max_image_width,
             bool separate_files,
             bool use_reveal_mask,
@@ -1503,11 +1511,11 @@ void toHtml(const QString &path,
     if (separate_files)
     {
         write_support_files();
-        writeSeparateIndex(root_elem);
+        write_separate_index(root_elem);
 
         // A separate file for every single topic
-        auto topics = root_elem->findChildren<XmlElement*>("topic");
 #ifdef THREADED
+        auto topics = root_elem->findChildren<XmlElement*>("topic");
         // This method speeds up the output of multiple files by creating separate
         // threads to handle each CHUNK of topics.
         // (Unfortunately, it only takes 4 seconds to write out the S&S campaign,
@@ -1529,9 +1537,9 @@ void toHtml(const QString &path,
         for (unsigned i=0; i<max_threads; i++)
             jobs[i].get();
 #else
-        for (auto topic : topics)
+        for (auto topic : root_elem->findChildren<XmlElement*>("topic"))
         {
-            writeTopicFile(topic);
+            write_topic_file(topic);
         }
 #endif
     }
@@ -1572,7 +1580,7 @@ void toHtml(const QString &path,
 
         stream.writeStartElement("body");
 
-        writeFirstPage(&stream, root_elem);
+        write_first_page(&stream, root_elem);
 
         // All topics in a single file, grouped by category,
         // nesting child topics inside the parent topic.
@@ -1584,7 +1592,7 @@ void toHtml(const QString &path,
             stream.writeStartElement("details");
             stream.writeAttribute("class", "mainTopic");
             stream.writeAttribute("open", "open");
-            writeTopicBody(&stream, "summary", topic, /*allinone*/ true);
+            write_topic_body(&stream, "summary", topic, /*allinone*/ true);
             stream.writeEndElement();  // details
         }
 
