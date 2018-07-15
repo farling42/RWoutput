@@ -101,9 +101,10 @@ XmlElement::XmlElement(const QByteArray &fixed_text, QObject *parent) :
 void XmlElement::parse_gumbo_nodes(const GumboNode *node)
 {
     GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
-    for (unsigned int max = node->v.element.children.length; max > 0; --max, ++children)
+    int count = node->v.element.children.length;
+    while (count-- > 0)
     {
-        const GumboNode *child = *children;
+        const GumboNode *child = *children++;
         switch (child->type)
         {
         case GUMBO_NODE_TEXT:
@@ -169,12 +170,12 @@ XmlElement::XmlElement(const GumboNode *node, QObject *parent) :
 #endif
 
     // Collect up all the attributes
-    unsigned int max = node->v.element.attributes.length;
+    unsigned int count = node->v.element.attributes.length;
     GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-    p_attributes.reserve(max);
-    for (; max > 0; --max, ++attributes)
+    p_attributes.reserve(count);
+    while (count-- > 0)
     {
-        const GumboAttribute *attr = *attributes;
+        const GumboAttribute *attr = *attributes++;
         p_attributes.append(Attribute(attr->name, attr->value));
 #ifdef PRINT_GUMBO
         qDebug() << "GUMBO     " << attr->name << "=" << attr->value;
@@ -269,7 +270,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     // Check that HTML has at least 2 children: head and body
                     if (output->root->v.element.children.length >= 2)
                     {
-                        GumboNode *body_node = reinterpret_cast<GumboNode*>(output->root->v.element.children.data[1]);
+                        const GumboNode *body_node = reinterpret_cast<GumboNode*>(output->root->v.element.children.data[1]);
                         parse_gumbo_nodes(body_node);
                     }
 #ifdef PRINT_GUMBO

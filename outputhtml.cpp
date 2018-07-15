@@ -605,13 +605,14 @@ static void write_ext_object(QXmlStreamWriter *stream, const QString &obj_name, 
  * @param node
  */
 
-static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, bool top=false)
+static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *parent, bool top=false)
 {
     Q_UNUSED(top)
-    const GumboVector *children = &parent->v.element.children;
-    for (unsigned i=0; i<children->length; i++)
+    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
+    int count = parent->v.element.children.length;
+    while (count-- > 0)
     {
-        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        const GumboNode *node = *children++;
         switch (node->type)
         {
         case GUMBO_NODE_TEXT:
@@ -633,13 +634,14 @@ static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, b
 
         case GUMBO_NODE_ELEMENT:
         {
-            QString tag = gumbo_normalized_tagname(node->v.element.tag);
+            const QString tag = gumbo_normalized_tagname(node->v.element.tag);
             stream->writeStartElement(tag);
             //if (top) qDebug() << "GUMBO_NODE_ELEMENT:" << tag;
-            const GumboVector *attribs = &node->v.element.attributes;
-            for (unsigned i=0; i<attribs->length; i++)
+            GumboAttribute **attribs = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+            int count = node->v.element.attributes.length;
+            while (count-- > 0)
             {
-                GumboAttribute *at = static_cast<GumboAttribute*>(attribs->data[i]);
+                const GumboAttribute *at = *attribs++;
                 stream->writeAttribute(at->name, at->value);
             }
             output_gumbo_children(stream, node);
@@ -661,12 +663,13 @@ static void output_gumbo_children(QXmlStreamWriter *stream, GumboNode *parent, b
 }
 
 
-static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
+static const GumboNode *get_gumbo_child(const GumboNode *parent, const QString &name)
 {
-    const GumboVector *children = &parent->v.element.children;
-    for (unsigned i=0; i<children->length; i++)
+    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
+    int count = parent->v.element.children.length;
+    while (count-- > 0)
     {
-        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        const GumboNode *node = *children++;
         if (node->type == GUMBO_NODE_ELEMENT)
         {
             const QString tag = gumbo_normalized_tagname(node->v.element.tag);
@@ -677,13 +680,14 @@ static GumboNode *get_gumbo_child(GumboNode *parent, const QString &name)
 }
 
 #ifdef DUMP_CHILDREN
-static void dump_children(const QString &from, GumboNode *parent)
+static void dump_children(const QString &from, const GumboNode *parent)
 {
     QStringList list;
-    GumboVector *children = &parent->v.element.children;
-    for (unsigned i=0; i<children->length; i++)
+    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
+    int count = parent->v.element.children.length;
+    while (count-- > 0)
     {
-        GumboNode *node = static_cast<GumboNode*>(children->data[i]);
+        const GumboNode *node = *children++;
         switch (node->type)
         {
         case GUMBO_NODE_ELEMENT:
@@ -729,15 +733,15 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     dump_children("ROOT", output->root);
 #endif
 
-    GumboNode *head = get_gumbo_child(output->root, "head");
-    GumboNode *body = get_gumbo_child(output->root, "body");
+    const GumboNode *head = get_gumbo_child(output->root, "head");
+    const GumboNode *body = get_gumbo_child(output->root, "body");
 
 #ifdef DUMP_CHILDREN
     dump_children("HEAD", head);
 #endif
 
     // Maybe we have a CSS that we can put inline.
-    GumboNode *style = get_gumbo_child(head, "style");
+    const GumboNode *style = get_gumbo_child(head, "style");
 #ifdef HANDLE_POOR_RTF
     if (!style) style = get_gumbo_child(body, "style");
 #endif
@@ -758,7 +762,7 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     }
     else
     {
-        GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
+        const GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
         if (title)
         {
             stream->writeStartElement("summary");
