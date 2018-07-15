@@ -6,6 +6,8 @@
 
 VERSION = 1.17
 
+# Qt 5.11 generates a link error referring to some qml activity.
+# This is because the resource file has *.js or *.css files in it.
 QT       += core gui printsupport
 
 CONFIG  += c++11
@@ -15,27 +17,21 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = RWout
 TEMPLATE = app
 
-# The following define makes your compiler emit warnings if you use
-# any feature of Qt which has been marked as deprecated (the exact warnings
-# depend on your compiler). Please consult the documentation of the
-# deprecated API in order to know how to port your code away from it.
-DEFINES += QT_DEPRECATED_WARNINGS
-
 # You can also make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x051100
 
 SOURCES += \
-        main.cpp \
-        mainwindow.cpp \
+    main.cpp \
+    mainwindow.cpp \
     xmlelement.cpp \
     outputhtml.cpp \
     linefile.cpp \
     outhtml4subset.cpp
 
 HEADERS += \
-        mainwindow.h \
+    mainwindow.h \
     xmlelement.h \
     outputhtml.h \
     linefile.h \
@@ -95,8 +91,8 @@ for(FILE,EXTRA_BINFILES){
 QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expand(\n\t))
 }
 
-MYMINGW = Desktop_Qt_5_10_1_MinGW_32bit
-MYMSVC  = Desktop_Qt_5_10_1_MSVC2015_64bit
+MYMINGW = Desktop_Qt_5_11_1_MinGW_32bit
+MYMSVC  = Desktop_Qt_5_11_1_MSVC2015_64bit
 
 win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Release/release/ -lgumbo
 else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Debug/debug/ -lgumbo

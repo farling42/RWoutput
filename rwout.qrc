@@ -1,6 +1,6 @@
 <RCC>
     <qresource prefix="/">
-        <file>theme.css</file>
-        <file>scripts.js</file>
+        <file>theme.css.template</file>
+        <file>scripts.js.template</file>
     </qresource>
 </RCC>

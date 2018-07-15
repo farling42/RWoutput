@@ -122,7 +122,7 @@ static void write_support_files()
     {
         QFile destfile(filename);
         if (destfile.exists()) destfile.remove();
-        QFile::copy(":/" + filename, destfile.fileName());
+        QFile::copy(":/" + filename + ".template", destfile.fileName());
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
     }
