@@ -29,8 +29,7 @@ class XmlElement : public QObject
 {
     Q_OBJECT
 public:
-    XmlElement(QXmlStreamReader*, QObject *parent = nullptr);
-    XmlElement(const GumboNode *info, QObject *parent);
+    static XmlElement *readTree(QIODevice*);
 
     // objectName == XML element title
     struct Attribute {
@@ -40,8 +39,6 @@ public:
         Attribute(const char *name, const char *value) : name(name), value(value) {}
         Attribute(const QStringRef &name, const QStringRef &value) : name(name.toString()), value(value.toString()) {}
     };
-
-    static XmlElement *readTree(QIODevice*);
 
     bool hasAttribute(const QString &name) const;
     const QString &attribute(const QString &name) const;
@@ -56,8 +53,11 @@ public:
     void dump_tree() const;
     QString snippetName() const;
     QString childString() const;
+
 private:
+    XmlElement(QXmlStreamReader*, QObject *parent = nullptr);
     XmlElement(const QByteArray &fixed_text, QObject *parent);
+    XmlElement(const GumboNode *info, QObject *parent);
     void parse_gumbo_nodes(const GumboNode *node);
     // Real data is...
     QByteArray p_byte_data;

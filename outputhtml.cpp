@@ -17,7 +17,7 @@
 
 //#define ALWAYS_SAVE_EXT_FILES
 //#define THREADED
-//#define TIME_CONVERSION
+#define TIME_CONVERSION
 
 #include "outputhtml.h"
 
@@ -398,18 +398,6 @@ static void write_para_children(QXmlStreamWriter *stream, XmlElement *parent, co
     }
 }
 
-/**
- * @brief tobase64
- * @param data
- * @return
- */
-static inline QString to_base64(const QByteArray &data)
-{
-    // use new LineFile class to insert \n at the appropriate points in the output
-    return QString{data.toBase64()};
-}
-
-
 /*
  * Return the divisor for the map's size
  */
@@ -514,10 +502,10 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
     stream->writeAttribute("alt", image_name);
     if (in_buffer)
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
-                               .arg(to_base64(buffer.data())));
+                               .arg(QString::fromLatin1(buffer.data().toBase64())));
     else
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
-                               .arg(to_base64(orig_data)));
+                               .arg(QString::fromLatin1(orig_data.toBase64())));
     stream->writeEndElement();  // img
 
     stream->writeEndElement();  // figure
@@ -558,7 +546,7 @@ static void write_ext_object(QXmlStreamWriter *stream, const QString &obj_name, 
         stream->writeStartElement("span");
         stream->writeStartElement("a");
         stream->writeAttribute("download", filename);
-        stream->writeAttribute("href", QString("data:%1;base64,%2").arg(mime_type).arg(to_base64(data)));
+        stream->writeAttribute("href", QString("data:%1;base64,%2").arg(mime_type).arg(QString::fromLatin1(data.toBase64())));
         stream->writeCharacters(filename);
         stream->writeEndElement();  // a
         stream->writeEndElement();  // span
@@ -609,8 +597,7 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
 {
     Q_UNUSED(top)
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    int count = parent->v.element.children.length;
-    while (count-- > 0)
+    for (int count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
         switch (node->type)
@@ -637,12 +624,11 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
             const QString tag = gumbo_normalized_tagname(node->v.element.tag);
             stream->writeStartElement(tag);
             //if (top) qDebug() << "GUMBO_NODE_ELEMENT:" << tag;
-            GumboAttribute **attribs = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-            int count = node->v.element.attributes.length;
-            while (count-- > 0)
+            GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+            for (int count = node->v.element.attributes.length; count > 0; --count)
             {
-                const GumboAttribute *at = *attribs++;
-                stream->writeAttribute(at->name, at->value);
+                const GumboAttribute *attr = *attributes++;
+                stream->writeAttribute(attr->name, attr->value);
             }
             output_gumbo_children(stream, node);
             stream->writeEndElement();
@@ -663,17 +649,16 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
 }
 
 
-static const GumboNode *get_gumbo_child(const GumboNode *parent, const QString &name)
+static const GumboNode *find_named_child(const GumboNode *parent, const QString &name)
 {
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    int count = parent->v.element.children.length;
-    while (count-- > 0)
+    for (int count = parent->v.element.children.length; count > 0; --count)
     {
-        const GumboNode *node = *children++;
-        if (node->type == GUMBO_NODE_ELEMENT)
+        const GumboNode *child = *children++;
+        if (child->type == GUMBO_NODE_ELEMENT &&
+                gumbo_normalized_tagname(child->v.element.tag) == name)
         {
-            const QString tag = gumbo_normalized_tagname(node->v.element.tag);
-            if (tag == name) return node;
+            return child;
         }
     }
     return nullptr;
@@ -684,8 +669,7 @@ static void dump_children(const QString &from, const GumboNode *parent)
 {
     QStringList list;
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    int count = parent->v.element.children.length;
-    while (count-- > 0)
+    for (int count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
         switch (node->type)
@@ -733,15 +717,15 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     dump_children("ROOT", output->root);
 #endif
 
-    const GumboNode *head = get_gumbo_child(output->root, "head");
-    const GumboNode *body = get_gumbo_child(output->root, "body");
+    const GumboNode *head = find_named_child(output->root, "head");
+    const GumboNode *body = find_named_child(output->root, "body");
 
 #ifdef DUMP_CHILDREN
     dump_children("HEAD", head);
 #endif
 
     // Maybe we have a CSS that we can put inline.
-    const GumboNode *style = get_gumbo_child(head, "style");
+    const GumboNode *style = find_named_child(head, "style");
 #ifdef HANDLE_POOR_RTF
     if (!style) style = get_gumbo_child(body, "style");
 #endif
@@ -762,7 +746,7 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
     }
     else
     {
-        const GumboNode *title = head ? get_gumbo_child(head, "title") : nullptr;
+        const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
         if (title)
         {
             stream->writeStartElement("summary");

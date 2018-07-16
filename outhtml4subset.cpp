@@ -360,7 +360,7 @@ static void write_ext_object(QTextStream &stream, const QString &obj_name, const
 
         stream << QString("<b>%1: </b>").arg(obj_name);
 
-        stream << QString("<span><a download='%3' href='data:%1;base64,%2'></span>").arg(mime_type).arg(to_base64(data)).arg(filename);
+        stream << QString("<span><a download='%3' href='data:%1;base64,%2'></span>").arg(mime_type).arg(QString::fromLatin1(data.toBase64()))).arg(filename);
 
         if (annotation) writeParaChildren(stream, annotation, class_name);
     }
