@@ -54,10 +54,10 @@ Section
    # point the new shortcut at the program uninstaller
    CreateShortCut "$SMPROGRAMS\Uninstall Realm Works Output Converter.lnk" "$INSTDIR\uninstall.exe"
 
-   # Add the program to the "Open With" list for the ".rwexport" extension
+   # Add the program to the "Open With" list for the ".rwoutput" extension
    WriteRegStr HKCR "Applications\${EXENAME}\shell\open" "FriendlyAppName" "${APPNAME}"
    WriteRegStr HKCR "Applications\${EXENAME}\shell\open\command" "" '"$INSTDIR\${EXENAME}" "%1"'
-   WriteRegStr HKCR ".rwexport\OpenWithList\${EXENAME}" "" ""
+   WriteRegStr HKCR ".rwoutput\OpenWithList\${EXENAME}" "" ""
 
    # Put into the "Add/Remove" menu
    WriteRegStr HKLM "${ARP}" "DisplayName"     "${APPNAME}"
@@ -84,7 +84,7 @@ SectionEnd
 Section "uninstall"
 
     # Unregister our interest in the file extension
-    DeleteRegKey HKCR ".rwexport\OpenWithList\${EXENAME}"
+    DeleteRegKey HKCR ".rwoutput\OpenWithList\${EXENAME}"
     DeleteRegKey HKCR "Applications\${EXENAME}"
 
     # Remove Start Menu launcher
