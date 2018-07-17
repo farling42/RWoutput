@@ -47,7 +47,7 @@ MainWindow::MainWindow(QWidget *parent) :
     //ui->print->setIcon(style()->standardIcon(QStyle::));
     ui->simpleHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
-    ui->htmlOutput->setEnabled(false);
+    ui->output->setEnabled(false);
 
     connect(ui->separateTopicFiles, &QCheckBox::clicked, ui->indexOnEveryPage, &QCheckBox::setEnabled);
     ui->indexOnEveryPage->setEnabled(ui->separateTopicFiles->isChecked());
@@ -77,7 +77,7 @@ bool MainWindow::loadFile(const QString &in_filename)
         return false;
     }
 
-    ui->htmlOutput->setEnabled(false);
+    ui->output->setEnabled(false);
     ui->filename->setText(QFileInfo(in_file).fileName());
 
     ui->statusBar->showMessage("Loading RWoutput file...");
@@ -85,7 +85,7 @@ bool MainWindow::loadFile(const QString &in_filename)
     ui->statusBar->showMessage("RWoutput file LOAD complete.");
 
     ui->topicCount->setText(QString("Topic Count: %1").arg(root_element->findChildren<XmlElement*>("topic").count()));
-    ui->htmlOutput->setEnabled(true);
+    ui->output->setEnabled(true);
     in_file.close();
     return true;
 }

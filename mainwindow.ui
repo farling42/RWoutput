@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>411</width>
-    <height>305</height>
+    <width>491</width>
+    <height>365</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -63,7 +63,7 @@ FILE</string>
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="htmlOutput">
+       <widget class="QGroupBox" name="outputOptions">
         <property name="title">
          <string>Output Options</string>
         </property>
@@ -176,7 +176,7 @@ FILE</string>
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="groupBox">
+       <widget class="QGroupBox" name="output">
         <property name="title">
          <string>Output</string>
         </property>
@@ -193,6 +193,9 @@ FILE</string>
          </item>
          <item>
           <widget class="QPushButton" name="savePdf">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="toolTip">
             <string>Produce a single PDF document with all topics in alphabetical order</string>
            </property>
@@ -203,6 +206,9 @@ FILE</string>
          </item>
          <item>
           <widget class="QPushButton" name="print">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="toolTip">
             <string>Print all the topics in alphabetical order</string>
            </property>
@@ -233,8 +239,8 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>411</width>
-     <height>21</height>
+     <width>491</width>
+     <height>26</height>
     </rect>
    </property>
   </widget>
