@@ -11,18 +11,10 @@
  * This helps reading XML files since otherwise some lines might be VERY long.
  */
 
-LineFile::LineFile() : QFile() {init();}
-
-LineFile::LineFile(const QString &name) : QFile(name) {init();}
-
-LineFile::LineFile(QObject *parent) : QFile(parent) {init();}
-
-LineFile::LineFile(const QString &name, QObject *parent) : QFile(name, parent) {init();}
-
-void LineFile::init()
-{
-    linelen = 0;
-}
+LineFile::LineFile() : QFile() {}
+LineFile::LineFile(const QString &name) : QFile(name) {}
+LineFile::LineFile(QObject *parent) : QFile(parent) {}
+LineFile::LineFile(const QString &name, QObject *parent) : QFile(name, parent) {}
 
 // Ensure that no line in the file is more than 1,000 characters long.
 

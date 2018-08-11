@@ -597,7 +597,7 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
 {
     Q_UNUSED(top)
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    for (int count = parent->v.element.children.length; count > 0; --count)
+    for (unsigned count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
         switch (node->type)
@@ -625,7 +625,7 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
             stream->writeStartElement(tag);
             //if (top) qDebug() << "GUMBO_NODE_ELEMENT:" << tag;
             GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-            for (int count = node->v.element.attributes.length; count > 0; --count)
+            for (unsigned count = node->v.element.attributes.length; count > 0; --count)
             {
                 const GumboAttribute *attr = *attributes++;
                 stream->writeAttribute(attr->name, attr->value);
@@ -652,7 +652,7 @@ static void output_gumbo_children(QXmlStreamWriter *stream, const GumboNode *par
 static const GumboNode *find_named_child(const GumboNode *parent, const QString &name)
 {
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    for (int count = parent->v.element.children.length; count > 0; --count)
+    for (unsigned count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *child = *children++;
         if (child->type == GUMBO_NODE_ELEMENT &&
@@ -705,7 +705,7 @@ static bool write_html(QXmlStreamWriter *stream, bool use_fixed_title, const QSt
 {
     // Put the children of the BODY into this frame.
     GumboOutput *output = gumbo_parse(data);
-    if (output == 0)
+    if (output == nullptr)
     {
         return false;
     }
@@ -1176,7 +1176,7 @@ static void write_topic_file(XmlElement *topic)
     stream->writeEndElement(); // body
     stream->writeEndElement(); // html
 
-    stream = 0;
+    stream = nullptr;
 }
 
 /*

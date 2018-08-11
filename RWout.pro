@@ -53,8 +53,8 @@ CONFIG += windeployqt
 COMPANY = com.amusingtime.RWOutput
 
 # Get the 32-bit compiler to allow 2GB or more of accessible memory.
-QMAKE_CXXFLAGS += -Wl,--large-address-aware
-QMAKE_LFLAGS   += -Wl,--large-address-aware
+win32-g++:QMAKE_CXXFLAGS += -Wl,--large-address-aware
+win32-g++:QMAKE_LFLAGS   += -Wl,--large-address-aware
 
 DESTDIR = install
 
@@ -76,17 +76,25 @@ RESOURCES += \
     rwout.qrc
 
 # Add ZLIB (required for QUAZIP)
+win32-g++{
 ZLIB = $$PWD/../zlib-1.2.11
 INCLUDEPATH += $$ZLIB
 LIBS += -L$$ZLIB -lz
 EXTRA_BINFILES += $$ZLIB/zlib1.dll
+}
+win32:!win32-g++{
+ZLIB = $$PWD/../zlib-1.2.11
+INCLUDEPATH += $$ZLIB
+LIBS += -L$$ZLIB/static_x64 -lzlibstat
+EXTRA_BINFILES += $$ZLIB/dll_x64/zlibwapi.dll
+}
 
 # Add QUAZIP (used to open HL portfolio files)
 # (quazip.dll is not copied into the install directory!)
-QUAZIP = $$PWD/../quazip-0.7.3
-INCLUDEPATH += $$QUAZIP
-LIBS += -L$$QUAZIP/quazip/release -lquazip
-EXTRA_BINFILES += $$QUAZIP/quazip/release/quazip.dll
+#QUAZIP = $$PWD/../quazip-0.7.3
+#INCLUDEPATH += $$QUAZIP
+#LIBS += -L$$QUAZIP/quazip/release -lquazip
+#EXTRA_BINFILES += $$QUAZIP/quazip/release/quazip.dll
 
 for(FILE,EXTRA_BINFILES){
 QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expand(\n\t))
@@ -94,8 +102,11 @@ QMAKE_POST_LINK += $$$$shell_path($(COPY_FILE) $${FILE} $(DESTDIR)$$escape_expan
 
 # %{CurrentKit:FileSystemName} = Desktop_...32bit
 MYMINGW = Desktop_Qt_5_11_1_MinGW_32bit
-MYMSVC  = Desktop_Qt_5_11_1_MSVC2015_64bit
+MYMSVC  = Desktop_Qt_5_11_1_MSVC2017_64bit
 
+#
+# GUMBO library
+#
 win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Release/release/ -lgumbo
 else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Debug/debug/ -lgumbo
 else:win32:!win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-gumbo-$${MYMSVC}-Release/release/ -lgumbo
@@ -110,3 +121,27 @@ else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gu
 else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Release/release/gumbo.lib
 else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMSVC}-Debug/debug/gumbo.lib
 else:unix: PRE_TARGETDEPS += $$PWD/../build-gumbo-$${MYMINGW}-Release/libgumbo.a
+
+#
+# QUAZIP library
+#
+win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-quazip-$${MYMINGW}-Release/quazip/release/ -lquazip
+else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-quazip-$${MYMINGW}-Debug/quazip/debug/ -lquazipd
+else:win32:!win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-quazip-$${MYMSVC}-Release/quazip/release/ -lquazip
+else:win32:!win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-quazip-$${MYMSVC}-Debug/quazip/debug/ -lquazipd
+else:unix: LIBS += -L$$PWD/../build-gumbo-$${MYMINGW}-Release/ -lquazip
+
+INCLUDEPATH += $$PWD/../quazip-0.7.3
+DEPENDPATH += $$PWD/../quazip-0.7.3
+
+win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-quazip-$${MYMINGW}-Release/quazip/release/libquazip.a
+else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-quazip-$${MYMINGW}-Debug/quazip/debug/libquazipd.a
+else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-quazip-$${MYMSVC}-Release/quazip/release/quazip.lib
+else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-quazip-$${MYMSVC}-Debug/quazip/debug/quazip.lib
+else:unix: PRE_TARGETDEPS += $$PWD/../build-quazip-$${MYMINGW}-Release/libquazip.a
+
+#win32-g++:CONFIG(release, debug|release): EXTRA_BINFILES += $$PWD/../build-quazip-$${MYMINGW}-Release/quazip/release/quazip.dll
+#else:win32-g++:CONFIG(debug, debug|release): EXTRA_BINFILES += $$PWD/../build-quazip-$${MYMINGW}-Debug/quazip/debug/quazip.dll
+#else:win32:!win32-g++:CONFIG(release, debug|release): EXTRA_BINFILES += $$PWD/../build-quazip-$${MYMSVC}-Release/quazip/release/quazip.dll
+#else:win32:!win32-g++:CONFIG(debug, debug|release): EXTRA_BINFILES += $$PWD/../build-quazip-$${MYMSVC}-Debug/quazip/debug/quazip.dll
+#else:unix: EXTRA_BINFILES += $$PWD/../build-quazip-$${MYMINGW}-Release/libquazip.a

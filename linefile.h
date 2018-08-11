@@ -15,7 +15,6 @@ public:
 protected:
     virtual qint64 writeData(const char *data, qint64 len);
 private:
-    void init();
     qint64 linelen{0};
 };
 

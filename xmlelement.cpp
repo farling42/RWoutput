@@ -62,8 +62,8 @@ XmlElement::XmlElement(const GumboNode *node, QObject *parent) :
 
     // Collect up all the attributes
     GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-    p_attributes.reserve(node->v.element.attributes.length);
-    for (int count = node->v.element.attributes.length; count > 0; --count)
+    p_attributes.reserve(int(node->v.element.attributes.length));
+    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
     {
         const GumboAttribute *attr = *attributes++;
         p_attributes.append(Attribute(attr->name, attr->value));
@@ -215,7 +215,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
 void XmlElement::parse_gumbo_nodes(const GumboNode *node)
 {
     GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
-    for (int count = node->v.element.children.length; count > 0; --count)
+    for (unsigned count = node->v.element.children.length; count > 0; --count)
     {
         const GumboNode *child = *children++;
         switch (child->type)
