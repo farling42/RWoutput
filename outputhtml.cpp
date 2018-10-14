@@ -1208,7 +1208,6 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
     // Footer
     // PREV     TOP     UP    NEXT
     stream->writeStartElement("footer");
-    stream->writeEmptyElement("hr");
     stream->writeStartElement("table");
     stream->writeAttribute("class", "navTable");
     stream->writeStartElement("tr");

@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 1.19
+VERSION = 1.20
 
 QT       += core gui printsupport
 
