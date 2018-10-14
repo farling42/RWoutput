@@ -109,3 +109,36 @@ section {
     content:  counter(s1counter) "." counter(s2counter) "." counter(s3counter) ".\0000a0\0000a0";
     counter-increment: s3counter;
 }
+
+.navTable {
+    width: 100%
+}
+
+.navPrev {
+    width: 25%
+}
+
+.navPrev:before {
+    content: "Prev: "
+}
+
+.navNext {
+    width: 25%
+}
+
+.navNext:before {
+    content: "Next: "
+}
+
+.navUp {
+    width: 25%
+}
+
+.navUp:before {
+    content: "Up: "
+}
+
+.navTop {
+    width: 25%
+}
+

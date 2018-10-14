@@ -1028,7 +1028,7 @@ static void write_section(QXmlStreamWriter *stream, XmlElement *section, const L
 }
 
 
-static void write_topic_body(QXmlStreamWriter *stream, const QString &main_tag, XmlElement *topic, bool allinone)
+static void write_topic_body(QXmlStreamWriter *stream, const QString &main_tag, const XmlElement *topic, bool allinone)
 {
     // The RWoutput file puts the "true name" as the public_name of the topic.
     // All other names are listed as aliases (with no attributes).
@@ -1136,8 +1136,41 @@ static void write_topic_body(QXmlStreamWriter *stream, const QString &main_tag, 
     }
 }
 
+/**
+ * @brief write_link
+ * Writes one of the navigation links that might appear in the footer of each page
+ * @param stream
+ * @param name
+ * @param topic
+ * @param override
+ */
+static void write_link(QXmlStreamWriter *stream, const QString &name, const XmlElement *topic, const QString &override = QString())
+{
+    stream->writeStartElement("td");
+    stream->writeAttribute("class", "nav" + name);
+    if (topic && topic->objectName() == "topic")
+    {
+        stream->writeStartElement("a");
+        write_topic_href(stream, topic->attribute("topic_id"));
+        stream->writeCharacters(topic->attribute("public_name"));
+        stream->writeEndElement();
+    }
+    else if (!override.isEmpty())
+    {
+        stream->writeStartElement("a");
+        write_topic_href(stream, override);
+        stream->writeCharacters(name);
+        stream->writeEndElement();
+    }
+    else
+    {
+        stream->writeCharacters(name);
+    }
+    stream->writeEndElement(); // TD
+}
 
-static void write_topic_file(XmlElement *topic)
+
+static void write_topic_file(const XmlElement *topic, const XmlElement *up, const XmlElement *prev, const XmlElement *next)
 {
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
@@ -1172,8 +1205,26 @@ static void write_topic_file(XmlElement *topic)
         stream->writeEndElement();
     }
 
+    // Footer
+    // PREV     TOP     UP    NEXT
+    stream->writeStartElement("footer");
+    stream->writeEmptyElement("hr");
+    stream->writeStartElement("table");
+    stream->writeAttribute("class", "navTable");
+    stream->writeStartElement("tr");
+
+    write_link(stream, "Prev", prev);
+    write_link(stream, "Home", nullptr, "index");
+    write_link(stream, "Up",   up,      "index");  // If up is not defined, use the index file
+    write_link(stream, "Next", next);
+
+    stream->writeEndElement(); // tr
+    stream->writeEndElement(); // table
+    stream->writeEndElement(); // footer
+
     // Complete the individual topic file
     stream->writeEndElement(); // body
+
     stream->writeEndElement(); // html
 
     stream = nullptr;
@@ -1436,6 +1487,22 @@ static void write_topics(QList<XmlElement*> list, int first, int last)
 }
 #endif
 
+
+static void write_child_topics(XmlElement *parent)
+{
+    QList<XmlElement*> children = parent->findChildren<XmlElement*>("topic", Qt::FindDirectChildrenOnly);
+    int last = children.count()-1;
+    for (int pos=0; pos<children.count(); pos++)
+    {
+        write_topic_file(children[pos],
+                         /*up*/parent,
+                         /*prev*/(pos>0) ? children[pos-1] : nullptr,
+                         /*next*/(pos<last) ? children[pos+1] : nullptr);
+        write_child_topics(children[pos]);
+    }
+}
+
+
 /**
  * @brief toHtml
  * Generate HTML 5 (XHTML) representation of the supplied XmlElement tree
@@ -1516,10 +1583,7 @@ void toHtml(const QString &path,
         for (unsigned i=0; i<max_threads; i++)
             jobs[i].get();
 #else
-        for (auto topic : root_elem->findChildren<XmlElement*>("topic"))
-        {
-            write_topic_file(topic);
-        }
+        write_child_topics(root_elem->findChild<XmlElement*>("contents"));
 #endif
     }
     else
