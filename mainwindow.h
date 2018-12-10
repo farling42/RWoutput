@@ -47,6 +47,7 @@ private:
     Ui::MainWindow *ui;
     XmlElement *root_element;
     QFile in_file;
+    void setStatusText(const QString &text);
 };
 
 #endif // MAINWINDOW_H

@@ -58,6 +58,15 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+void MainWindow::setStatusText(const QString &text)
+{
+    ui->statusBar->showMessage(text);
+    // Ensure it is drawn immediately
+    qApp->processEvents();
+}
+
+
 bool MainWindow::loadFile(const QString &in_filename)
 {
     qDebug() << "Loading file" << in_filename;
@@ -80,9 +89,9 @@ bool MainWindow::loadFile(const QString &in_filename)
     ui->output->setEnabled(false);
     ui->filename->setText(QFileInfo(in_file).fileName());
 
-    ui->statusBar->showMessage("Loading RWoutput file...");
+    setStatusText("Loading RWoutput file...");
     root_element = XmlElement::readTree(&in_file);
-    ui->statusBar->showMessage("RWoutput file LOAD complete.");
+    setStatusText("RWoutput file LOAD complete.");
 
     ui->topicCount->setText(QString("Topic Count: %1").arg(root_element->findChildren<XmlElement*>("topic").count()));
     ui->output->setEnabled(true);
@@ -124,7 +133,8 @@ void MainWindow::on_saveHtml_clicked()
 
     if (!dir.exists())
     {
-        ui->statusBar->showMessage("The directory does not exist!");
+        setStatusText("The directory does not exist!");
+        qApp->processEvents();
         return;
     }
     settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
@@ -133,7 +143,8 @@ void MainWindow::on_saveHtml_clicked()
     bool ok = true;
     int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
     if (!ok) max_image_width = -1;
-    ui->statusBar->showMessage("Saving XHTML file...");
+    setStatusText("Saving XHTML file...");
+    qApp->processEvents();
 
     toHtml(path, root_element,
            max_image_width,
@@ -141,7 +152,8 @@ void MainWindow::on_saveHtml_clicked()
            ui->revealMask->isChecked(),
            separate_files && ui->indexOnEveryPage->isChecked());
 
-    ui->statusBar->showMessage("XHTML file SAVE complete.");
+    setStatusText("XHTML file SAVE complete.");
+    qApp->processEvents();
 }
 
 
@@ -171,28 +183,28 @@ void MainWindow::on_savePdf_clicked()
 
         QTextDocument doc;
 
-        ui->statusBar->showMessage("Generating HTML4 subset contents...");
+        setStatusText("Generating HTML4 subset contents...");
         {
             QString result;   // only keep long enough to call doc.setHtml
             QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
             outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
-            ui->statusBar->showMessage("Transferring to QTextDocument...");
+            setStatusText("Transferring to QTextDocument...");
             doc.setHtml(result);
         }
         //doc.setPageSize(printer.pageRect().size()); // This is necessary if you want to hide the page number
 
-        ui->statusBar->showMessage("Saving PDF file...");
+        setStatusText("Saving PDF file...");
         QPdfWriter pdf(&file);
         pdf.setPageSize(QPrinter::A4);
         // Try explicitly setting page size so that QTextDocument doesn't have to lay out
         // the entire document itself. PDF viewer reports unrecognised font!
         //doc.setPageSize(pdf.pageLayout().pageSize().size(QPageSize::Point));
         doc.print(&pdf);
-        ui->statusBar->showMessage("PDF file SAVE complete.");
+        setStatusText("PDF file SAVE complete.");
     }
     else
     {
-        ui->statusBar->showMessage("Failed to open PDF file.");
+        setStatusText("Failed to open PDF file.");
     }
 }
 
@@ -216,20 +228,20 @@ void MainWindow::on_print_clicked()
 
         QTextDocument doc;
 
-        ui->statusBar->showMessage("Generating HTML4 subset contents...");
+        setStatusText("Generating HTML4 subset contents...");
         {
             QString result;   // only keep long enough to call doc.setHtml
             QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
             outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
-            ui->statusBar->showMessage("Transferring to QTextDocument...");
+            setStatusText("Transferring to QTextDocument...");
             doc.setHtml(result);
         }
         doc.setPageSize(dialog.printer()->pageRect().size()); // This is necessary if you want to hide the page number
 
-        ui->statusBar->showMessage("Printing...");
+        setStatusText("Printing...");
         doc.print(dialog.printer());
 
-        ui->statusBar->showMessage("Print complete.");
+        setStatusText("Print complete.");
     }
 }
 
@@ -258,15 +270,15 @@ void MainWindow::on_simpleHtml_clicked()
         int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
         if (!ok) max_image_width = -1;
 
-        ui->statusBar->showMessage("Saving HTML4 file...");
+        setStatusText("Saving HTML4 file...");
         QTextStream stream(&file);
         outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
 
-        ui->statusBar->showMessage("Simple HTML4 SAVE complete.");
+        setStatusText("Simple HTML4 SAVE complete.");
     }
     else
     {
-        ui->statusBar->showMessage("Failed to open output file.");
+        setStatusText("Failed to open output file.");
     }
 
 }
