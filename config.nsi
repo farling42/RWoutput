@@ -37,7 +37,7 @@ Section
 
    # The files to be installed
    File /r install\*.*
-   File ..\quazip-0.7.3\quazip\release\quazip.dll
+   File ..\build-quazip-Desktop_Qt_5_12_0_MinGW_64_bit-Release\quazip\release\quazip.dll
 
    # create the uninstaller
    WriteUninstaller "$INSTDIR\uninstall.exe"
