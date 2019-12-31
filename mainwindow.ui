@@ -37,6 +37,9 @@
 rwoutput
 FILE</string>
            </property>
+           <property name="icon">
+            <iconset theme="document-open"/>
+           </property>
           </widget>
          </item>
          <item>
@@ -189,31 +192,34 @@ FILE</string>
            <property name="text">
             <string>Create HTML file(s)</string>
            </property>
+           <property name="icon">
+            <iconset theme="document-save"/>
+           </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="savePdf">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
            <property name="toolTip">
             <string>Produce a single PDF document with all topics in alphabetical order</string>
            </property>
            <property name="text">
             <string>Create PDF file</string>
            </property>
+           <property name="icon">
+            <iconset theme="document-save"/>
+           </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="print">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
            <property name="toolTip">
             <string>Print all the topics in alphabetical order</string>
            </property>
            <property name="text">
             <string>Print</string>
+           </property>
+           <property name="icon">
+            <iconset theme="document-print"/>
            </property>
           </widget>
          </item>
@@ -224,6 +230,9 @@ FILE</string>
            </property>
            <property name="text">
             <string>Create HTML4 file</string>
+           </property>
+           <property name="icon">
+            <iconset theme="document-save"/>
            </property>
           </widget>
          </item>

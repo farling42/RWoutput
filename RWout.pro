@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 2.1
+VERSION = 2.2
 
 QT       += core gui printsupport
 
@@ -23,6 +23,7 @@ TEMPLATE = app
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x051200
 
 SOURCES += \
+    gentextdocument.cpp \
     main.cpp \
     mainwindow.cpp \
     xmlelement.cpp \
@@ -31,6 +32,7 @@ SOURCES += \
     outhtml4subset.cpp
 
 HEADERS += \
+    gentextdocument.h \
     mainwindow.h \
     xmlelement.h \
     outputhtml.h \
