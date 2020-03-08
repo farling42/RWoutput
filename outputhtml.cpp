@@ -30,6 +30,8 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QApplication>
+#include <QStyle>
+#include <QStaticText>
 #include <future>
 #ifdef TIME_CONVERSION
 #include <QElapsedTimer>
@@ -408,11 +410,12 @@ std::mutex image_mutex;
 
 static int write_image(QXmlStreamWriter *stream, const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
                        const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
-                       const QString &usemap = QString())
+                       const QString &usemap = QString(), const QList<XmlElement*> pins = QList<XmlElement*>())
 {
     QBuffer buffer;
     QString format = filename.split(".").last();
     int divisor = 1;
+    const int pin_size = 20;
     bool in_buffer = false;
 
     stream->writeStartElement("p");
@@ -428,7 +431,7 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
 
     // See if possible image conversion is required
     bool bad_format = (format == "bmp" || format == "tif");
-    if (mask_elem != nullptr || image_max_width > 0 || bad_format)
+    if (mask_elem != nullptr || image_max_width > 0 || bad_format || !pins.isEmpty())
     {
 #ifdef THREADED
         // Only one thread at a time can use QImage
@@ -486,7 +489,44 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             }
             //format = "png";   // not always better (especially if was JPG)
             in_buffer = true;
-        }
+        } /* mask or scaling */
+
+        // Add some graphics to show where PINS will be
+        if (!pins.isEmpty())
+        {
+            // Set desired colour of the marker
+            QPainter painter(&image);
+            painter.setPen(QPen(Qt::red));
+
+            // Set correct font size
+            QFont font(painter.font());
+            font.setPixelSize(pin_size-1);
+            painter.setFont(font);
+
+            // Create string once
+            static QStaticText pin_text;
+            static bool first_time = true;
+            if (first_time)
+            {
+                first_time = false;
+                /* UNICODE : 1F4CC = map marker */
+                /* original = bottom-left corner */
+                uint pin_char = 0x1f4cc;
+                pin_text.setText(QString::fromUcs4(&pin_char, 1));
+                pin_text.prepare(QTransform(), font);
+            }
+
+            for (XmlElement *pin : pins)
+            {
+                painter.drawStaticText(pin->attribute("x").toInt() / divisor,
+                                       pin->attribute("y").toInt() / divisor - pin_text.size().height(),
+                                       pin_text);
+            }
+
+            // Tell the next bit to read from the buffer
+            in_buffer = true;
+        } /* pins */
+
         // Do we need to put it in the buffer?
         if (in_buffer)
         {
@@ -507,6 +547,36 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
         stream->writeAttribute("src", QString("data:image/%1;base64,%2").arg(format)
                                .arg(QString::fromLatin1(orig_data.toBase64())));
     stream->writeEndElement();  // img
+
+    if (!pins.isEmpty())
+    {
+        // Create the clickable MAP on top of the map
+        stream->writeStartElement("map");
+        stream->writeAttribute("name", usemap);
+        for (auto pin : pins)
+        {
+            int x = pin->attribute("x").toInt() / divisor;
+            int y = pin->attribute("y").toInt() / divisor - pin_size;
+            stream->writeStartElement("area");
+            stream->writeAttribute("shape", "rect");
+            stream->writeAttribute("coords", QString("%1,%2,%3,%4")
+                                   .arg(x).arg(y)
+                                   .arg(x + pin_size).arg(y + pin_size));
+            QString title = pin->attribute("pin_name");
+            if (!title.isEmpty()) stream->writeAttribute("title", title);
+            QString link = pin->attribute("topic_id");
+            if (!link.isEmpty()) write_topic_href(stream, link);
+
+            XmlElement *description = pin->xmlChild("description");
+            if (description)
+            {
+                const QString &bodytext = description->childString();
+                if (!bodytext.isEmpty()) stream->writeAttribute("tooltip", bodytext);
+            }
+            stream->writeEndElement();  // area
+        }
+        stream->writeEndElement();  // map
+    }
 
     stream->writeEndElement();  // figure
     stream->writeEndElement();  // p
@@ -899,36 +969,7 @@ static void write_snippet(QXmlStreamWriter *stream, XmlElement *snippet, const L
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
             int divisor = write_image(stream, smart_image->attribute("name"), contents->byteData(),
-                                     mask, filename, sn_style, annotation, links, usemap);
-
-            if (!pins.isEmpty())
-            {
-                // Create the clickable MAP on top of the map
-                stream->writeStartElement("map");
-                stream->writeAttribute("name", usemap);
-                for (auto pin : pins)
-                {
-                    stream->writeStartElement("area");
-                    stream->writeAttribute("shape", "circle");
-                    stream->writeAttribute("coords", QString("%1,%2,%3")
-                                           .arg(pin->attribute("x").toInt() / divisor)
-                                           .arg(pin->attribute("y").toInt() / divisor)
-                                           .arg(10));
-                    QString title = pin->attribute("pin_name");
-                    if (!title.isEmpty()) stream->writeAttribute("title", title);
-                    QString link = pin->attribute("topic_id");
-                    if (!link.isEmpty()) write_topic_href(stream, link);
-
-                    XmlElement *description = pin->xmlChild("description");
-                    if (description)
-                    {
-                        const QString &bodytext = description->childString();
-                        if (!bodytext.isEmpty()) stream->writeAttribute("alt", bodytext);
-                    }
-                    stream->writeEndElement();  // area
-                }
-                stream->writeEndElement();  // map
-            }
+                                     mask, filename, sn_style, annotation, links, usemap, pins);
         }
     }
     else if (sn_type == "Date_Game")
