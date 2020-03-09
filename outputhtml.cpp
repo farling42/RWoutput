@@ -400,6 +400,15 @@ static void write_para_children(QXmlStreamWriter *stream, XmlElement *parent, co
     }
 }
 
+
+static QString get_elem_string(XmlElement *elem)
+{
+    if (!elem) return QString();
+
+    // RW puts \r\n as a line terminator, rather than just \n
+    return elem->childString().replace("&#xd;\n","\n");
+}
+
 /*
  * Return the divisor for the map's size
  */
@@ -562,17 +571,34 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             stream->writeAttribute("coords", QString("%1,%2,%3,%4")
                                    .arg(x).arg(y)
                                    .arg(x + pin_size).arg(y + pin_size));
-            QString title = pin->attribute("pin_name");
+
+            // Build up a tooltip from the text configured on the pin
+            QString pin_name = pin->attribute("pin_name");
+            QString description = get_elem_string(pin->xmlChild("description"));
+            QString gm_directions = get_elem_string(pin->xmlChild("gm_directions"));
+            QString title;
+            if (!pin_name.isEmpty())
+            {
+                if (description.isEmpty() && gm_directions.isEmpty())
+                    title = pin_name;
+                else
+                    title.append("___ " + pin_name + " ___");
+            }
+            if (!description.isEmpty())
+            {
+                if (!title.isEmpty()) title.append("\n\n");
+                title.append(description);
+            }
+            if (!gm_directions.isEmpty())
+            {
+                if (!title.isEmpty()) title.append("\n\n---  GM DIRECTIONS  ---\n");
+                title.append(gm_directions);
+            }
             if (!title.isEmpty()) stream->writeAttribute("title", title);
+
             QString link = pin->attribute("topic_id");
             if (!link.isEmpty()) write_topic_href(stream, link);
 
-            XmlElement *description = pin->xmlChild("description");
-            if (description)
-            {
-                const QString &bodytext = description->childString();
-                if (!bodytext.isEmpty()) stream->writeAttribute("tooltip", bodytext);
-            }
             stream->writeEndElement();  // area
         }
         stream->writeEndElement();  // map
