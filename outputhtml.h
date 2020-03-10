@@ -21,6 +21,15 @@
 #include <QXmlStreamWriter>
 class XmlElement;
 
+extern const QString map_pin_title_default;
+extern const QString map_pin_description_default;
+extern const QString map_pin_gm_directions_default;
+
+extern QString map_pin_title;
+extern QString map_pin_description;
+extern QString map_pin_gm_directions;
+
+
 void toHtml(const QString &path,
             const XmlElement *root_elem,
             int max_image_width,

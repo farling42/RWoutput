@@ -33,6 +33,7 @@
 #include "xmlelement.h"
 #include "outputhtml.h"
 #include "outhtml4subset.h"
+#include "mappinsdialog.h"
 #ifdef GEN_TEXT_DOCUMENT
 #include "gentextdocument.h"
 #endif
@@ -289,4 +290,17 @@ void MainWindow::on_simpleHtml_clicked()
 
     setStatusText("Simple HTML4 SAVE complete.");
 
+}
+
+void MainWindow::on_mapPins_clicked()
+{
+    MapPinsDialog dialog(map_pin_title, map_pin_description, map_pin_gm_directions,
+                         map_pin_title_default, map_pin_description_default, map_pin_gm_directions_default,
+                         this);
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        map_pin_title = dialog.titleTemplate();
+        map_pin_description = dialog.descriptionTemplate();
+        map_pin_gm_directions = dialog.gmDirectionsTemplate();
+    }
 }

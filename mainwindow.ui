@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>491</width>
-    <height>365</height>
+    <width>489</width>
+    <height>377</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>RW Output Converter</string>
+   <string>Realm Works Output Converter</string>
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -38,7 +38,8 @@ rwoutput
 FILE</string>
            </property>
            <property name="icon">
-            <iconset theme="document-open"/>
+            <iconset theme="document-open">
+             <normaloff>.</normaloff>.</iconset>
            </property>
           </widget>
          </item>
@@ -159,6 +160,13 @@ FILE</string>
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QPushButton" name="mapPins">
+              <property name="text">
+               <string>Map Pins...</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -193,7 +201,8 @@ FILE</string>
             <string>Create HTML file(s)</string>
            </property>
            <property name="icon">
-            <iconset theme="document-save"/>
+            <iconset theme="document-save">
+             <normaloff>.</normaloff>.</iconset>
            </property>
           </widget>
          </item>
@@ -206,7 +215,8 @@ FILE</string>
             <string>Create PDF file</string>
            </property>
            <property name="icon">
-            <iconset theme="document-save"/>
+            <iconset theme="document-save">
+             <normaloff>.</normaloff>.</iconset>
            </property>
           </widget>
          </item>
@@ -219,7 +229,8 @@ FILE</string>
             <string>Print</string>
            </property>
            <property name="icon">
-            <iconset theme="document-print"/>
+            <iconset theme="document-print">
+             <normaloff>.</normaloff>.</iconset>
            </property>
           </widget>
          </item>
@@ -232,7 +243,8 @@ FILE</string>
             <string>Create HTML4 file</string>
            </property>
            <property name="icon">
-            <iconset theme="document-save"/>
+            <iconset theme="document-save">
+             <normaloff>.</normaloff>.</iconset>
            </property>
           </widget>
          </item>
@@ -248,7 +260,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>491</width>
+     <width>489</width>
      <height>26</height>
     </rect>
    </property>

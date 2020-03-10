@@ -63,6 +63,14 @@ typedef LineFile OurFile;
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
 
+const QString map_pin_title_default("___ %1 ___");
+const QString map_pin_description_default("%1");
+const QString map_pin_gm_directions_default("---  GM DIRECTIONS  ---\n%1");
+
+QString map_pin_title(map_pin_title_default);
+QString map_pin_description(map_pin_description_default);
+QString map_pin_gm_directions(map_pin_gm_directions_default);
+
 #define DUMP_LEVEL 0
 
 // Sort topics, first by prefix, and then by topic name
@@ -582,17 +590,17 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
                 if (description.isEmpty() && gm_directions.isEmpty())
                     title = pin_name;
                 else
-                    title.append("___ " + pin_name + " ___");
+                    title.append(map_pin_title.arg(pin_name));
             }
             if (!description.isEmpty())
             {
                 if (!title.isEmpty()) title.append("\n\n");
-                title.append(description);
+                title.append(map_pin_description.arg(description));
             }
             if (!gm_directions.isEmpty())
             {
-                if (!title.isEmpty()) title.append("\n\n---  GM DIRECTIONS  ---\n");
-                title.append(gm_directions);
+                if (!title.isEmpty()) title.append("\n\n");
+                title.append(map_pin_gm_directions.arg(gm_directions));
             }
             if (!title.isEmpty()) stream->writeAttribute("title", title);
 

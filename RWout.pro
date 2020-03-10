@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 2.4
+VERSION = 2.5
 
 QT       += core gui printsupport
 
@@ -26,6 +26,7 @@ SOURCES += \
     gentextdocument.cpp \
     main.cpp \
     mainwindow.cpp \
+    mappinsdialog.cpp \
     xmlelement.cpp \
     outputhtml.cpp \
     linefile.cpp \
@@ -34,6 +35,7 @@ SOURCES += \
 HEADERS += \
     gentextdocument.h \
     mainwindow.h \
+    mappinsdialog.h \
     xmlelement.h \
     outputhtml.h \
     linefile.h \
@@ -41,7 +43,8 @@ HEADERS += \
     linkage.h
 
 FORMS += \
-        mainwindow.ui
+        mainwindow.ui \
+        mappinsdialog.ui
 
 macx {
 MACDEPLOYQT_OPTIONS = -verbose 3 -dmg

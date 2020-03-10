@@ -43,6 +43,8 @@ private slots:
     void on_print_clicked();
     void on_simpleHtml_clicked();
 
+    void on_mapPins_clicked();
+
 private:
     Ui::MainWindow *ui;
     XmlElement *root_element;
