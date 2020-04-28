@@ -73,6 +73,9 @@ QString map_pin_title(map_pin_title_default);
 QString map_pin_description(map_pin_description_default);
 QString map_pin_gm_directions(map_pin_gm_directions_default);
 
+bool show_full_link_tooltip = true;
+bool show_full_map_pin_tooltip = true;
+
 #define DUMP_LEVEL 0
 
 // Sort topics, first by prefix, and then by topic name
@@ -263,6 +266,120 @@ static void start_file(QXmlStreamWriter *stream)
     // Caller needs to do writeEndElement for "head" and "html"
 }
 
+static QString simple_para_text(XmlElement *p)
+{
+    // Collect all spans into a single paragraph (without formatting)
+    // (get all nested spans; we can't use write_span here)
+    QString result;
+    for (auto span : p->findChildren<XmlElement*>("span"))
+    {
+        for (auto child : span->xmlChildren())
+        {
+            if (child->isFixedString())
+            {
+                result.append(child->fixedText());
+            }
+        }
+    }
+    return result;
+}
+
+/**
+ * @brief build_tooltip
+ * Builds the complete string for a popup tooltip.
+ *
+ * @param title
+ * @param description
+ * @param gm_directions
+ * @return
+ */
+static inline QString build_tooltip(const QString &title, const QString &description, const QString &gm_directions)
+{
+    QString result;
+
+    if (!title.isEmpty())
+    {
+        if (description.isEmpty() && gm_directions.isEmpty())
+            result = title;
+        else
+            result.append(map_pin_title.arg(title));
+    }
+    if (!description.isEmpty())
+    {
+        if (!result.isEmpty()) result.append("\n\n");
+        result.append(map_pin_description.arg(description));
+    }
+    if (!gm_directions.isEmpty())
+    {
+        if (!result.isEmpty()) result.append("\n\n");
+        result.append(map_pin_gm_directions.arg(gm_directions));
+    }
+    return result;
+}
+
+/**
+ * Read first section from topic.
+ *
+ * First section - all Multi_Line snippet - contents/gm_directions - p - span
+ */
+
+static inline void get_summary(const QString &topic_id, QString &description, QString &gm_directions)
+{
+    // First section - all Multi_Line snippet - contents/gm_directions - p - span
+    const XmlElement *topic = all_topics.value(topic_id);
+    if (!topic) return;
+
+    const XmlElement *section = topic->xmlChild("section");
+    if (!section) return;
+
+    bool add_desc = description.isEmpty();
+    bool add_gm   = gm_directions.isEmpty();
+    bool first_contents = true;
+    bool first_gm = true;
+    for (auto snippet : section->xmlChildren("snippet"))
+    {
+        if (snippet->attribute("type") != "Multi_Line") continue;
+
+        if (add_desc)
+        {
+            if (XmlElement *contents = snippet->xmlChild("contents"))
+            {
+                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
+                for (auto p : contents->xmlChildren("p"))
+                {
+                    QString text = simple_para_text(p);
+                    if (!text.isEmpty())
+                    {
+                        if (first_contents)
+                            first_contents = false;
+                        else
+                            description.append("\n\n");
+                        description.append(text);
+                    }
+                }
+            }
+        }
+        if (add_gm)
+        {
+            if (XmlElement *gm_dir = snippet->xmlChild("gm_directions"))
+            {
+                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
+                for (auto p : gm_dir->xmlChildren("p"))
+                {
+                    QString text = simple_para_text(p);
+                    if (!text.isEmpty())
+                    {
+                        if (first_gm)
+                            first_gm = false;
+                        else
+                            gm_directions.append("\n\n");
+                        gm_directions.append(text);
+                    }
+                }
+            }
+        }
+    }
+}
 
 static void write_attributes(QXmlStreamWriter *stream, const XmlElement *elem, const QString &classname)
 {
@@ -286,12 +403,23 @@ static void write_attributes(QXmlStreamWriter *stream, const XmlElement *elem, c
 }
 
 
-static void write_topic_href(QXmlStreamWriter *stream, const QString &topic)
+static void write_topic_href(QXmlStreamWriter *stream, const QString &topic_id, bool add_title=true)
 {
     if (in_single_file)
-        stream->writeAttribute("href", "#" + topic);
+        stream->writeAttribute("href", "#" + topic_id);
     else
-        stream->writeAttribute("href", topic + ".xhtml");
+        stream->writeAttribute("href", topic_id + ".xhtml");
+    if (add_title && show_full_link_tooltip)
+    {
+        if (const XmlElement *topic = all_topics.value(topic_id))
+        {
+            QString description;
+            QString gm_directions;
+            get_summary(topic_id, description, gm_directions);
+            QString tooltip = build_tooltip(topic->attribute("public_name"), description, gm_directions);
+            if (!tooltip.isEmpty()) stream->writeAttribute("title", tooltip);
+        }
+    }
 }
 
 
@@ -417,24 +545,6 @@ static QString get_elem_string(XmlElement *elem)
 
     // RW puts \r\n as a line terminator, rather than just \n
     return elem->childString().replace("&#xd;\n","\n");
-}
-
-static QString simple_para_text(XmlElement *p)
-{
-    // Collect all spans into a single paragraph (without formatting)
-    // (get all nested spans; we can't use write_span here)
-    QString result;
-    for (auto span : p->findChildren<XmlElement*>("span"))
-    {
-        for (auto child : span->xmlChildren())
-        {
-            if (child->isFixedString())
-            {
-                result.append(child->fixedText());
-            }
-        }
-    }
-    return result;
 }
 
 /*
@@ -625,85 +735,16 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             QString description = get_elem_string(pin->xmlChild("description"));
             QString gm_directions = get_elem_string(pin->xmlChild("gm_directions"));
             QString link = pin->attribute("topic_id");
-            QString title;
             // OPTION - use first section of topic if no description or gm_directions is provided
-            if ((description.isEmpty() || gm_directions.isEmpty()) && !link.isEmpty())
+            if (show_full_map_pin_tooltip && (description.isEmpty() || gm_directions.isEmpty()) && !link.isEmpty())
             {
-                // First section - all Multi_Line snippet - contents/gm_directions - p - span
-                const XmlElement *topic = all_topics.value(link);
-                const XmlElement *section = topic ? topic->xmlChild("section") : nullptr;
-                if (section)
-                {
-                    bool add_desc = description.isEmpty();
-                    bool add_gm   = gm_directions.isEmpty();
-                    bool first_contents = true;
-                    bool first_gm = true;
-                    for (auto snippet : section->xmlChildren("snippet"))
-                    {
-                        if (snippet->attribute("type") != "Multi_Line") continue;
-
-                        if (add_desc)
-                        {
-                            if (XmlElement *contents = snippet->xmlChild("contents"))
-                            {
-                                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
-                                for (auto p : contents->xmlChildren("p"))
-                                {
-                                    QString text = simple_para_text(p);
-                                    if (!text.isEmpty())
-                                    {
-                                        if (first_contents)
-                                            first_contents = false;
-                                        else
-                                            description.append("\n\n");
-                                        description.append(text);
-                                    }
-                                }
-                            }
-                        }
-                        if (add_gm)
-                        {
-                            bool first = true;
-                            if (XmlElement *gm_dir = snippet->xmlChild("gm_directions"))
-                            {
-                                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
-                                for (auto p : gm_dir->xmlChildren("p"))
-                                {
-                                    QString text = simple_para_text(p);
-                                    if (!text.isEmpty())
-                                    {
-                                        if (first_gm)
-                                            first_gm = false;
-                                        else
-                                            gm_directions.append("\n\n");
-                                        gm_directions.append(text);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Read topic summary from first section
+                get_summary(link, description, gm_directions);
             }
-            if (!pin_name.isEmpty())
-            {
-                if (description.isEmpty() && gm_directions.isEmpty())
-                    title = pin_name;
-                else
-                    title.append(map_pin_title.arg(pin_name));
-            }
-            if (!description.isEmpty())
-            {
-                if (!title.isEmpty()) title.append("\n\n");
-                title.append(map_pin_description.arg(description));
-            }
-            if (!gm_directions.isEmpty())
-            {
-                if (!title.isEmpty()) title.append("\n\n");
-                title.append(map_pin_gm_directions.arg(gm_directions));
-            }
+            QString title = build_tooltip(pin_name, description, gm_directions);
             if (!title.isEmpty()) stream->writeAttribute("title", title);
 
-            if (!link.isEmpty()) write_topic_href(stream, link);
+            if (!link.isEmpty()) write_topic_href(stream, link, false);
 
             stream->writeEndElement();  // area
         }
