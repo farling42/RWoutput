@@ -62,6 +62,8 @@ typedef LineFile OurFile;
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
+static QMap<QString,QStaticText> category_pin_of_topic;
+static QMap<QString,XmlElement*> all_topics;
 
 const QString map_pin_title_default("___ %1 ___");
 const QString map_pin_description_default("%1");
@@ -417,6 +419,24 @@ static QString get_elem_string(XmlElement *elem)
     return elem->childString().replace("&#xd;\n","\n");
 }
 
+static QString simple_para_text(XmlElement *p)
+{
+    // Collect all spans into a single paragraph (without formatting)
+    // (get all nested spans; we can't use write_span here)
+    QString result;
+    for (auto span : p->findChildren<XmlElement*>("span"))
+    {
+        for (auto child : span->xmlChildren())
+        {
+            if (child->isFixedString())
+            {
+                result.append(child->fixedText());
+            }
+        }
+    }
+    return result;
+}
+
 /*
  * Return the divisor for the map's size
  */
@@ -521,20 +541,40 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             painter.setFont(font);
 
             // Create string once
-            static QStaticText pin_text;
+            static QStaticText default_pin_text;
             static bool first_time = true;
             if (first_time)
             {
                 first_time = false;
-                /* UNICODE : 1F4CC = map marker */
+                /* UNICODE : 1F4CC = map marker (push pin) */
                 /* original = bottom-left corner */
-                uint pin_char = 0x1f4cc;
-                pin_text.setText(QString::fromUcs4(&pin_char, 1));
-                pin_text.prepare(QTransform(), font);
+                uint pin_char = 0x1f4cd;
+                default_pin_text.setText(QString::fromUcs4(&pin_char, 1));
+                default_pin_text.prepare(QTransform(), font);
             }
-
+            // TODO - select pin appropriate to the type of topic to which it is linked!
+            // The "category_name" attribute of each "topic" element is what needs to be matched to a pin_text
             for (XmlElement *pin : pins)
             {
+                const QString topic_name = pin->attribute("topic_id");
+                if (!topic_name.isEmpty() && !category_pin_of_topic.contains(topic_name))
+                {
+                    QString category;
+                    if (all_topics.contains(topic_name))
+                        category = all_topics[topic_name]->attribute("category_name");
+                    else
+                        category = "..generic..";
+
+                    // Find the category of the named topic (if any).
+                    uint pin_char = 0x1f4cc;    // round pin
+                    QStaticText cat_pin;
+                    cat_pin.setText(QString::fromUcs4(&pin_char, 1));
+                    cat_pin.prepare(QTransform(), font);
+                    category_pin_of_topic.insert(topic_name, cat_pin);
+                }
+
+                painter.setPen(QPen(Qt::blue));
+                const QStaticText &pin_text = topic_name.isEmpty() ? default_pin_text : category_pin_of_topic.value(topic_name);
                 painter.drawStaticText(pin->attribute("x").toInt() / divisor,
                                        pin->attribute("y").toInt() / divisor - pin_text.size().height(),
                                        pin_text);
@@ -584,7 +624,66 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             QString pin_name = pin->attribute("pin_name");
             QString description = get_elem_string(pin->xmlChild("description"));
             QString gm_directions = get_elem_string(pin->xmlChild("gm_directions"));
+            QString link = pin->attribute("topic_id");
             QString title;
+            // OPTION - use first section of topic if no description or gm_directions is provided
+            if ((description.isEmpty() || gm_directions.isEmpty()) && !link.isEmpty())
+            {
+                // First section - all Multi_Line snippet - contents/gm_directions - p - span
+                const XmlElement *topic = all_topics.value(link);
+                const XmlElement *section = topic ? topic->xmlChild("section") : nullptr;
+                if (section)
+                {
+                    bool add_desc = description.isEmpty();
+                    bool add_gm   = gm_directions.isEmpty();
+                    bool first_contents = true;
+                    bool first_gm = true;
+                    for (auto snippet : section->xmlChildren("snippet"))
+                    {
+                        if (snippet->attribute("type") != "Multi_Line") continue;
+
+                        if (add_desc)
+                        {
+                            if (XmlElement *contents = snippet->xmlChild("contents"))
+                            {
+                                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
+                                for (auto p : contents->xmlChildren("p"))
+                                {
+                                    QString text = simple_para_text(p);
+                                    if (!text.isEmpty())
+                                    {
+                                        if (first_contents)
+                                            first_contents = false;
+                                        else
+                                            description.append("\n\n");
+                                        description.append(text);
+                                    }
+                                }
+                            }
+                        }
+                        if (add_gm)
+                        {
+                            bool first = true;
+                            if (XmlElement *gm_dir = snippet->xmlChild("gm_directions"))
+                            {
+                                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
+                                for (auto p : gm_dir->xmlChildren("p"))
+                                {
+                                    QString text = simple_para_text(p);
+                                    if (!text.isEmpty())
+                                    {
+                                        if (first_gm)
+                                            first_gm = false;
+                                        else
+                                            gm_directions.append("\n\n");
+                                        gm_directions.append(text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if (!pin_name.isEmpty())
             {
                 if (description.isEmpty() && gm_directions.isEmpty())
@@ -604,7 +703,6 @@ static int write_image(QXmlStreamWriter *stream, const QString &image_name, cons
             }
             if (!title.isEmpty()) stream->writeAttribute("title", title);
 
-            QString link = pin->attribute("topic_id");
             if (!link.isEmpty()) write_topic_href(stream, link);
 
             stream->writeEndElement();  // area
@@ -1623,6 +1721,14 @@ void toHtml(const QString &path,
             class_of_style.insert(style, style);
         else
             class_of_style.insert(style, QString("rwStyle%1").arg(stylenumber++));
+    }
+    category_pin_of_topic.clear();
+
+    // To help get category for pins on each individual topic,
+    // get the topic_id of every single topic in the file.
+    for (auto topic: root_elem->findChildren<XmlElement*>("topic"))
+    {
+        all_topics.insert(topic->attribute("topic_id"), topic);
     }
 
     // Write out the individual TOPIC files now:

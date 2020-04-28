@@ -6,9 +6,9 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 2.5
+VERSION = 2.6
 
-QT       += core gui printsupport
+QT       += core gui printsupport network
 
 CONFIG  += c++11
 
@@ -23,6 +23,7 @@ TEMPLATE = app
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x051200
 
 SOURCES += \
+    fileuploader.cpp \
     gentextdocument.cpp \
     main.cpp \
     mainwindow.cpp \
@@ -33,6 +34,7 @@ SOURCES += \
     outhtml4subset.cpp
 
 HEADERS += \
+    fileuploader.h \
     gentextdocument.h \
     mainwindow.h \
     mappinsdialog.h \
