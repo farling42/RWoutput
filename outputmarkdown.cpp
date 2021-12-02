@@ -16,6 +16,7 @@
 */
 
 #define TIME_CONVERSION
+#undef  SHOW_PINS
 
 #include "outputmarkdown.h"
 
@@ -23,6 +24,7 @@
 #include <QBuffer>
 #include <QCollator>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QImage>
 #include <QPainter>
@@ -70,7 +72,26 @@ extern QString map_pin_gm_directions;
 extern bool show_full_link_tooltip;
 extern bool show_full_map_pin_tooltip;
 
+static QString assetsDir("asset-files");
+
 #define DUMP_LEVEL 0
+
+static const QString dirFile(const QString &orig_dirname, const QString &filename)
+{
+    // Sanitise dirname;
+    QString dirname = orig_dirname;
+    const QRegExp invalid_chars("[/\<>:|?]");
+    // Invalid characters for file include *"/\<>:|?
+    dirname.replace(invalid_chars,"_");
+
+    QDir dir(dirname);
+    if (!dir.exists()) {
+        qDebug() << "Creating directory: " << dirname;
+        if (!QDir::current().mkdir(dirname))
+            qWarning() << "Failed to create directory: " << dirname;
+    }
+    return dirname + QDir::separator() + filename;
+}
 
 // Sort topics, first by prefix, and then by topic name
 static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
@@ -510,7 +531,11 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
 
     // See if possible image conversion is required
     bool bad_format = (format == "bmp" || format == "tif" || format == "tiff");
+#ifdef SHOW_PINS
     if (mask_elem != nullptr || image_max_width > 0 || bad_format || !pins.isEmpty())
+#else
+    if (mask_elem != nullptr || image_max_width > 0 || bad_format)
+#endif
     {
         QImage image = QImage::fromData(orig_data, qPrintable(format));
         if (bad_format)
@@ -567,6 +592,7 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
             in_buffer = true;
         } /* mask or scaling */
 
+#ifdef SHOW_PINS
         // Add some graphics to show where PINS will be
         if (!pins.isEmpty())
         {
@@ -622,7 +648,7 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
             // Tell the next bit to read from the buffer
             in_buffer = true;
         } /* pins */
-
+#endif
         // Do we need to put it in the buffer?
         if (in_buffer)
         {
@@ -634,7 +660,7 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
     }
 
     // Put it into a separate file
-    QFile file(filename);
+    QFile file(dirFile(assetsDir, filename));
     if (!file.open(QFile::WriteOnly))
     {
         qWarning() << "writeExtObject: failed to open file for writing:" << filename;
@@ -651,21 +677,16 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
     }
     stream << ")";
 
-#if 0
+#ifdef SHOW_PINS
     if (!pins.isEmpty())
     {
         // Create the clickable MAP on top of the map
-        stream->writeStartElement("map");
-        stream->writeAttribute("name", usemap);
+        stream << (QString("<map name=\"%1\">").arg(usemap));
         for (auto pin : pins)
         {
             int x = pin->attribute("x").toInt() / divisor;
             int y = pin->attribute("y").toInt() / divisor - pin_size;
-            stream->writeStartElement("area");
-            stream->writeAttribute("shape", "rect");
-            stream->writeAttribute("coords", QString("%1,%2,%3,%4")
-                                   .arg(x).arg(y)
-                                   .arg(x + pin_size).arg(y + pin_size));
+            stream << (QString("<area shape=\"rect\" coords=\"%1,%2,%3,%4\">").arg(x).arg(y).arg(x+pin_size).arg(y+pin_size));
 
             // Build up a tooltip from the text configured on the pin
             QString pin_name = pin->attribute("pin_name");
@@ -678,14 +699,15 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
                 // Read topic summary from first section
                 get_summary(link, description, gm_directions);
             }
+#if 0
             QString title = build_tooltip(pin_name, description, gm_directions);
             if (!title.isEmpty()) stream->writeAttribute("title", title);
-
+#endif
             if (!link.isEmpty()) stream << topic_link(link, "");
 
-            stream->writeEndElement();  // area
+            stream << "</area>";
         }
-        stream->writeEndElement();  // map
+        stream << "</map>";
     }
 #endif
 
@@ -698,7 +720,7 @@ static void write_ext_object(QTextStream &stream, const QString &obj_name, const
 {
     Q_UNUSED(obj_name)
         // Write the asset data to an external file
-        QFile file(filename);
+        QFile file(dirFile(assetsDir, filename));
         if (!file.open(QFile::WriteOnly))
         {
             qWarning() << "writeExtObject: failed to open file for writing:" << filename;
@@ -1090,8 +1112,8 @@ static void write_snippet(QTextStream &stream, XmlElement *snippet, const Linkag
             XmlElement *contents = asset->xmlChild("contents");
             if (contents == nullptr) return;
 
-            QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             QString usemap;
+            QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
             int divisor = write_image(stream, smart_image->attribute("name"), contents->byteData(),
@@ -1204,11 +1226,11 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
 #endif
     // Start with HEADER for the topic
     //stream->writeAttribute("id", topic->attribute("topic_id"));
-    stream << "# <span style=\"text-align: center\">";
+    stream << "# <center>";
     if (!topic->attribute("prefix").isEmpty()) stream << topic->attribute("prefix") << " - ";
     stream << topic->attribute("public_name");
     if (!topic->attribute("suffix").isEmpty()) stream << "(" << topic->attribute("suffix") << ")";
-    stream << "</span>\n";
+    stream << "</center>\n";
 
     auto aliases = topic->xmlChildren("alias");
     // Maybe some aliases (in own section for smaller font?)
@@ -1280,7 +1302,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
 #endif
 
     // Create a new file for this topic
-    OurFile topic_file(topic_files.value(topic->attribute("topic_id")) + ".md");
+    OurFile topic_file(dirFile(topic->attribute("category_name"), topic_files.value(topic->attribute("topic_id")) + ".md"));
     if (!topic_file.open(QFile::WriteOnly|QFile::Text))
     {
         qWarning() << "Failed to open output file for topic" << topic_file.fileName();
