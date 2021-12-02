@@ -2,5 +2,6 @@
     <qresource prefix="/">
         <file>theme.css</file>
         <file>scripts.js</file>
+        <file>obsidian.css</file>
     </qresource>
 </RCC>

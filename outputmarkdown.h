@@ -15,44 +15,23 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef OUTPUTMARKDOWN_H
+#define OUTPUTMARKDOWN_H
 
-#include <QMainWindow>
-#include <QFile>
-
-namespace Ui {
-class MainWindow;
-}
-
+#include <QTextStream>
 class XmlElement;
 
-class MainWindow : public QMainWindow
-{
-    Q_OBJECT
+extern const QString map_pin_title_default;
+extern const QString map_pin_description_default;
+extern const QString map_pin_gm_directions_default;
 
-public:
-    explicit MainWindow(QWidget *parent = 0);
-    ~MainWindow();
-    bool loadFile(const QString &filename);
+extern QString map_pin_title;
+extern QString map_pin_description;
+extern QString map_pin_gm_directions;
 
-private slots:
-    void on_loadFile_clicked();
-    void on_saveHtml_clicked();
-    void on_saveMarkdown_clicked();
-    void on_savePdf_clicked();
-    void on_print_clicked();
-    void on_simpleHtml_clicked();
 
-    void on_mapPins_clicked();
+void toMarkdown(const XmlElement *root_elem,
+                int  max_image_width,
+                bool use_reveal_mask);
 
-    void on_saveFgMod_clicked();
-
-private:
-    Ui::MainWindow *ui;
-    XmlElement *root_element;
-    QFile in_file;
-    void setStatusText(const QString &text);
-};
-
-#endif // MAINWINDOW_H
+#endif // OUTPUTMARKDOWN_H

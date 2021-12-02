@@ -23,21 +23,27 @@ TEMPLATE = app
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x051200
 
 SOURCES += \
+    fg_category_delegate.cpp \
     fileuploader.cpp \
     gentextdocument.cpp \
     main.cpp \
     mainwindow.cpp \
     mappinsdialog.cpp \
+    outputfgmod.cpp \
+    outputmarkdown.cpp \
     xmlelement.cpp \
     outputhtml.cpp \
     linefile.cpp \
     outhtml4subset.cpp
 
 HEADERS += \
+    fg_category_delegate.h \
     fileuploader.h \
     gentextdocument.h \
     mainwindow.h \
     mappinsdialog.h \
+    outputfgmod.h \
+    outputmarkdown.h \
     xmlelement.h \
     outputhtml.h \
     linefile.h \

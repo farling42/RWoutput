@@ -2,12 +2,15 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>489</width>
-    <height>377</height>
+    <width>515</width>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -207,6 +210,13 @@ FILE</string>
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="saveMarkdown">
+           <property name="text">
+            <string>Create Markdown file(s)</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="savePdf">
            <property name="toolTip">
             <string>Produce a single PDF document with all topics in alphabetical order</string>
@@ -260,8 +270,8 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>489</width>
-     <height>26</height>
+     <width>515</width>
+     <height>21</height>
     </rect>
    </property>
   </widget>

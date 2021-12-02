@@ -22,21 +22,32 @@
 
 #include <QDebug>
 #include <QFileDialog>
+#include <QHeaderView>
 #include <QSettings>
 #include <QPrinter>
 #include <QPdfWriter>
 #include <QPageSetupDialog>
 #include <QPrintDialog>
+#include <QStandardItemModel>
+#include <QTableView>
 #include <QTextEdit>
 #include <QTextDocument>
+#include <QDialogButtonBox>
 
 #include "xmlelement.h"
 #include "outputhtml.h"
 #include "outhtml4subset.h"
+#include "outputfgmod.h"
+#include "outputmarkdown.h"
 #include "mappinsdialog.h"
+#include "fg_category_delegate.h"
+
 #ifdef GEN_TEXT_DOCUMENT
 #include "gentextdocument.h"
 #endif
+
+
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -50,7 +61,9 @@ MainWindow::MainWindow(QWidget *parent) :
     // Set icons that can't be set in Designer.
     ui->loadFile->setIcon(style()->standardIcon(QStyle::SP_FileDialogStart));
     ui->saveHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    ui->saveMarkdown->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     ui->savePdf->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    //ui->saveFgMod->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     //ui->print->setIcon(style()->standardIcon(QStyle::));
     ui->simpleHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
@@ -160,6 +173,42 @@ void MainWindow::on_saveHtml_clicked()
            separate_files && ui->indexOnEveryPage->isChecked());
 
     setStatusText("XHTML file SAVE complete.");
+    qApp->processEvents();
+}
+
+void MainWindow::on_saveMarkdown_clicked()
+{
+    QSettings settings;
+    const QString SAVE_DIRECTORY_PARAM("outputDirectory");
+
+    // Choose a directory in which to generate all the files:
+    // we'll create index.html in that directory
+    QString path = QFileDialog::getExistingDirectory(this, tr("Output Directory"),
+                                                     /*dir*/ settings.value(SAVE_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath()).toString());
+
+    if (path.isEmpty()) return;
+    QDir dir(path);
+
+    if (!dir.exists())
+    {
+        setStatusText("The directory does not exist!");
+        qApp->processEvents();
+        return;
+    }
+    settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
+    QDir::setCurrent(dir.absolutePath());
+
+    bool ok = true;
+    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
+    if (!ok) max_image_width = -1;
+    setStatusText("Saving Markdown file...");
+    qApp->processEvents();
+
+    toMarkdown(root_element,
+               max_image_width,
+               ui->revealMask->isChecked());
+
+    setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();
 }
 
@@ -303,4 +352,116 @@ void MainWindow::on_mapPins_clicked()
         map_pin_description = dialog.descriptionTemplate();
         map_pin_gm_directions = dialog.gmDirectionsTemplate();
     }
+}
+
+void MainWindow::on_saveFgMod_clicked()
+{
+    //
+    // Get the mapping of category_name to FG section
+    //
+    QMultiMap<QString,const XmlElement*> cat_map;
+    for (const XmlElement *topic : root_element->findChildren<XmlElement*>("topic"))
+    {
+        QString cat = topic->attribute("category_name");
+        if (!cat.isEmpty()) cat_map.insert(cat, topic);
+    }
+    // Get a list of unique category names
+    QList<QString> cat_names = cat_map.uniqueKeys();
+
+    QStringList fg_cats{"battle","battlerandom","charsheet","encounter","effects","image","item","library","modifiers",
+                        "notes","npc","quest","storytemplate","tables","treasureparcels" };
+    fg_cats.sort();
+
+    // Get mapping from RW category to FG name.
+    QStandardItemModel cat_model;
+    cat_model.setHorizontalHeaderLabels(QStringList{"RW Category","FG section"});
+    for (auto cat : cat_names)
+    {
+        QList<QStandardItem*> row;
+        row.append(new QStandardItem(cat));
+        row.append(new QStandardItem("library"));
+        cat_model.appendRow(row);
+    }
+
+    // Present model to allow mappings to be changed
+    QTableView *view = new QTableView;
+    view->setModel(&cat_model);
+    FgCategoryDelegate *delegate = new FgCategoryDelegate;
+    delegate->setValues(fg_cats);
+    view->setItemDelegateForColumn(1, delegate);
+    view->resizeColumnsToContents();
+    view->setSizeAdjustPolicy(QTableView::AdjustToContents);
+    view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    view->verticalHeader()->hide();
+
+    QDialog dialog;
+    dialog.setModal(true);
+    QVBoxLayout *layout = new QVBoxLayout;
+    layout->addWidget(view);
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.setLayout(layout);
+    if (dialog.exec() == QDialog::Rejected)
+    {
+        return;
+    }
+
+    // Read required mapping
+    QMap<QString,QString> rw_to_fg;
+    while (cat_model.rowCount() > 0)
+    {
+        auto row = cat_model.takeRow(0);
+        rw_to_fg.insert(row[0]->text(), row[1]->text());
+        qDeleteAll(row);
+    }
+    // Convert cat_map (RW category) to section_to_topic (FG section)
+    QMap<QString,const XmlElement *> section_to_topic;
+    for (auto topic : cat_map)
+    {
+        section_to_topic.insert(rw_to_fg.value(topic->attribute("category_name")), topic);
+    }
+
+    //
+    // Get the SAVE filename
+    //
+    QSettings settings;
+    const QString SAVE_DIRECTORY_PARAM("outputDirectory");
+
+    // Choose a directory in which to generate all the files:
+    // we'll create index.html in that directory
+    QString start_dir = settings.value(SAVE_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath()).toString();
+    QString path = QFileDialog::getSaveFileName(this, tr("Output File"),
+                                           /*dir*/ start_dir + "/" + QFileInfo(in_file).baseName() + ".mod",
+                                           /*filter*/ "MOD files (*.mod)");
+
+    if (path.isEmpty()) return;
+    QDir dir(QFileInfo(path).absolutePath());
+
+    if (!dir.exists())
+    {
+        setStatusText("The directory does not exist!");
+        qApp->processEvents();
+        return;
+    }
+    settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
+    QDir::setCurrent(dir.absolutePath());
+
+    //
+    // Perform the actual conversion
+    //
+    bool ok = true;
+    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
+    if (!ok) max_image_width = -1;
+    setStatusText("Saving MOD file...");
+    qApp->processEvents();
+
+    toFgMod(path, root_element,
+            section_to_topic,
+            ui->revealMask->isChecked());
+
+    setStatusText("MOD file SAVE complete.");
+    qApp->processEvents();
 }

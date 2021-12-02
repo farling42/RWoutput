@@ -1,0 +1,145 @@
+.indexCategory {
+    font-size: 20px;
+}
+.topicHeader {
+    font-family: verdana;
+    font-size: 20px;
+    font-weight: bold;
+    background-color: gainsboro;
+    padding-bottom: 5px;
+}
+
+@media print {
+    /* When printing, start each topic on a new page */
+    .mainTopic { page-break-before: always; }
+}
+
+header.topicHeader {
+    /* Only when each topic is in a separate file */
+    text-align: center;
+}
+summary.topicHeader {
+    /* Only when all topics are in a single file */
+    padding-top: 15px;
+}
+.mainTopic > .mainTopic {
+    /* Child topics are indented */
+    margin-left: 20px;
+}
+.childTopicsHeader {
+    background-color: lightgreen;
+}
+.childTopicsList {
+    column-count: 3
+}
+.section1 {
+    background-color: lightblue;
+}
+.snippet_label {
+    font-weight: bold;
+}
+.annotation {
+    font-style: italic;
+    margin-left: 20px;
+}
+.portfolioListing {
+    margin-left: 20px;
+}
+.portfolioDetails {
+    border: 1px solid tan;
+    padding: 2px;
+    background-color: azure;
+}
+.portfolioSummary {
+    font-weight: bold;
+}
+.statblockDetails {
+    border: 1px solid tan;
+    padding: 2px;
+    background-color: azure;
+    margin-left: 20px;
+}
+.statblockSummary {
+    font-weight: bold;
+}
+.gm_directions {
+    background-color: floralwhite;
+    border: 1px solid tan;
+}
+nav {
+    float: left;
+    border: 2px solid;
+    width: 20%;
+    margin-right: 10px;
+    overflow:hidden;
+}
+.nameAlias:before {
+    content: "Alias: ";
+    font-weight: bold;
+}
+.nameAlias {
+    font-style: italic;
+}
+section {
+    overflow:hidden;
+}
+/* Formatting for the prefix and/or suffix of Topics */
+.topicHeader[topic_prefix]:before {
+    content: attr(topic_prefix) " - ";
+}
+.topicHeader[topic_suffix]:after {
+    content: " (" attr(topic_suffix) ")";
+}
+/* Auto-numbering of sections within topics */
+section {
+    counter-reset: s1counter;
+}
+.section1:before {
+    content:  counter(s1counter) ".\0000a0\0000a0";
+    counter-increment: s1counter;
+    counter-reset: s2counter;
+    counter-reset: s3counter;
+}
+.section2:before {
+    content:  counter(s1counter) "." counter(s2counter) ".\0000a0\0000a0";
+    counter-increment: s2counter;
+    counter-reset: s3counter;
+}
+.section3:before {
+    content:  counter(s1counter) "." counter(s2counter) "." counter(s3counter) ".\0000a0\0000a0";
+    counter-increment: s3counter;
+}
+
+.navTable {
+    border-top: 3px solid blue;
+    width: 100%
+}
+
+.navPrev {
+    width: 25%
+}
+
+.navPrev:before {
+    content: "Prev: "
+}
+
+.navNext {
+    width: 25%
+}
+
+.navNext:before {
+    content: "Next: "
+}
+
+.navUp {
+    width: 25%
+}
+
+.navUp:before {
+    content: "Up: "
+}
+
+.navTop {
+    width: 25%
+}
+
