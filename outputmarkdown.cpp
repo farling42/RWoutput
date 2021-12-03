@@ -76,7 +76,7 @@ extern bool show_full_map_pin_tooltip;
 
 static QString assetsDir("asset-files");
 
-#define DUMP_LEVEL 2
+#define DUMP_LEVEL 0
 
 static const QString dirFile(const QString &orig_dirname, const QString &filename)
 {
