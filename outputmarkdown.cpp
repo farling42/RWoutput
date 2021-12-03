@@ -186,16 +186,16 @@ static void write_head_meta(QTextStream &stream, const XmlElement *root_elem)
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     if (details == nullptr) return;
 
-    stream << "**exportDate:** " << root_elem->attribute("export_date") << "\n\n";
+    stream << "**Exported from Realm Works:** " << root_elem->attribute("export_date") << "\n\n";
 
-    stream << "**author:** RWOutput Tool\n\n";
+    stream << "**Created By:** RWOutput Tool, version " << qApp->applicationVersion() << "\n\n";
 
-    write_meta_child(stream, "summary",      details, "summary");
-    write_meta_child(stream, "description",  details, "description");
-    write_meta_child(stream, "requirements", details, "requirements");
-    write_meta_child(stream, "credits",      details, "credits");
-    write_meta_child(stream, "legal",        details, "legal");
-    write_meta_child(stream, "other_notes",  details, "other_notes");
+    write_meta_child(stream, "Summary",      details, "summary");
+    write_meta_child(stream, "Description",  details, "description");
+    write_meta_child(stream, "Requirements", details, "requirements");
+    write_meta_child(stream, "Credits",      details, "credits");
+    write_meta_child(stream, "Legal",        details, "legal");
+    write_meta_child(stream, "Other Notes",  details, "other_notes");
 }
 
 static void start_file(QTextStream &stream)
@@ -1280,6 +1280,25 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     // If the RW topic has a "true name" defined then the actual name of the topic
     // is reported as an alias.
 
+    // Aliases belong in the metadata at the start of the file
+    auto aliases = topic->xmlChildren("alias");
+    // Maybe some aliases (in own section for smaller font?)
+    if (!aliases.isEmpty())
+    {
+        stream << "---\naliases: [";
+        bool first=true;
+        for (auto alias : aliases)
+        {
+            if (first)
+                first=false;
+            else
+                stream << ",";
+            // comma-separated list, so each alias needs to go inside double-quotes to hide embedded commas
+            stream << '"' << alias->attribute("name") << '"';
+        }
+        stream << "]\n---\n";
+    }
+
     // Start with HEADER for the topic
     //stream->writeAttribute("id", topic->attribute("topic_id"));
     stream << "# <center>";
@@ -1288,17 +1307,6 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     if (!topic->attribute("suffix").isEmpty()) stream << " (" << topic->attribute("suffix") << ")";
     stream << "</center>\n";
 
-    auto aliases = topic->xmlChildren("alias");
-    // Maybe some aliases (in own section for smaller font?)
-    if (!aliases.isEmpty())
-    {
-        stream << "\n## Aliases\n";
-        for (auto alias : aliases)
-        {
-            stream << "+ " << alias->attribute("name") << "\n";
-        }
-        stream << "\n";
-    }
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1404,7 +1412,11 @@ static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int lev
 
 static void write_separate_index(const XmlElement *root_elem)
 {
-    QFile out_file("Table of Contents.md");
+    XmlElement *definition = root_elem->xmlChild("definition");
+    XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
+    QString detail_title   = details    ? details->attribute("name") : "Table of Contents";
+
+    QFile out_file(detail_title + ".md");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
     {
         qWarning() << "Failed to find file" << out_file.fileName();
@@ -1429,7 +1441,7 @@ static void write_separate_index(const XmlElement *root_elem)
 #endif
                     if (header->objectName() == "details")
                     {
-                        stream << "\n# <span class=\"text-align:center\">" << header->attribute("name") << "</span>\n";
+                        stream << "\n# <center>" << header->attribute("name") << "</center>\n";
                     }
                 }
                 write_head_meta(stream, root_elem);
