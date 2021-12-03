@@ -142,7 +142,7 @@ static const QString valid_tag(const QString &string)
     // Tag can only contain letters (case sensitive), digits, underscore and dash
     // "/" is allowed for nested tags
     QString result = string;
-    return "#" + result.replace(QRegExp("[^a-zA-Z0-9-_]"), "-");
+    return result.replace(QRegExp("[^a-zA-Z0-9-_]"), "-");
 }
 
 
@@ -1360,8 +1360,6 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     stream << "Tags: " << valid_tag(topic->attribute("category_name")) << "\n";
     if (parent) stream << "parent: " << topic_link(parent) << "\n";
     stream << "---\n";
-    // Tags inside metadata block above don't get put into the TAGS panel (and aren't reported in the "Metadata" box of published content)
-    stream << "%%\ntags: " << valid_tag(topic->attribute("category_name")) << "\n%%\n";
 
     // Start with HEADER for the topic
     //stream->writeAttribute("id", topic->attribute("topic_id"));

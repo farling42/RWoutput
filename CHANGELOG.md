@@ -1,3 +1,6 @@
+# next
+Tags in the metadata block don't have a # at the start
+
 # 3.4.1
 The HOME and UP boxes in the Navigation pane now uses the name of the main page, rather than "Home".
 
