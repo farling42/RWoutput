@@ -206,7 +206,9 @@ void MainWindow::on_saveMarkdown_clicked()
 
     toMarkdown(root_element,
                max_image_width,
-               ui->revealMask->isChecked());
+               ui->revealMask->isChecked(),
+               ui->foldersByCategory->isChecked(),
+               ui->obsidianLinks->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

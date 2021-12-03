@@ -32,6 +32,8 @@ extern QString map_pin_gm_directions;
 
 void toMarkdown(const XmlElement *root_elem,
                 int  max_image_width,
-                bool use_reveal_mask);
+                bool use_reveal_mask,
+                bool folders_by_category,
+                bool obsidian_links);
 
 #endif // OUTPUTMARKDOWN_H

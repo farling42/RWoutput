@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 3.3
+VERSION = 3.4
 
 QT       += core gui printsupport network
 
@@ -70,6 +70,8 @@ DESTDIR = install
 
 # The DISTFILE appears in the "Other files" section of Qt Creator
 DISTFILES += LICENSE \
+    CHANGELOG.md \
+    README.md \
     config.nsi
 
 # Installation on Windows is performed using NSIS (see http://nsis.sourceforge.net/)

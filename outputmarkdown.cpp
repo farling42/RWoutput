@@ -52,6 +52,8 @@ static int image_max_width = -1;
 static bool apply_reveal_mask = true;
 static bool sort_by_prefix = true;
 static QCollator collator;
+static bool category_folders = true;
+static bool obsidian_links = false;
 
 #if 1
 typedef QFile OurFile;
@@ -65,7 +67,7 @@ static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout"
 static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
 static QMap<QString,QStaticText> category_pin_of_topic;
 static QMap<QString,XmlElement*> all_topics;
-static QMap<QString,QString> topic_files;
+static QMap<QString,QString> topic_files;   // key=topic_id, value=public_name
 
 extern QString map_pin_title;
 extern QString map_pin_description;
@@ -75,21 +77,18 @@ extern bool show_full_link_tooltip;
 extern bool show_full_map_pin_tooltip;
 
 static QString assetsDir("asset-files");
+static QString imported_date;
+static QString mainPageName;
 
 #define DUMP_LEVEL 0
 
-static const QString dirFile(const QString &orig_dirname, const QString &filename)
+static const QString dirFile(const QString &dirname, const QString &filename)
 {
     // Sanitise dirname;
-    QString dirname = orig_dirname;
-    const QRegExp invalid_chars("[/\\<>:|?]");
-    // Invalid characters for file include *"/\<>:|?
-    dirname.replace(invalid_chars,"_");
-
     QDir dir(dirname);
     if (!dir.exists()) {
-        qDebug() << "Creating directory: " << dirname;
-        if (!QDir::current().mkdir(dirname)) {
+        //qDebug() << "Creating directory: " << dirname;
+        if (!QDir::current().mkpath(dirname)) {
             qWarning() << "Failed to create directory: " << dirname;
             // Store at the top level instead
             return filename;
@@ -97,6 +96,56 @@ static const QString dirFile(const QString &orig_dirname, const QString &filenam
     }
     return dirname + QDir::separator() + filename;
 }
+
+
+static const QString parentDirName(const XmlElement *topic)
+{
+    // Invalid characters for file include *"/\<>:|?
+    const QRegExp invalid_chars("[/\\<>:|?]");
+    XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
+    if (parent && parent->objectName() == "topic")
+    {
+        QString thisdir = parent->attribute("public_name");
+        thisdir.replace(invalid_chars,"_");
+        return parentDirName(parent) + QDir::separator() + thisdir;
+    }
+    else
+    {
+        QString thisdir = topic->attribute("category_name");
+        thisdir.replace(invalid_chars,"_");
+        return thisdir;
+    }
+}
+
+
+static const QString topicDirFile(const XmlElement *topic)
+{
+    // If the topic has children, then create a folder named after this note,
+    // and put the note in it.
+    // This is a parent topic, so create a folder to hold it.
+    if (category_folders)
+    {
+        return dirFile(topic->attribute("category_name"), topic->attribute("public_name")) + ".md";
+    }
+    else
+    {
+        QString dirname = parentDirName(topic);
+        if (topic->xmlChild("topic"))
+            dirname.append(QDir::separator() + topic->attribute("public_name"));
+        qDebug() << "topicDirFile: " << topic->attribute("public_name") << " has dirname " << dirname;
+        return dirFile(dirname, topic->attribute("public_name")) + ".md";
+    }
+}
+
+
+static const QString valid_tag(const QString &string)
+{
+    // Tag can only contain letters (case sensitive), digits, underscore and dash
+    // "/" is allowed for nested tags
+    QString result = string;
+    return "#" + result.replace(QRegExp("[^a-zA-Z0-9-_]"), "-");
+}
+
 
 // Sort topics, first by prefix, and then by topic name
 static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
@@ -188,7 +237,7 @@ static void write_head_meta(QTextStream &stream, const XmlElement *root_elem)
 
     stream << "**Exported from Realm Works:** " << root_elem->attribute("export_date") << "\n\n";
 
-    stream << "**Created By:** RWOutput Tool, version " << qApp->applicationVersion() << "\n\n";
+    stream << "**Created By:** RWOutput Tool v" << qApp->applicationVersion() << " on " << imported_date << "\n\n";
 
     write_meta_child(stream, "Summary",      details, "summary");
     write_meta_child(stream, "Description",  details, "description");
@@ -367,23 +416,31 @@ static void write_attributes(QTextStream &stream, const XmlElement *elem, const 
 }
 #endif
 
-static QString topic_link(const QString &topic_id, const QString &text)
+static QString internal_link(const QString &filename, const QString &public_name)
 {
-    QString topic_file = topic_files.value(topic_id);
-    //topic_file.replace(" ", "%20");
-#if 1
-    if (!text.isEmpty())
-        return QString("[[%1|%2]]").arg(topic_file, text);
+    QString topic_file = topic_files.value(filename);
+    if (topic_file.isEmpty()) topic_file = filename;
+
+    if (obsidian_links)
+    {
+        if (public_name.isEmpty() || topic_file == public_name)
+            return QString("[[%1]]").arg(topic_file);
+        else
+            return QString("[[%1|%2]]").arg(topic_file, public_name);
+    }
     else
-        return QString("[[%1]]").arg(topic_file);
-#else
-    if (!text.isEmpty())
-        return QString("[%1](%2)").arg(topic_file, text);
-    else
-        return QString("[%1]").arg(topic_file);
-#endif
+    {
+        if (public_name.isEmpty() || topic_file == public_name)
+            return QString("[%1]").arg(topic_file);
+        else
+            return QString("[%1](%2)").arg(topic_file, public_name);
+    }
 }
 
+static QString topic_link(const XmlElement *topic)
+{
+    return internal_link(topic->attribute("topic_id"), topic->attribute("public_name"));
+}
 
 static void write_span(QTextStream &stream, XmlElement *elem, const LinkageList &links, const QString &classname)
 {
@@ -399,7 +456,7 @@ static void write_span(QTextStream &stream, XmlElement *elem, const LinkageList 
         const QString text = elem->fixedText();
         const QString link_text = links.find(text);
         if (!link_text.isNull())
-            stream << topic_link(link_text, text);
+            stream << internal_link(link_text, text);
         else
             stream << text;
     }
@@ -710,11 +767,11 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
                 // Read topic summary from first section
                 get_summary(link, description, gm_directions);
             }
-#if 0
             QString title = build_tooltip(pin_name, description, gm_directions);
+#if 0
             if (!title.isEmpty()) stream->writeAttribute("title", title);
 #endif
-            if (!link.isEmpty()) stream << topic_link(link, "");
+            if (!link.isEmpty()) stream << internal_link(link, title);
 
             stream << "</area>";
         }
@@ -1020,8 +1077,6 @@ static bool write_html(QTextStream &stream, bool use_fixed_title, const QString 
         }
     }
 
-    //stream << sntype.toLower() << "\n\n# Details\n\n";
-
     // Maybe we have a CSS that we can put inline.
     const GumboNode *style = find_named_child(head, "style");
 #ifdef HANDLE_POOR_RTF
@@ -1280,12 +1335,17 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     // If the RW topic has a "true name" defined then the actual name of the topic
     // is reported as an alias.
 
+    XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
+    if (parent && parent->objectName() != "topic") parent = NULL;
+
     // Aliases belong in the metadata at the start of the file
     auto aliases = topic->xmlChildren("alias");
     // Maybe some aliases (in own section for smaller font?)
+    stream << "---\n";
+    stream << "ImportedOn: " << imported_date << "\n";
     if (!aliases.isEmpty())
     {
-        stream << "---\naliases: [";
+        stream << "Aliases: [";
         bool first=true;
         for (auto alias : aliases)
         {
@@ -1296,8 +1356,13 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
             // comma-separated list, so each alias needs to go inside double-quotes to hide embedded commas
             stream << '"' << alias->attribute("name") << '"';
         }
-        stream << "]\n---\n";
+        stream << "]\n";
     }
+    stream << "Tags: " << valid_tag(topic->attribute("category_name")) << "\n";
+    if (parent) stream << "parent: " << topic_link(parent) << "\n";
+    stream << "---\n";
+    // Tags inside metadata block above don't get put into the TAGS panel (and aren't reported in the "Metadata" box of published content)
+    stream << "%%\ntags: " << valid_tag(topic->attribute("category_name")) << "\n%%\n";
 
     // Start with HEADER for the topic
     //stream->writeAttribute("id", topic->attribute("topic_id"));
@@ -1307,6 +1372,8 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     if (!topic->attribute("suffix").isEmpty()) stream << " (" << topic->attribute("suffix") << ")";
     stream << "</center>\n";
 
+    // Put in a link to the parent topic
+    if (parent) stream << "Parent: " << topic_link(parent) << "\n";
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1328,12 +1395,12 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
     auto child_topics = topic->xmlChildren("topic");
     if (!child_topics.isEmpty())
     {
-        stream << "\n---\n### Child Topics\n";
+        stream << "\n\n---\n## Governed Content\n";
 
         std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
         for (auto child: child_topics)
         {
-            stream << "- " << topic_link(child->attribute("topic_id"), child->attribute("public_name")) << "\n";
+            stream << "- " << topic_link(child) << "\n";
         }
     }
 }
@@ -1346,16 +1413,17 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
  * @param topic
  * @param override
  */
-static void write_link(QTextStream &stream, const QString &name, const XmlElement *topic, const QString &override = QString())
+static QString nav_link(const QString &name, const XmlElement *topic, const QString &override = QString())
 {
-    stream << name << ": ";
+    QString result;
     if (topic && topic->objectName() == "topic")
-        stream << topic_link(topic->attribute("topic_id"), topic->attribute("public_name"));
+        result = topic_link(topic);
     else if (!override.isEmpty())
-        stream << topic_link(override, name);
+        result = internal_link(override, name);
     else
-        stream << "---";
-    stream << "\n";
+        result = "---";
+    // Escape vertical bars to work with table format
+    return result.replace("|","\\|");
 }
 
 
@@ -1365,8 +1433,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
     qDebug() << ".topic" << topic->objectName() << ":" << topic->attribute("public_name");
 #endif
 
+    XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
+    if (parent && parent->objectName() != "topic") parent = NULL;
+    QString directory = parent ? parent->attribute("public_name") : topic->attribute("category_name");
+
     // Create a new file for this topic
-    OurFile topic_file(dirFile(topic->attribute("category_name"), topic_files.value(topic->attribute("topic_id")) + ".md"));
+    //OurFile topic_file(dirFile(topic->attribute("category_name"), topic_files.value(topic->attribute("topic_id")) + ".md"));
+    OurFile topic_file(topicDirFile(topic));
     if (!topic_file.open(QFile::WriteOnly|QFile::Text))
     {
         qWarning() << "Failed to open output file for topic" << topic_file.fileName();
@@ -1380,12 +1453,15 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
     start_file(stream);
     write_topic_body(stream, topic);
 
-#if 0
-    stream << "\n\n---\n### Navigation\n";
-    write_link(stream, "Up",   up,      "index");  // If up is not defined, use the index file
-    write_link(stream, "Prev", prev);
-    write_link(stream, "Next", next);
-    write_link(stream, "Home", nullptr, "index");
+#if 1
+    stream << "\n\n---\n## Navigation\n";
+    stream << "| Up | Prev | Next | Home |\n";
+    stream << "|:---|:----:|:----:|-----:|\n";
+    stream << "| " << nav_link("Up",   up,      mainPageName);  // If up is not defined, use the index file
+    stream << " | " << nav_link("Prev", prev);
+    stream << " | " << nav_link("Next", next);
+    stream << " | " << nav_link("Home", nullptr, mainPageName);  // Always points to top
+    stream << " |\n";
 #endif
 }
 
@@ -1395,8 +1471,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
 
 static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int level)
 {
-    if (level > 1) stream << QString((level-1) * 4, ' ');
-    stream << "- " << topic_link(topic->attribute("topic_id"), topic->attribute("public_name")) << "\n\n";
+    stream << QString(level * 4, ' ') << "- " << topic_link(topic) << "\n";
 
     auto child_topics = topic->xmlChildren("topic");
     if (!child_topics.isEmpty())
@@ -1414,15 +1489,21 @@ static void write_separate_index(const XmlElement *root_elem)
 {
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
-    QString detail_title   = details    ? details->attribute("name") : "Table of Contents";
+    mainPageName           = details    ? details->attribute("name") : "Table of Contents";
+    topic_files.insert(mainPageName, mainPageName);
 
-    QFile out_file(detail_title + ".md");
+    QFile out_file(mainPageName + ".md");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
     {
         qWarning() << "Failed to find file" << out_file.fileName();
         return;
     }
     QTextStream stream(&out_file);
+
+    // Metadata
+    stream << "---\n";
+    stream << "ImportedOn: " << imported_date << "\n";
+    stream << "---\n";
 
     if (root_elem->objectName() == "output")
     {
@@ -1465,7 +1546,7 @@ static void write_separate_index(const XmlElement *root_elem)
 
                 for (auto cat : unique_keys)
                 {
-                    stream << "\n# " << cat << "\n";
+                    stream << "# " << cat << "\n";
 
                     // Organise topics alphabetically
                     auto topics = categories.values(cat);
@@ -1473,65 +1554,11 @@ static void write_separate_index(const XmlElement *root_elem)
 
                     for (auto topic: topics)
                     {
-                        write_topic_to_index(stream, topic, 1);
+                        write_topic_to_index(stream, topic, 0);
                     }
                 }
             }
         }
-    }
-}
-
-
-static void write_first_page(QTextStream &stream, const XmlElement *root_elem)
-{
-    XmlElement *definition = root_elem->xmlChild("definition");
-    XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
-    XmlElement *contents   = root_elem->xmlChild("contents");
-
-    if (definition == nullptr || contents == nullptr || details == nullptr)
-    {
-        qWarning() << "Invalid structure inside RWoutput file";
-        qDebug() << "root_elem  =" << root_elem->objectName();
-        qDebug() << "definition =" << definition;
-        qDebug() << "contents   =" << contents;
-        qDebug() << "details    =" << details;
-        return;
-    }
-
-    stream << "\n# <span style=\"text-align: center; margin: 100px\">" << details->attribute("name") << "</span>\n\n";
-
-    stream << "**Exported on** " << QDateTime::fromString(root_elem->attribute("export_date"), Qt::ISODate).toLocalTime().toString(Qt::SystemLocaleLongDate) << "\n\n";
-
-    stream << "**Generated by RWoutput tool on** " << QDateTime::currentDateTime().toString(Qt::SystemLocaleLongDate) << "\n\n";
-
-    if (details->hasAttribute("summary"))
-    {
-        stream << "## Summary\n" << details->attribute("summary") << "\n\n";
-    }
-
-    if (details->hasAttribute("description"))
-    {
-        stream << "## Description\n" << details->attribute("description") << "\n\n";
-    }
-
-    if (details->hasAttribute("requirements"))
-    {
-        stream << "## Requirements\n" << details->attribute("requirements") << "\n\n";
-    }
-
-    if (details->hasAttribute("credits"))
-    {
-        stream << "## Credits\n" << details->attribute("credits") << "\n\n";
-    }
-
-    if (details->hasAttribute("legal"))
-    {
-        stream << "## Legal\n" << details->attribute("legal") << "\n\n";
-    }
-
-    if (details->hasAttribute("other_notes"))
-    {
-        stream << "## Other Notes\n" << details->attribute("other_notes") << "\n\n";
     }
 }
 
@@ -1561,7 +1588,9 @@ static void write_child_topics(XmlElement *parent)
  */
 void toMarkdown(const XmlElement *root_elem,
                 int max_image_width,
-                bool use_reveal_mask)
+                bool use_reveal_mask,
+                bool folders_by_category,
+                bool do_obsidian_links)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -1570,7 +1599,11 @@ void toMarkdown(const XmlElement *root_elem,
 
     image_max_width   = max_image_width;
     apply_reveal_mask = use_reveal_mask;
+    category_folders  = folders_by_category;
+    obsidian_links    = do_obsidian_links;
     collator.setNumericMode(true);
+
+    imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());
 
     // Get a full list of the individual STYLE attributes of every single topic,
     // with a view to putting them into the CSS instead.
