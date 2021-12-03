@@ -1,3 +1,8 @@
+# 3.4.1
+The HOME and UP boxes in the Navigation pane now uses the name of the main page, rather than "Home".
+
+Ensure that the filename for Notes don't contain invalid characters.
+
 # 3.4
 
 Add aliases in metadata section at the top of each file

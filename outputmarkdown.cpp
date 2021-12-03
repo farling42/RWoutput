@@ -82,9 +82,18 @@ static QString mainPageName;
 
 #define DUMP_LEVEL 0
 
+static const QString validFilename(const QString &string)
+{
+    // full character list from https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+    static const QRegExp invalid_chars("[<>:\"/\\|?*]");
+    QString result(string);
+    return result.replace(invalid_chars,"_");
+}
+
+
 static const QString dirFile(const QString &dirname, const QString &filename)
 {
-    // Sanitise dirname;
+    // Each component of dirname must already have been processed by validFilename
     QDir dir(dirname);
     if (!dir.exists()) {
         //qDebug() << "Creating directory: " << dirname;
@@ -94,27 +103,18 @@ static const QString dirFile(const QString &dirname, const QString &filename)
             return filename;
         }
     }
-    return dirname + QDir::separator() + filename;
+    return dirname + QDir::separator() + validFilename(filename);
 }
 
 
 static const QString parentDirName(const XmlElement *topic)
 {
     // Invalid characters for file include *"/\<>:|?
-    const QRegExp invalid_chars("[/\\<>:|?]");
     XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
     if (parent && parent->objectName() == "topic")
-    {
-        QString thisdir = parent->attribute("public_name");
-        thisdir.replace(invalid_chars,"_");
-        return parentDirName(parent) + QDir::separator() + thisdir;
-    }
+        return parentDirName(parent) + QDir::separator() + validFilename(parent->attribute("public_name"));
     else
-    {
-        QString thisdir = topic->attribute("category_name");
-        thisdir.replace(invalid_chars,"_");
-        return thisdir;
-    }
+        return validFilename(topic->attribute("category_name"));
 }
 
 
@@ -125,14 +125,13 @@ static const QString topicDirFile(const XmlElement *topic)
     // This is a parent topic, so create a folder to hold it.
     if (category_folders)
     {
-        return dirFile(topic->attribute("category_name"), topic->attribute("public_name")) + ".md";
+        return dirFile(validFilename(topic->attribute("category_name")), topic->attribute("public_name")) + ".md";
     }
     else
     {
         QString dirname = parentDirName(topic);
         if (topic->xmlChild("topic"))
-            dirname.append(QDir::separator() + topic->attribute("public_name"));
-        qDebug() << "topicDirFile: " << topic->attribute("public_name") << " has dirname " << dirname;
+            dirname.append(QDir::separator() + validFilename(topic->attribute("public_name")));
         return dirFile(dirname, topic->attribute("public_name")) + ".md";
     }
 }
@@ -419,7 +418,7 @@ static void write_attributes(QTextStream &stream, const XmlElement *elem, const 
 static QString internal_link(const QString &filename, const QString &public_name)
 {
     QString topic_file = topic_files.value(filename);
-    if (topic_file.isEmpty()) topic_file = filename;
+    if (topic_file.isEmpty()) topic_file = validFilename(filename);
 
     if (obsidian_links)
     {
@@ -1413,13 +1412,13 @@ static void write_topic_body(QTextStream &stream, const XmlElement *topic)
  * @param topic
  * @param override
  */
-static QString nav_link(const QString &name, const XmlElement *topic, const QString &override = QString())
+static QString nav_link(const XmlElement *topic, const QString &override = QString())
 {
     QString result;
     if (topic && topic->objectName() == "topic")
         result = topic_link(topic);
     else if (!override.isEmpty())
-        result = internal_link(override, name);
+        result = internal_link(override, override);
     else
         result = "---";
     // Escape vertical bars to work with table format
@@ -1456,11 +1455,11 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *up, cons
 #if 1
     stream << "\n\n---\n## Navigation\n";
     stream << "| Up | Prev | Next | Home |\n";
-    stream << "|:---|:----:|:----:|-----:|\n";
-    stream << "| " << nav_link("Up",   up,      mainPageName);  // If up is not defined, use the index file
-    stream << " | " << nav_link("Prev", prev);
-    stream << " | " << nav_link("Next", next);
-    stream << " | " << nav_link("Home", nullptr, mainPageName);  // Always points to top
+    stream << "|----|------|------|------|\n";
+    stream << "| "  << nav_link(up,      mainPageName);  // If up is not defined, use the index file
+    stream << " | " << nav_link(prev);
+    stream << " | " << nav_link(next);
+    stream << " | " << nav_link(nullptr, mainPageName);  // Always points to top
     stream << " |\n";
 #endif
 }
@@ -1490,7 +1489,7 @@ static void write_separate_index(const XmlElement *root_elem)
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     mainPageName           = details    ? details->attribute("name") : "Table of Contents";
-    topic_files.insert(mainPageName, mainPageName);
+    topic_files.insert(mainPageName, validFilename(mainPageName));
 
     QFile out_file(mainPageName + ".md");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
@@ -1631,7 +1630,7 @@ void toMarkdown(const XmlElement *root_elem,
     for (auto topic: root_elem->findChildren<XmlElement*>("topic"))
     {
         all_topics.insert(topic->attribute("topic_id"), topic);
-        topic_files.insert(topic->attribute("topic_id"), topic->attribute("public_name"));
+        topic_files.insert(topic->attribute("topic_id"), validFilename(topic->attribute("public_name")));
     }
 
     // Write out the individual TOPIC files now:
