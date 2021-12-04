@@ -208,7 +208,8 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->createMapPins->isChecked(),
                ui->revealMask->isChecked(),
                ui->foldersByCategory->isChecked(),
-               ui->obsidianLinks->isChecked());
+               ui->obsidianLinks->isChecked(),
+               ui->createNavPanel->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

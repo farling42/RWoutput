@@ -1,3 +1,14 @@
+# 3.6
+Move navigation box to top of each page, thus allowing the Parent line to be removed (with a UI option to disable its creation).
+
+Prefix the tag category with the text "Category/" so that they are grouped better in the tags panel.
+
+Allow any letters (not just latin) into tag names, so should allow accented characters.
+
+Add frontmatter lines to support **Breadcrumbs** plug-in for navigation (https://github.com/SkepticMystic/breadcrumbs)
+
+Topics are created using the FULL name using prefix and suffix when available, to build: "prefix - name ( suffix )"
+
 # 3.5
 Smart Images are converted to map pins that are usable with the Leaflet plugin.
 

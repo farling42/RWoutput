@@ -34,6 +34,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool create_leaflet_pins,
                 bool use_reveal_mask,
                 bool folders_by_category,
-                bool obsidian_links);
+                bool obsidian_links,
+                bool create_nav_panel);
 
 #endif // OUTPUTMARKDOWN_H

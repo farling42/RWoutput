@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>455</width>
-    <height>436</height>
+    <height>459</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -209,6 +209,19 @@ FILE</string>
               </property>
               <property name="text">
                <string>Create Map Pins</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="createNavPanel">
+              <property name="toolTip">
+               <string>Check to put a navigation panel at the top of each page</string>
+              </property>
+              <property name="text">
+               <string>Add NAV panel as header</string>
               </property>
               <property name="checked">
                <bool>true</bool>
