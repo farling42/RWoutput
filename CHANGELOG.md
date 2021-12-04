@@ -1,4 +1,6 @@
-# next
+# 3.5
+Smart Images are converted to map pins that are usable with the Leaflet plugin.
+
 Tags in the metadata block don't have a # at the start
 
 # 3.4.1

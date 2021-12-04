@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>515</width>
-    <height>400</height>
+    <width>455</width>
+    <height>436</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -202,6 +202,19 @@ FILE</string>
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QCheckBox" name="createMapPins">
+              <property name="toolTip">
+               <string>Create map pin information for Leaflet</string>
+              </property>
+              <property name="text">
+               <string>Create Map Pins</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -302,7 +315,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>515</width>
+     <width>455</width>
      <height>21</height>
     </rect>
    </property>

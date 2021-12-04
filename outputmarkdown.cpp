@@ -16,7 +16,6 @@
 */
 
 #define TIME_CONVERSION
-#undef  SHOW_PINS
 #define IGNORE_GUMBO_TABLE
 #undef  GUMBO_TABLE
 
@@ -48,12 +47,12 @@
 #include "linefile.h"
 #include "linkage.h"
 
-static int image_max_width = -1;
 static bool apply_reveal_mask = true;
 static bool sort_by_prefix = true;
 static QCollator collator;
 static bool category_folders = true;
 static bool obsidian_links = false;
+static bool show_leaflet_pins = true;
 
 #if 1
 typedef QFile OurFile;
@@ -293,7 +292,6 @@ static QString simple_para_text(XmlElement *p)
     return result;
 }
 
-#if 0
 /**
  * @brief build_tooltip
  * Builds the complete string for a popup tooltip.
@@ -316,17 +314,16 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
     }
     if (!description.isEmpty())
     {
-        if (!result.isEmpty()) result.append("\n\n");
+        if (!result.isEmpty()) result.append("\n");
         result.append(map_pin_description.arg(description));
     }
     if (!gm_directions.isEmpty())
     {
-        if (!result.isEmpty()) result.append("\n\n");
+        if (!result.isEmpty()) result.append("\n");
         result.append(map_pin_gm_directions.arg(gm_directions));
     }
     return result;
 }
-#endif
 
 /**
  * Read first section from topic.
@@ -580,6 +577,13 @@ static QString get_elem_string(XmlElement *elem)
     return elem->childString().replace("&#xd;\n","\n");
 }
 
+
+static QString mapCoord(int coord)
+{
+    return QString::number(coord / 10.0, 'f', 1);
+}
+
+
 /*
  * Return the divisor for the map's size
  */
@@ -596,15 +600,14 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
     const int pin_size = 20;
     bool in_buffer = false;
 
+    // Need to decode image, to get size
+    QImage image = QImage::fromData(orig_data, qPrintable(format));
+    QSize image_size = image.size();
+
     // See if possible image conversion is required
     bool bad_format = (format == "bmp" || format == "tif" || format == "tiff");
-#ifdef SHOW_PINS
-    if (mask_elem != nullptr || image_max_width > 0 || bad_format || !pins.isEmpty())
-#else
-    if (mask_elem != nullptr || image_max_width > 0 || bad_format)
-#endif
+    if (mask_elem != nullptr || bad_format)
     {
-        QImage image = QImage::fromData(orig_data, qPrintable(format));
         if (bad_format)
         {
             format = "png";
@@ -613,109 +616,34 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
             filename = filename.mid(0,last) + ".png";
         }
 
-        if (mask_elem != nullptr || (image_max_width > 0 && image.width() > image_max_width))
+        // Apply mask, if supplied
+        if (mask_elem && apply_reveal_mask)
         {
-            // Apply mask, if supplied
-            if (mask_elem && apply_reveal_mask)
+            // If the mask is empty, then don't use it
+            // (if the image is JPG, the mask isn't necessarily JPG
+            QImage mask = QImage::fromData(mask_elem->byteData());
+
+            // Ensure we have a 32-bit image to convert
+            image = image.convertToFormat(QImage::Format_RGB32);
+
+            // Create a mask with the correct alpha
+            QPixmap pixmap(image.size());
+            pixmap.fill(QColor(0, 0, 0, 200));
+            pixmap.setMask(QBitmap::fromImage(mask));
+
+            if (image.size() != mask.size())
             {
-                // If the mask is empty, then don't use it
-                // (if the image is JPG, the mask isn't necessarily JPG
-                QImage mask = QImage::fromData(mask_elem->byteData());
-
-                // Ensure we have a 32-bit image to convert
-                image = image.convertToFormat(QImage::Format_RGB32);
-
-                // Create a mask with the correct alpha
-                QPixmap pixmap(image.size());
-                pixmap.fill(QColor(0, 0, 0, 200));
-                pixmap.setMask(QBitmap::fromImage(mask));
-
-                if (image.size() != mask.size())
-                {
-                    qWarning() << "Image size differences for" << orig_filename << ": image =" << image.size() << ", mask =" << mask.size();
-                }
-                // Apply the mask to the original picture
-                QPainter painter(&image);
-                painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-                painter.drawPixmap(0, 0, pixmap);
+                qWarning() << "Image size differences for" << orig_filename << ": image =" << image.size() << ", mask =" << mask.size();
             }
+            // Apply the mask to the original picture
+            QPainter painter(&image);
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            painter.drawPixmap(0, 0, pixmap);
 
-            // Reduce width in a binary fashion, so maximum detail is kept.
-            if (image_max_width > 0)
-            {
-                int orig_width = image.size().width();
-                int new_width  = orig_width;
-                while (new_width > image_max_width)
-                {
-                    divisor = divisor << 1;
-                    new_width = new_width >> 1;
-                }
-                if (divisor > 1)
-                {
-                    image = image.scaledToWidth(new_width, Qt::SmoothTransformation);
-                }
-            }
             //format = "png";   // not always better (especially if was JPG)
             in_buffer = true;
-        } /* mask or scaling */
+        } /* mask */
 
-#ifdef SHOW_PINS
-        // Add some graphics to show where PINS will be
-        if (!pins.isEmpty())
-        {
-            // Set desired colour of the marker
-            QPainter painter(&image);
-            painter.setPen(QPen(Qt::red));
-
-            // Set correct font size
-            QFont font(painter.font());
-            font.setPixelSize(pin_size-1);
-            painter.setFont(font);
-
-            // Create string once
-            static QStaticText default_pin_text;
-            static bool first_time = true;
-            if (first_time)
-            {
-                first_time = false;
-                /* UNICODE : 1F4CC = map marker (push pin) */
-                /* original = bottom-left corner */
-                uint pin_char = 0x1f4cd;
-                default_pin_text.setText(QString::fromUcs4(&pin_char, 1));
-                default_pin_text.prepare(QTransform(), font);
-            }
-            // TODO - select pin appropriate to the type of topic to which it is linked!
-            // The "category_name" attribute of each "topic" element is what needs to be matched to a pin_text
-            for (XmlElement *pin : pins)
-            {
-                const QString topic_name = pin->attribute("topic_id");
-                if (!topic_name.isEmpty() && !category_pin_of_topic.contains(topic_name))
-                {
-                    QString category;
-                    if (all_topics.contains(topic_name))
-                        category = all_topics[topic_name]->attribute("category_name");
-                    else
-                        category = "..generic..";
-
-                    // Find the category of the named topic (if any).
-                    uint pin_char = 0x1f4cc;    // round pin
-                    QStaticText cat_pin;
-                    cat_pin.setText(QString::fromUcs4(&pin_char, 1));
-                    cat_pin.prepare(QTransform(), font);
-                    category_pin_of_topic.insert(topic_name, cat_pin);
-                }
-
-                painter.setPen(QPen(Qt::blue));
-                const QStaticText &pin_text = topic_name.isEmpty() ? default_pin_text : category_pin_of_topic.value(topic_name);
-                painter.drawStaticText(pin->attribute("x").toInt() / divisor,
-                                       pin->attribute("y").toInt() / divisor - pin_text.size().height(),
-                                       pin_text);
-            }
-
-            // Tell the next bit to read from the buffer
-            in_buffer = true;
-        } /* pins */
-#endif
         // Do we need to put it in the buffer?
         if (in_buffer)
         {
@@ -736,47 +664,59 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
     file.write (in_buffer ? buffer.data() : orig_data);
     file.close();
 
-    stream << "![" << image_name << "!](" << filename.replace(" ","%20");
-    if (annotation) {
-        stream << " \"";
-        write_para_children(stream, annotation, "annotation " + class_name, links, image_name);
-        stream << "\"";
-    }
-    stream << ")";
-
-#ifdef SHOW_PINS
-    if (!pins.isEmpty())
+    if (show_leaflet_pins && !pins.isEmpty())
     {
+        int height = image_size.height();
+        // The leaflet plugin for Obsidian uses latitude/longitude, so (y,x)
+        stream << "\n```leaflet\n";
+        stream << "id: " << image_name << "\n";
+        stream << "image: [[" << filename << "]]\n";
+        if (height > 1500) stream << "height: " << mapCoord(height * 2) << "px\n";   // double the scaled height seems to work
+        stream << "draw: false\n";
+        stream << "showAllMarkers: true\n";
+        stream << "bounds:\n";
+        stream << "    - [0, 0]\n";
+        stream << "    - [" << mapCoord(height) << ", " << mapCoord(image_size.width()) << "]\n";
+
         // Create the clickable MAP on top of the map
-        stream << (QString("<map name=\"%1\">").arg(usemap));
         for (auto pin : pins)
         {
             int x = pin->attribute("x").toInt() / divisor;
             int y = pin->attribute("y").toInt() / divisor - pin_size;
-            stream << (QString("<area shape=\"rect\" coords=\"%1,%2,%3,%4\">").arg(x).arg(y).arg(x+pin_size).arg(y+pin_size));
 
             // Build up a tooltip from the text configured on the pin
             QString pin_name = pin->attribute("pin_name");
             QString description = get_elem_string(pin->xmlChild("description"));
             QString gm_directions = get_elem_string(pin->xmlChild("gm_directions"));
             QString link = pin->attribute("topic_id");
-            // OPTION - use first section of topic if no description or gm_directions is provided
-            if (show_full_map_pin_tooltip && (description.isEmpty() || gm_directions.isEmpty()) && !link.isEmpty())
-            {
-                // Read topic summary from first section
-                get_summary(link, description, gm_directions);
-            }
-            QString title = build_tooltip(pin_name, description, gm_directions);
-#if 0
-            if (!title.isEmpty()) stream->writeAttribute("title", title);
-#endif
-            if (!link.isEmpty()) stream << internal_link(link, title);
+            QString tooltip = build_tooltip(pin_name, description, gm_directions);
 
-            stream << "</area>";
+            stream << "marker: default, " << mapCoord(height-y) << ", " << mapCoord(x) << ",";
+            if (link.isEmpty())
+            {
+                // No link, but explicit tooltip
+                stream << ",unknown";
+            }
+            else
+            {
+                stream << internal_link(link, "");
+                //if (tooltip != link_name) stream << ", \"" << tooltip.replace("\"","'") << "\"";
+            }
+            stream << "\n";
         }
-        stream << "</map>";
+        stream << "```\n";
     }
-#endif
+    else
+    {
+        // No pins required
+        stream << "![" << image_name << "!](" << filename.replace(" ","%20");
+        if (annotation) {
+            stream << " \"";
+            write_para_children(stream, annotation, "annotation " + class_name, links, image_name);
+            stream << "\"";
+        }
+        stream << ")";
+    }
 
     return divisor;
 }
@@ -1077,8 +1017,8 @@ static bool write_html(QTextStream &stream, bool use_fixed_title, const QString 
     }
 
     // Maybe we have a CSS that we can put inline.
-    const GumboNode *style = find_named_child(head, "style");
 #ifdef HANDLE_POOR_RTF
+    const GumboNode *style = find_named_child(head, "style");
     if (!style) style = get_gumbo_child(body, "style");
 #endif
 
@@ -1229,8 +1169,8 @@ static void write_snippet(QTextStream &stream, XmlElement *snippet, const Linkag
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            int divisor = write_image(stream, smart_image->attribute("name"), contents->byteData(),
-                                     mask, filename, sn_style, annotation, links, usemap, pins);
+            write_image(stream, smart_image->attribute("name"), contents->byteData(),
+                        mask, filename, sn_style, annotation, links, usemap, pins);
         }
     }
     else if (sn_type == "Date_Game")
@@ -1579,12 +1519,13 @@ static void write_child_topics(XmlElement *parent)
  * @brief toHtml
  * Generate Markdown representation of the supplied XmlElement tree
  * @param root_elem
- * @param max_image_width
+ * @param create_leaflet_pins  Add interactive map with map pins using Leaflet plugin
  * @param use_reveal_mask
- * @param index_on_every_page
+ * @param folders_by_category  IF true, stores pages in folders named after category; if false then store pages based on topic hierarchy
+ * @param do_obsidian_links
  */
 void toMarkdown(const XmlElement *root_elem,
-                int max_image_width,
+                bool create_leaflet_pins,
                 bool use_reveal_mask,
                 bool folders_by_category,
                 bool do_obsidian_links)
@@ -1593,11 +1534,11 @@ void toMarkdown(const XmlElement *root_elem,
     QElapsedTimer timer;
     timer.start();
 #endif
-
-    image_max_width   = max_image_width;
-    apply_reveal_mask = use_reveal_mask;
+    Q_UNUSED(use_reveal_mask)
+    apply_reveal_mask = false; //use_reveal_mask;
     category_folders  = folders_by_category;
     obsidian_links    = do_obsidian_links;
+    show_leaflet_pins = create_leaflet_pins;
     collator.setNumericMode(true);
 
     imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());

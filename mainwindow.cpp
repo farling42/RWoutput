@@ -205,7 +205,7 @@ void MainWindow::on_saveMarkdown_clicked()
     qApp->processEvents();
 
     toMarkdown(root_element,
-               max_image_width,
+               ui->createMapPins->isChecked(),
                ui->revealMask->isChecked(),
                ui->foldersByCategory->isChecked(),
                ui->obsidianLinks->isChecked());
