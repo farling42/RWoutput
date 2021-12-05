@@ -218,13 +218,13 @@ FILE</string>
             <item>
              <widget class="QCheckBox" name="createNavPanel">
               <property name="toolTip">
-               <string>Check to put a navigation panel at the top of each page</string>
+               <string>Check to put a navigation panel at the top of each page (it will add pollution to the Obsidian graph view)</string>
               </property>
               <property name="text">
                <string>Add NAV panel as header</string>
               </property>
               <property name="checked">
-               <bool>true</bool>
+               <bool>false</bool>
               </property>
              </widget>
             </item>

@@ -1,3 +1,10 @@
+# 3.8
+Create placeholder note for the category of each top-level topic.
+
+Default option for "Add NAV panel as header" is OFF, to prevent pollution of the Obsidian graph view (Breadcrumb links do not pollute that graph).
+
+Internally create strings instead of using QTextStream.
+
 # 3.7
 Display annotations on its own line prefixed by "annotation:" in italics (needs more work).
 
