@@ -1,3 +1,12 @@
+# 3.7
+Display annotations on its own line prefixed by "annotation:" in italics (needs more work).
+
+Add connections at the end of each page (and add information into frontmatter for future use).
+
+Reformat various links in frontmatter to use multi-line arrays to avoid needing to handle commas.
+
+Tidy up memory after each run, so that the program can be run several times without polluting other vaults.
+
 # 3.6
 Move navigation box to top of each page, thus allowing the Parent line to be removed (with a UI option to disable its creation).
 

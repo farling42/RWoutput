@@ -55,6 +55,7 @@ static bool obsidian_links = false;
 static bool show_leaflet_pins = true;
 static bool show_nav_panel = true;
 static bool nav_at_start = true;
+static int  max_index_level = 99;
 
 #if 1
 typedef QFile OurFile;
@@ -66,7 +67,6 @@ typedef LineFile OurFile;
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
-static QMap<QString,QStaticText> category_pin_of_topic;
 static QMap<QString,XmlElement*> all_topics;
 static QMap<QString,QString> topic_files;   // key=topic_id, value=public_name
 static QMap<const XmlElement*,QString> topic_names;
@@ -270,6 +270,13 @@ static QString simple_para_text(XmlElement *p)
     return result;
 }
 
+
+static QString annotationString(const XmlElement *annotation)
+{
+    //XmlElement *annotation = node->xmlChild("annotation");
+    return annotation ? (" *; " + annotation->xmlChild()->fixedText() + "*") : "";
+}
+
 /**
  * @brief build_tooltip
  * Builds the complete string for a popup tooltip.
@@ -390,16 +397,11 @@ static void write_attributes(QTextStream &stream, const XmlElement *elem, const 
 }
 #endif
 
-static QString internal_link(const QString &topic_id, const QString &public_name, bool add_quotes=false)
+static QString internal_link(const QString &topic_id, const QString &public_name)
 {
     QString label      = public_name;
     QString topic_file = topic_files.value(topic_id);
     if (topic_file.isEmpty()) topic_file = validFilename(topic_id);
-
-    if (add_quotes) {
-        topic_file = '"' + topic_file + '"';
-        label      = '"' + label + '"';
-    }
 
     if (obsidian_links)
     {
@@ -417,9 +419,9 @@ static QString internal_link(const QString &topic_id, const QString &public_name
     }
 }
 
-static QString topic_link(const XmlElement *topic, bool add_quotes=false)
+static QString topic_link(const XmlElement *topic)
 {
-    return internal_link(topic->attribute("topic_id"), topic_names.value(topic), add_quotes);
+    return internal_link(topic->attribute("topic_id"), topic_names.value(topic));
 }
 
 static void write_span(QTextStream &stream, XmlElement *elem, const LinkageList &links, const QString &classname)
@@ -541,11 +543,16 @@ static void write_para_children(QTextStream &stream, XmlElement *parent, const Q
     qDebug() << "...write para-children";
 #endif
 
+    QString first_text = prefix_bodytext;
+    if (classname.startsWith("annotation")) {
+        if (!first_text.isEmpty()) first_text += "\n";
+        first_text += "*annotation:* ";
+    }
     bool first = true;
     for (auto para: parent->xmlChildren())
     {
         if (first)
-            write_para(stream, para, classname, links, /*prefix*/prefix_label, prefix_bodytext, QString());
+            write_para(stream, para, classname, links, /*prefix*/prefix_label, first_text, QString());
         else
             write_para(stream, para, classname, links, /*no prefix*/QString(), QString(), QString());
         first = false;
@@ -693,13 +700,11 @@ static int write_image(QTextStream &stream, const QString &image_name, const QBy
     else
     {
         // No pins required
-        stream << "![" << image_name << "!](" << filename.replace(" ","%20");
+        stream << "![" << image_name << "!](" << filename.replace(" ","%20") << ")";
         if (annotation) {
-            stream << " \"";
-            write_para_children(stream, annotation, "annotation " + class_name, links, image_name);
-            stream << "\"";
+            write_para_children(stream, annotation, "annotation " + class_name, links);
         }
-        stream << ")";
+        stream << "\n";
     }
 
     return divisor;
@@ -721,13 +726,11 @@ static void write_ext_object(QTextStream &stream, const QString &obj_name, const
         file.close();
 
         QString temp = filename;
-        stream << "![" << filename << "!](" << temp.replace(" ","%20");
+        stream << "![" << filename << "!](" << temp.replace(" ","%20") << ")";
         if (annotation) {
-            stream << " \"";
             write_para_children(stream, annotation, "annotation " + class_name, links);
-            stream << "\"";
         }
-        stream << ")";
+        stream << "\n";
 }
 
 /**
@@ -1285,6 +1288,49 @@ static QString nav_link(const XmlElement *topic, const QString &override = QStri
     return result.replace("|","\\|");
 }
 
+static const QMap<QString,QString> nature_mapping{
+    { "Arbitrary", "Arbitrary Connection To"},
+    { "Generic",   "Simple Connection To"},
+    { "Union",     "Family Relationship To-Union With" },
+    { "Parent_To_Offspring", "Family Relationship To-Immediate Ancestor Of"},
+    { "Offspring_To_Parent", "Family Relationship To-Offspring Of" },
+    { "Master_To_Minion", "Comprises Or Encompasses" },
+    { "Minion_To_Master", "Belongs To Or Within" },
+    { "Public_Attitude_Towards", "Public Attitude Towards" },
+    { "Private_Attitude_Towards", "Private Attitude Towards" }
+};
+
+static QString relationship(XmlElement *connection)
+{
+    QString nature    = connection->attribute("nature");
+    QString qualifier = connection->attribute("qualifier");
+    QString attitude  = connection->attribute("attitude");
+    QString rating    = connection->attribute("rating");
+
+    QString result = nature_mapping.value(nature);
+    if (result.isEmpty()) result = "Unknown Relationship";
+
+    if (!qualifier.isEmpty())
+    {
+        if (nature == "Master_To_Minion")
+        {
+            auto quals = qualifier.split(" / ");
+            if (quals.length() > 1) qualifier = quals[0];
+        }
+        else if (nature == "Minion_To_Master")
+        {
+            auto quals = qualifier.split(" / ");
+            if (quals.length() > 1) qualifier = quals[1];
+        }
+        result += "-" + qualifier;
+    }
+    else if (!attitude.isEmpty())
+        result += "-" + attitude;
+    else if (!rating.isEmpty())
+        result += "-" + rating;
+
+    return result;
+}
 
 static void write_topic_file(const XmlElement *topic, const XmlElement *parent, const XmlElement *prev, const XmlElement *next)
 {
@@ -1318,44 +1364,46 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     auto aliases = topic->xmlChildren("alias");
     if (!aliases.isEmpty())
     {
-        stream << "Aliases: [";
-        bool first=true;
+        stream << "Aliases:\n";
         for (auto alias : aliases)
         {
-            if (first)
-                first=false;
-            else
-                stream << ",";
-            // comma-separated list, so each alias needs to go inside double-quotes to hide embedded commas
-            stream << '"' << alias->attribute("name") << '"';
+            stream << "  - " << alias->attribute("name") << "\n";
         }
-        stream << "]\n";
     }
     stream << "Tags: Category/" << validTag(topic->attribute("category_name")) << "\n";
 
     if (parent) {
+        // Don't tell Breadcrumbs about the main page!
         QString link = (parent->objectName() == "topic") ? topic_files.value(parent->attribute("topic_id")) : mainPageName;
-        stream << "parent: [ \"" << link << "\"]\nup: [ \""   << link << "\" ]\n";
+        stream << "parent:\n  - " << link << "\nup:\n  - " << link << "\n";
     }
     if (prev)
     {
         QString link = topic_files.value(prev->attribute("topic_id"));
-        stream << "prev: [ \"" << link << "\" ]\n";
+        stream << "prev:\n  - " << link << "\n";
     }
     if (next)
     {
         QString link = topic_files.value(next->attribute("topic_id"));
-        stream << "next: [ \"" << link << "\" ]\nsibling: [ \"" << link << "\" ]\n";
+        stream << "next:\n  - " << link << "\nsibling:\n  - " << link << "\n";
     }
-    QString down;
-    for (auto child: topic->xmlChildren("topic"))
+    const auto children = topic->xmlChildren("topic");
+    if (children.length() > 0)
     {
-        if (!down.isEmpty()) down += ", ";
-        //down += topic_link(child, true);
-        down += '"' + topic_files.value(child->attribute("topic_id")) + '"';
+        stream << "down:\n";
+        for (auto child: topic->xmlChildren("topic"))
+        {
+            stream << "  - " << topic_files.value(child->attribute("topic_id")) << "\n";
+        }
     }
-    if (!down.isEmpty())  stream << "down: [ " << down << " ]\n";
     stream << "RWtopicId: " << topic->attribute("topic_id") << "\n";
+
+    // Connections
+    for (auto child : topic->xmlChildren("connection"))
+    {
+        // Remove spaces from tag
+        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id"), child->attribute("target_name")) << "\n";
+    }
     stream << "---\n";
 
     //
@@ -1404,6 +1452,20 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         }
     }
 
+    auto connections = topic->xmlChildren("connection");
+    if (connections.length() > 0)
+    {
+        stream << "\n\n---\n## Connections\n";
+        for (auto connection : connections)
+        {
+            // Remove spaces from tag
+            stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
+            XmlElement *annot = connection->xmlChild("annotation");
+            if (annot) stream << " *; " << annot->xmlChild()->fixedText() << "*";
+            stream << "\n";
+        }
+    }
+
     if (show_nav_panel && !nav_at_start)
     {
         //stream << "\n---\n";
@@ -1429,9 +1491,12 @@ static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int lev
     if (!child_topics.isEmpty())
     {
         std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
-        for (auto child_topic: child_topics)
+        if (level < max_index_level)
         {
-            write_topic_to_index(stream, child_topic, level+1);
+            for (auto child_topic: child_topics)
+            {
+                write_topic_to_index(stream, child_topic, level+1);
+            }
         }
     }
 }
@@ -1573,7 +1638,6 @@ void toMarkdown(const XmlElement *root_elem,
             styles_set.insert(child->attribute("style"));
         }
     }
-    class_of_style.clear();
     int stylenumber=1;
     for (auto style: styles_set)
     {
@@ -1582,7 +1646,6 @@ void toMarkdown(const XmlElement *root_elem,
         else
             class_of_style.insert(style, QString("rwStyle%1").arg(stylenumber++));
     }
-    category_pin_of_topic.clear();
 
     // To help get category for pins on each individual topic,
     // get the topic_id of every single topic in the file.
@@ -1612,4 +1675,10 @@ void toMarkdown(const XmlElement *root_elem,
 #ifdef TIME_CONVERSION
     qInfo() << "TIME TO GENERATE HTML =" << timer.elapsed() << "milliseconds";
 #endif
+
+    // Tidy up memory
+    class_of_style.clear();
+    all_topics.clear();
+    topic_names.clear();
+    topic_files.clear();
 }
