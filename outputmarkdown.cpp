@@ -1140,7 +1140,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         result += "**" + snippet->snippetName() + "**: " + bodytext;
 
         if (annotation)
-            result += "; " + write_annotation(annotation, links);
+            result += " ; " + write_annotation(annotation, links) + "\n\n";
         else
             result += write_para(snippet, links, QString());
     }
@@ -1153,7 +1153,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += "; " + write_annotation(annotation, links);
+            result += " ; " + write_annotation(annotation, links) + "\n\n";
         else
             result += write_para(snippet, links, QString());
     }
@@ -1169,7 +1169,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
 
         if (annotation)
-            result += "; " + write_annotation(annotation, links);
+            result += " ; " + write_annotation(annotation, links) + "\n\n";
         else
             result += write_para(snippet, links, QString());
     }
@@ -1182,7 +1182,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         const QString &bodytext = contents->childString();
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += "; " + write_annotation(annotation, links);
+            result += " ; " + write_annotation(annotation, links) + "\n\n";
         else
             result += write_para(snippet, links, QString());
 
@@ -1202,7 +1202,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         XmlElement *annotation = snippet->xmlChild("annotation");
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += "; " + write_annotation(annotation, links);
+            result += " ; " + write_annotation(annotation, links) + "\n\n";
         else
             result += write_para(snippet, links, QString());
     }
@@ -1443,7 +1443,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             // Remove spaces from tag
             stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
             XmlElement *annot = connection->xmlChild("annotation");
-            if (annot) stream << " *; " << annot->xmlChild()->fixedText() << "*";
+            if (annot) stream << " ; " << annot->xmlChild()->fixedText();
             stream << "\n";
         }
     }
