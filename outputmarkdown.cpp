@@ -400,9 +400,8 @@ static QString topic_link(const XmlElement *topic)
     return internal_link(topic->attribute("topic_id"), topic_names.value(topic));
 }
 
-static const QString write_span(XmlElement *elem, const LinkageList &links, const QString &classname)
+static const QString write_span(XmlElement *elem, const LinkageList &links)
 {
-    Q_UNUSED(classname)
     QString result;
 #if DEBUG_LEVEL > 5
     qDebug() << "....span";
@@ -425,15 +424,20 @@ static const QString write_span(XmlElement *elem, const LinkageList &links, cons
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
         {
-            result += write_span( child, links, QString());
+            result += write_span(child, links);
         }
     }
     return result;
 }
 
 
-static const QString write_para(XmlElement *elem, const QString &classname, const LinkageList &links,
-                       const QString &label, const QString &bodytext, const QString &orig_listtype)
+static const QString hlabel(const QString &label, const QString &text)
+{
+    return "**" + label + "**: " + text;
+}
+
+
+static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype)
 {
     QString result;
     QString listtype = orig_listtype;
@@ -442,7 +446,7 @@ static const QString write_para(XmlElement *elem, const QString &classname, cons
 #endif
     if (elem->isFixedString())
     {
-        return write_span(elem, links, classname);
+        return write_span(elem, links);
     }
 
     bool close = false;
@@ -463,37 +467,17 @@ static const QString write_para(XmlElement *elem, const QString &classname, cons
     }
     else
     {
-        //// stream->writeStartElement(sntype);
-        //// write_attributes(stream, elem, classname);
         qDebug() << "write_para: element = " << sntype;
         //result += "<" + elem->objectName() + ">";
         //close=true;
     }
-    // If there is no label, then set the class on the paragraph element,
-    // otherwise we will put the text inside a span with the given class.
-    bool class_set = false;
-    if (!label.isEmpty())
-    {
-        result += "**" + label + "**: ";
-    }
-    else if (!classname.isEmpty())
-    {
-        // class might already have been written by calling writeAttributes
-        //if (elem->objectName() == "snippet") stream->writeAttribute("class", classname);
-        class_set = true;
-    }
-
-    if (!bodytext.isEmpty())
-    {
-        result += bodytext;
-    }
     for (auto child : elem->xmlChildren())
     {
         if (child->objectName() == "span")
-            result += write_span(child, links, class_set ? QString() : classname);
+            result += write_span(child, links);
         else if (child->objectName() != "tag_assign")
             // Ignore certain children
-            result += write_para(child, classname, links, /*no prefix*/QString(), QString(), listtype);
+            result += write_para(child, links, listtype);
     }
     // Anything to put AFTER the child elements?
     if (sntype == "snippet" || sntype == "p" || sntype == "ul" || sntype == "ol")
@@ -505,28 +489,15 @@ static const QString write_para(XmlElement *elem, const QString &classname, cons
 }
 
 
-static const QString write_para_children(XmlElement *parent, const QString &classname, const LinkageList &links,
-                                const QString &prefix_label = QString(), const QString &prefix_bodytext = QString())
+static const QString write_para_children(XmlElement *parent, const LinkageList &links)
 {
-    QString result;
-
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children";
 #endif
-
-    QString first_text = prefix_bodytext;
-    if (classname.startsWith("annotation")) {
-        if (!first_text.isEmpty()) first_text += "\n";
-        first_text += "*annotation:* ";
-    }
-    bool first = true;
+    QString result;
     for (auto para: parent->xmlChildren())
     {
-        if (first)
-            result += write_para(para, classname, links, /*prefix*/prefix_label, first_text, QString());
-        else
-            result += write_para(para, classname, links, /*no prefix*/QString(), QString(), QString());
-        first = false;
+        result += write_para(para, links, QString());
     }
     return result;
 }
@@ -676,7 +647,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         // No pins required
         result += "![" + image_name + "!](" + filename.replace(" ","%20") + ")";
         if (annotation) {
-            result += write_para_children(annotation, "annotation " + class_name, links);
+            result += write_para_children(annotation, links);
         }
         result += "\n";
     }
@@ -703,7 +674,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
         QString temp = filename;
         result += "![" + filename + "!](" + temp.replace(" ","%20") + ")";
         if (annotation) {
-            result += write_para_children(annotation, "annotation " + class_name, links);
+            result += write_para_children(annotation, links);
         }
         result += "\n";
         return result;
@@ -942,7 +913,7 @@ static void dump_children(const QString &from, const GumboNode *parent)
             break;
         }
     }
-    qDebug() << "   write_html:" << from << gumbo_normalized_tagname(parent->v.element.tag) << "has children" << list.join(", ");
+    qDebug() << "   dump_children:" << from << gumbo_normalized_tagname(parent->v.element.tag) << "has children" << list.join(", ");
 }
 #endif
 
@@ -952,10 +923,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 
     // Put the children of the BODY into this frame.
     GumboOutput *output = gumbo_parse(data);
-    if (output == nullptr)
-    {
-        return result;
-    }
+    if (output == nullptr) return result;
 
 #ifdef DUMP_CHILDREN
     dump_children("ROOT", output->root);
@@ -968,19 +936,17 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     dump_children("HEAD", head);
 #endif
 
+    result += "\n---\n\n# " + sntype;
     if (use_fixed_title)
     {
-        result += sntype + "\n---\n\n# " + sntype + "\n";
+        // Nothing else in the header
+        result += "\n";
     }
     else
     {
         const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
-        if (title)
-        {
-            result += sntype.toLower() + "\n---\n\n# " + sntype + ": ";
-            result += output_gumbo_children(title);  // it should only be text
-            result += "\n";
-        }
+        // title should only be text
+        if (title) result += ": " + output_gumbo_children(title) + "\n";
     }
 
     // Maybe we have a CSS that we can put inline.
@@ -1024,17 +990,18 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     {
         // child is either <contents> or <gm_directions> or both
         for (auto gm_directions: snippet->xmlChildren("gm_directions"))
-            result += write_para_children(gm_directions, "gm_directions " + sn_style, links);
+            result += write_para_children(gm_directions, links);
 
         for (auto contents: snippet->xmlChildren("contents"))
-            result += write_para_children(contents, "contents " + sn_style, links);
+            result += write_para_children(contents, links);
     }
     else if (sn_type == "Labeled_Text")
     {
         for (auto contents: snippet->xmlChildren("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            result += write_para_children(contents, "contents " + sn_style, links, /*prefix*/snippet->snippetName());  // has its own 'p'
+            result += hlabel(/*prefix*/snippet->snippetName(), "");
+            result += write_para_children(contents, links);  // has its own 'p'
         }
     }
     else if (sn_type == "Portfolio")
@@ -1065,9 +1032,12 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
                             {
                                 QuaZipFile file(&zip);
                                 if (!file.open(QuaZipFile::ReadOnly))
+                                    qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
+                                else
                                 {
                                     QString temp = write_html(false, sn_type, file.readAll());
                                     if (temp.isEmpty()) qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
+                                    result += temp;
                                 }
                             }
                         }
@@ -1148,10 +1118,12 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         if (date == nullptr) return result;
 
         QString bodytext = date->attribute("display");
+        result += "**" + snippet->snippetName() + "**: " + bodytext;
+
         if (annotation)
-            result += write_para_children(annotation, "annotation " + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            result += write_para_children(annotation, links);
         else
-            result += write_para(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext, QString());
+            result += write_para(snippet, links, QString());
     }
     else if (sn_type == "Date_Range")
     {
@@ -1160,10 +1132,11 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         if (date == nullptr) return result;
 
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
+        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            result += write_para_children(annotation, links);
         else
-            result += write_para(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext, QString());
+            result += write_para(snippet, links, QString());
     }
     else if (sn_type == "Tag_Standard")
     {
@@ -1172,10 +1145,12 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         if (tag == nullptr) return result;
 
         QString bodytext = tag->attribute("tag_name");
+        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
+
         if (annotation)
-            result += write_para_children(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            result += write_para_children(annotation, links);
         else
-            result += write_para(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext, QString());
+            result += write_para(snippet, links, QString());
     }
     else if (sn_type == "Numeric")
     {
@@ -1184,10 +1159,11 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         if (contents == nullptr) return result;
 
         const QString &bodytext = contents->childString();
+        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            result += write_para_children(annotation, links);
         else
-            result += write_para(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext, QString());
+            result += write_para(snippet, links, QString());
 
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -1203,10 +1179,11 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         QString bodytext = values.join("; ");
 
         XmlElement *annotation = snippet->xmlChild("annotation");
+        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, "annotation" + sn_style, links, /*prefix*/snippet->snippetName(), bodytext);
+            result += write_para_children(annotation, links);
         else
-            result += write_para(snippet, sn_style, links, /*prefix*/snippet->snippetName(), bodytext, QString());
+            result += write_para(snippet, links, QString());
     }
     // Hybrid_Tag
 
@@ -1405,7 +1382,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << " |\n\n";
     }
 
-    stream << "# <center>" << topic_names.value(topic) << "</center>\n";
+    stream << "# " << topic_names.value(topic) << "\n";
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1619,7 +1596,6 @@ static void write_category_files(const XmlElement *tree)
             return;
         }
         QTextStream stream(&file);
-        qDebug() << "Category Directory: " << catname;
         stream << "---\n";
         // frontmatter for folder information
         stream << "up:\n  - " << mainPageName << "\n";
