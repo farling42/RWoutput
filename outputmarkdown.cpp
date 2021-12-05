@@ -235,7 +235,9 @@ static const QString write_head_meta(const XmlElement *root_elem)
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     if (details == nullptr) return result;
 
-    result += "**Exported from Realm Works:** " + root_elem->attribute("export_date") + "\n\n";
+    // From "2021-12-04T17:51:29Z" to something readable
+    QDateTime stamp = QDateTime::fromString(root_elem->attribute("export_date"), Qt::ISODate);
+    result += "**Exported from Realm Works:** " + stamp.toString(QLocale::system().dateTimeFormat()) + "\n\n";
 
     result += "**Created By:** RWOutput Tool v" + qApp->applicationVersion() + " on " + imported_date + "\n\n";
 
@@ -249,6 +251,12 @@ static const QString write_head_meta(const XmlElement *root_elem)
 }
 
 
+static QString doEscape(const QString &original)
+{
+    QString result = original;
+    return result.replace("[","\\[");
+}
+
 static QString simple_para_text(XmlElement *p)
 {
     // Collect all spans into a single paragraph (without formatting)
@@ -261,19 +269,14 @@ static QString simple_para_text(XmlElement *p)
         {
             if (child->isFixedString())
             {
-                result.append(child->fixedText());
+                // Escape any explicit square brackets
+                result += doEscape(child->fixedText());
             }
         }
     }
     return result;
 }
 
-
-static QString annotationString(const XmlElement *annotation)
-{
-    //XmlElement *annotation = node->xmlChild("annotation");
-    return annotation ? (" *; " + annotation->xmlChild()->fixedText() + "*") : "";
-}
 
 /**
  * @brief build_tooltip
@@ -414,9 +417,9 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         const QString text = elem->fixedText();
         const QString link_text = links.find(text);
         if (!link_text.isNull())
-            result += internal_link(link_text, text) + " ";  // adjacent links don't have spaces between them!
+            result += internal_link(link_text, doEscape(text)) + " ";  // adjacent links don't have spaces between them!
         else
-            result += text;
+            result += doEscape(text);
     }
     else
     {
