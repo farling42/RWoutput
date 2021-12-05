@@ -3,6 +3,12 @@ Create placeholder note for the category of each top-level topic.
 
 Default option for "Add NAV panel as header" is OFF, to prevent pollution of the Obsidian graph view (Breadcrumb links do not pollute that graph).
 
+Images and other embedded files now have an external link following them using the text of the annotation or "external link" as the label.
+
+Create annotations properly on each line, appearing after a semi-colon.
+
+Tag_Multi_Domain snippets will now contain tags (using #) instead of plain text.
+
 Internally create strings instead of using QTextStream.
 
 # 3.7

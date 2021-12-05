@@ -503,6 +503,17 @@ static const QString write_para_children(XmlElement *parent, const LinkageList &
 }
 
 
+static const QString write_annotation(XmlElement *annotation, const LinkageList &links)
+{
+    static const QString endline("\n");
+    QString result = write_para_children(annotation, links);
+    // Strip leading and trailing line breaks
+    if (result.startsWith(endline)) result = result.mid(endline.length());
+    if (result.endsWith(endline))   result = result.mid(0, result.length() - endline.length());
+    return result;
+}
+
+
 static QString get_elem_string(XmlElement *elem)
 {
     if (!elem) return QString();
@@ -526,8 +537,6 @@ static const QString write_image(const QString &image_name, const QByteArray &or
                        const QString &orig_filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
                        const QString &usemap = QString(), const QList<XmlElement*> pins = QList<XmlElement*>())
 {
-    QString result;
-
     Q_UNUSED(usemap)
     QBuffer buffer;
     QString filename = orig_filename;
@@ -600,6 +609,9 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     file.write (in_buffer ? buffer.data() : orig_data);
     file.close();
 
+    QString result;
+    if (!image_name.isEmpty()) result += "### " + image_name;
+
     if (show_leaflet_pins && !pins.isEmpty())
     {
         int height = image_size.height();
@@ -645,11 +657,12 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     else
     {
         // No pins required
-        result += "![" + image_name + "!](" + filename.replace(" ","%20") + ")";
-        if (annotation) {
-            result += write_para_children(annotation, links);
-        }
-        result += "\n";
+        result += "![" + image_name + "!](" + filename.replace(" ","%20") + ")\n";
+        // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
+        if (annotation)
+            result += "[" + write_annotation(annotation, links) + "](" + filename.replace(" ","%20") + ")\n";
+        else
+            result += "[open outside](" + filename.replace(" ","%20") + ")\n";
     }
 
     return result;
@@ -661,23 +674,29 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
 {
     QString result;
     Q_UNUSED(obj_name)
-        // Write the asset data to an external file
-        QFile file(dirFile(assetsDir, filename));
-        if (!file.open(QFile::WriteOnly))
-        {
-            qWarning() << "writeExtObject: failed to open file for writing:" << filename;
-            return result;
-        }
-        file.write (data);
-        file.close();
-
-        QString temp = filename;
-        result += "![" + filename + "!](" + temp.replace(" ","%20") + ")";
-        if (annotation) {
-            result += write_para_children(annotation, links);
-        }
-        result += "\n";
+    // Write the asset data to an external file
+    QFile file(dirFile(assetsDir, filename));
+    if (!file.open(QFile::WriteOnly))
+    {
+        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
         return result;
+    }
+    file.write (data);
+    file.close();
+
+    if (!obj_name.isEmpty()) result += "### " + obj_name;
+    QString valid_filename = filename;
+    valid_filename.replace(" ","%20");
+
+    result += "![" + filename + "!](" + valid_filename + ")\n";
+
+    // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
+    if (annotation)
+        result += "[" + write_annotation(annotation, links) + "](" + valid_filename + ")\n";
+    else
+        result += "[open outside](" + valid_filename + ")\n";
+
+    return result;
 }
 
 /**
@@ -769,7 +788,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
                         int slash = src.indexOf("/");
                         QString extension = src.mid(slash+1, base64-slash-1);
                         QString filename = QString("gumbodatafile%1.%2").arg(gumbofilenumber++).arg(extension);
-                        result += write_ext_object("anyoldobjectname", buffer, filename, "gumbo", NULL, LinkageList());
+                        result += write_ext_object("", buffer, filename, "gumbo", NULL, LinkageList());
                     }
                 }
                 else
@@ -1121,7 +1140,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         result += "**" + snippet->snippetName() + "**: " + bodytext;
 
         if (annotation)
-            result += write_para_children(annotation, links);
+            result += "; " + write_annotation(annotation, links);
         else
             result += write_para(snippet, links, QString());
     }
@@ -1134,7 +1153,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, links);
+            result += "; " + write_annotation(annotation, links);
         else
             result += write_para(snippet, links, QString());
     }
@@ -1144,11 +1163,13 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         XmlElement *annotation = snippet->xmlChild("annotation");
         if (tag == nullptr) return result;
 
+        // Too many things use Tag_Standard for us to create Obsidian tags from them
+//        QString bodytext = "#" + validTag(tag->attribute("tag_name"));
         QString bodytext = tag->attribute("tag_name");
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
 
         if (annotation)
-            result += write_para_children(annotation, links);
+            result += "; " + write_annotation(annotation, links);
         else
             result += write_para(snippet, links, QString());
     }
@@ -1161,7 +1182,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         const QString &bodytext = contents->childString();
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, links);
+            result += "; " + write_annotation(annotation, links);
         else
             result += write_para(snippet, links, QString());
 
@@ -1174,14 +1195,14 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         QStringList values;
         for (auto tag : tags)
         {
-            values.append(tag->attribute("domain_name") + ":" + tag->attribute("tag_name"));
+            values.append("#" + validTag(tag->attribute("domain_name")) + "/" + validTag(tag->attribute("tag_name")));
         }
-        QString bodytext = values.join("; ");
+        QString bodytext = values.join(", ");
 
         XmlElement *annotation = snippet->xmlChild("annotation");
         result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
         if (annotation)
-            result += write_para_children(annotation, links);
+            result += "; " + write_annotation(annotation, links);
         else
             result += write_para(snippet, links, QString());
     }
