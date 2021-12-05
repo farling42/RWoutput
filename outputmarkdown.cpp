@@ -414,7 +414,7 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         const QString text = elem->fixedText();
         const QString link_text = links.find(text);
         if (!link_text.isNull())
-            result += internal_link(link_text, text);
+            result += internal_link(link_text, text) + " ";  // adjacent links don't have spaces between them!
         else
             result += text;
     }

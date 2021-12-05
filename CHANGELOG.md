@@ -11,6 +11,8 @@ Tag_Multi_Domain snippets will now contain tags (using #) instead of plain text.
 
 Internally create strings instead of using QTextStream.
 
+Note headers no longer have the center HTML tag.
+
 # 3.7
 Display annotations on its own line prefixed by "annotation:" in italics (needs more work).
 
