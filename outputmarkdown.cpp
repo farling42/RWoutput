@@ -60,10 +60,9 @@ static int  max_index_level = 99;
 #undef DUMP_CHILDREN
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
-static QMap<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
-static QMap<QString,XmlElement*> all_topics;
-static QMap<QString,QString> topic_files;   // key=topic_id, value=public_name
-static QMap<const XmlElement*,QString> topic_names;
+static QHash<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
+static QHash<QString,QString> topic_files;   // key=topic_id, value=public_name
+static QHash<const XmlElement*,QString> topic_full_name;
 
 extern QString map_pin_title;
 extern QString map_pin_description;
@@ -93,7 +92,8 @@ static inline const QString validTag(const QString &string)
     // "/" is allowed for nested tags
     QString result = string;
     // First replace is for things like "Region: Geographical", renaming it to just "Region-Geographical" rather than "Region--Geographical"
-    return result.replace(": ","-").replace(QRegExp("[^\\w-]"), "-");
+   // return result.replace(": ","-").replace(QRegExp("[^\\w-]"), "-");
+    return result.replace(QRegExp("[^\\w-]"), "-");
 }
 
 
@@ -115,7 +115,6 @@ static const QString dirFile(const QString &dirname, const QString &filename)
 
 static const QString parentDirName(const XmlElement *topic)
 {
-    // Invalid characters for file include *"/\<>:|?
     XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
     if (parent && parent->objectName() == "topic")
         return parentDirName(parent) + QDir::separator() + topic_files.value(parent->attribute("topic_id"));
@@ -129,7 +128,7 @@ static const QString topicDirFile(const XmlElement *topic)
     // If the topic has children, then create a folder named after this note,
     // and put the note in it.
     // This is a parent topic, so create a folder to hold it.
-    const QString filename = validFilename(topic_files.value(topic->attribute("topic_id")));
+    const QString filename = topic_files.value(topic->attribute("topic_id"));
     if (category_folders)
     {
         return dirFile(validFilename(topic->attribute("category_name")), filename) + ".md";
@@ -137,15 +136,15 @@ static const QString topicDirFile(const XmlElement *topic)
     else
     {
         QString dirname = parentDirName(topic);
-        if (topic->xmlChild("topic"))
-            dirname.append(QDir::separator() + filename);
+        if (topic->xmlChild("topic"))       // has at least one child
+            dirname += QDir::separator() + filename;
         return dirFile(dirname, filename) + ".md";
     }
 }
 
 
 // Sort topics, first by prefix, and then by topic name
-static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
+static bool sort_topics(const XmlElement *left, const XmlElement *right)
 {
     if (sort_by_prefix)
     {
@@ -168,7 +167,7 @@ static bool sort_all_topics(const XmlElement *left, const XmlElement *right)
         }
     }
     // Both have the same prefix
-    return collator.compare(topic_names.value(left), topic_names.value(right)) < 0;
+    return collator.compare(topic_full_name.value(left), topic_full_name.value(right)) < 0;
 }
 
 
@@ -235,7 +234,7 @@ static const QString write_head_meta(const XmlElement *root_elem)
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     if (details == nullptr) return result;
 
-    // From "2021-12-04T17:51:29Z" to something readable
+    // From "2021-12-04T17:51:29Z" (ISO 8601) to something readable
     QDateTime stamp = QDateTime::fromString(root_elem->attribute("export_date"), Qt::ISODate);
     result += "**Exported from Realm Works:** " + stamp.toString(QLocale::system().dateTimeFormat()) + "\n\n";
 
@@ -257,26 +256,6 @@ static QString doEscape(const QString &original)
     return result.replace("[","\\[");
 }
 
-static QString simple_para_text(XmlElement *p)
-{
-    // Collect all spans into a single paragraph (without formatting)
-    // (get all nested spans; we can't use write_span here)
-    QString result;
-    const auto spans = p->findChildren<XmlElement*>("span");
-    for (auto span : spans)
-    {
-        for (auto child : span->xmlChildren())
-        {
-            if (child->isFixedString())
-            {
-                // Escape any explicit square brackets
-                result += doEscape(child->fixedText());
-            }
-        }
-    }
-    return result;
-}
-
 
 /**
  * @brief build_tooltip
@@ -296,111 +275,46 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
         if (description.isEmpty() && gm_directions.isEmpty())
             result = title;
         else
-            result.append(map_pin_title.arg(title));
+            result += map_pin_title.arg(title);
     }
     if (!description.isEmpty())
     {
-        if (!result.isEmpty()) result.append("\n");
-        result.append(map_pin_description.arg(description));
+        if (!result.isEmpty()) result += "\n";
+        result += map_pin_description.arg(description);
     }
     if (!gm_directions.isEmpty())
     {
-        if (!result.isEmpty()) result.append("\n");
-        result.append(map_pin_gm_directions.arg(gm_directions));
+        if (!result.isEmpty()) result += "\n";
+        result += map_pin_gm_directions.arg(gm_directions);
     }
     return result;
 }
 
-/**
- * Read first section from topic.
- *
- * First section - all Multi_Line snippet - contents/gm_directions - p - span
- */
 
-static inline void get_summary(const QString &topic_id, QString &description, QString &gm_directions)
+static QString internal_link(const QString &topic_id, const QString &label = QString())
 {
-    // First section - all Multi_Line snippet - contents/gm_directions - p - span
-    const XmlElement *topic = all_topics.value(topic_id);
-    if (!topic) return;
-
-    const XmlElement *section = topic->xmlChild("section");
-    if (!section) return;
-
-    bool add_desc = description.isEmpty();
-    bool add_gm   = gm_directions.isEmpty();
-    bool first_contents = true;
-    bool first_gm = true;
-    for (auto snippet : section->xmlChildren("snippet"))
-    {
-        if (snippet->attribute("type") != "Multi_Line") continue;
-
-        if (add_desc)
-        {
-            if (XmlElement *contents = snippet->xmlChild("contents"))
-            {
-                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
-                for (auto p : contents->xmlChildren("p"))
-                {
-                    QString text = simple_para_text(p);
-                    if (!text.isEmpty())
-                    {
-                        if (first_contents)
-                            first_contents = false;
-                        else
-                            description.append("\n\n");
-                        description.append(text);
-                    }
-                }
-            }
-        }
-        if (add_gm)
-        {
-            if (XmlElement *gm_dir = snippet->xmlChild("gm_directions"))
-            {
-                // <p class="RWDefault"><span class="RWSnippet">text</span></p>
-                for (auto p : gm_dir->xmlChildren("p"))
-                {
-                    QString text = simple_para_text(p);
-                    if (!text.isEmpty())
-                    {
-                        if (first_gm)
-                            first_gm = false;
-                        else
-                            gm_directions.append("\n\n");
-                        gm_directions.append(text);
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-static QString internal_link(const QString &topic_id, const QString &public_name = QString())
-{
-    QString label      = public_name;
-    QString topic_file = topic_files.value(topic_id);
-    if (topic_file.isEmpty()) topic_file = validFilename(topic_id);
+    QString filename = topic_files.value(topic_id);
+    if (filename.isEmpty()) filename = validFilename(topic_id);
 
     if (obsidian_links)
     {
-        if (public_name.isEmpty() || topic_file == label)
-            return QString("[[%1]]").arg(topic_file);
+        if (label.isEmpty() || filename == label)
+            return QString("[[%1]]").arg(filename);
         else
-            return QString("[[%1|%2]]").arg(topic_file, label);
+            return QString("[[%1|%2]]").arg(filename, label);
     }
     else
     {
-        if (public_name.isEmpty() || topic_file == label)
-            return QString("[%1]").arg(topic_file);
+        if (label.isEmpty() || filename == label)
+            return QString("[%1]").arg(filename);
         else
-            return QString("[%1](%2)").arg(topic_file, label);
+            return QString("[%1](%2)").arg(filename, label);
     }
 }
 
 static QString topic_link(const XmlElement *topic)
 {
-    return internal_link(topic->attribute("topic_id"), topic_names.value(topic));
+    return internal_link(topic->attribute("topic_id"), topic_full_name.value(topic));
 }
 
 static const QString write_span(XmlElement *elem, const LinkageList &links)
@@ -537,7 +451,7 @@ static QString mapCoord(int coord)
  */
 
 static const QString write_image(const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
-                       const QString &orig_filename, const QString &class_name, XmlElement *annotation, const LinkageList &links,
+                       const QString &orig_filename, XmlElement *annotation, const LinkageList &links,
                        const QString &usemap = QString(), const QList<XmlElement*> pins = QList<XmlElement*>())
 {
     Q_UNUSED(usemap)
@@ -673,10 +587,11 @@ static const QString write_image(const QString &image_name, const QByteArray &or
 
 
 static const QString write_ext_object(const QString &obj_name, const QByteArray &data,
-                             const QString &filename, const QString &class_name, XmlElement *annotation, const LinkageList &links)
+                             const QString &filename, XmlElement *annotation, const LinkageList &links)
 {
-    QString result;
     Q_UNUSED(obj_name)
+
+    QString result;
     // Write the asset data to an external file
     QFile file(dirFile(assetsDir, filename));
     if (!file.open(QFile::WriteOnly))
@@ -791,7 +706,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
                         int slash = src.indexOf("/");
                         QString extension = src.mid(slash+1, base64-slash-1);
                         QString filename = QString("gumbodatafile%1.%2").arg(gumbofilenumber++).arg(extension);
-                        result += write_ext_object("", buffer, filename, "gumbo", NULL, LinkageList());
+                        result += write_ext_object("", buffer, filename, nullptr, LinkageList());
                     }
                 }
                 else
@@ -1038,8 +953,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
                 XmlElement *contents = asset->xmlChild("contents");
                 if (contents)
                 {
-                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(),
-                                   filename, sn_style, annotation, links);
+                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
 
                     // Put in markers for statblock
                     QByteArray store = contents->byteData();
@@ -1091,21 +1005,19 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
                     if (sn_type == "Picture")
                     {
                         result += write_image(ext_object->attribute("name"), contents->byteData(),
-                                   /*mask*/nullptr, filename, sn_style, annotation, links);
+                                   /*mask*/nullptr, filename, annotation, links);
                     }
                     else if (filename.endsWith(".html") ||
                              filename.endsWith(".htm")  ||
                              filename.endsWith(".rtf"))
                     {
                         //result += "\n\nDecoded " + filename + "\n";
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(),
-                                       filename, sn_style, annotation, links);
+                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
                         result += write_html(true, sn_type, contents->byteData());
                     }
                     else
                     {
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(),
-                                       filename, sn_style, annotation, links);
+                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
                     }
                 }
             }
@@ -1130,7 +1042,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
             result += write_image(smart_image->attribute("name"), contents->byteData(),
-                        mask, filename, sn_style, annotation, links, usemap, pins);
+                        mask, filename, annotation, links, usemap, pins);
         }
     }
     else if (sn_type == "Date_Game")
@@ -1321,11 +1233,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 #if DUMP_LEVEL > 1
     qDebug() << ".topic" << topic->objectName() << ":" << topic_names.value(topic);
 #endif
-
-    //XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
-    //if (parent && parent->objectName() != "topic") parent = NULL;
     QString category_name = topic->attribute("category_name");
-    QString directory = parent ? topic_names.value(parent) : category_name;
 
     // Create a new file for this topic
     QFile topic_file(topicDirFile(topic));
@@ -1406,7 +1314,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << " |\n\n";
     }
 
-    stream << "# " << topic_names.value(topic) << "\n";
+    stream << "# " << topic_full_name.value(topic) << "\n";
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1430,7 +1338,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     {
         stream << "\n\n---\n## Governed Content\n";
 
-        std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
+        std::sort(child_topics.begin(), child_topics.end(), sort_topics);
         for (auto child: child_topics)
         {
             stream << "- " << topic_link(child) << "\n";
@@ -1475,7 +1383,7 @@ static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int lev
     auto child_topics = topic->xmlChildren("topic");
     if (!child_topics.isEmpty())
     {
-        std::sort(child_topics.begin(), child_topics.end(), sort_all_topics);
+        std::sort(child_topics.begin(), child_topics.end(), sort_topics);
         if (level < max_index_level)
         {
             for (auto child_topic: child_topics)
@@ -1556,7 +1464,7 @@ static void write_separate_index(const XmlElement *root_elem)
 
                 // Organise topics alphabetically
                 auto topics = categories.values(cat);
-                std::sort(topics.begin(), topics.end(), sort_all_topics);
+                std::sort(topics.begin(), topics.end(), sort_topics);
 
                 for (auto topic: topics)
                 {
@@ -1620,12 +1528,17 @@ static void write_category_files(const XmlElement *tree)
             return;
         }
         QTextStream stream(&file);
-        stream << "---\n";
+
+        //
+        // Start of FRONTMATTER
+        //
+        startFile(stream);
+
         // frontmatter for folder information
         stream << "up:\n  - " << mainPageName << "\n";
         stream << "down:\n";
         auto topics = categories.values(catname);
-        std::sort(topics.begin(), topics.end(), sort_all_topics);
+        std::sort(topics.begin(), topics.end(), sort_topics);
         for (auto topic: topics)
         {
             if (topic->attribute("category_name") == catname)
@@ -1697,7 +1610,6 @@ void toMarkdown(const XmlElement *root_elem,
     // get the topic_id of every single topic in the file.
     for (auto topic: root_elem->findChildren<XmlElement*>("topic"))
     {
-        all_topics.insert(topic->attribute("topic_id"), topic);
         // Filename contains the FULL topic name including prefix and suffix
         QString fullname;
         const QString prefix = topic->attribute("prefix");
@@ -1705,7 +1617,9 @@ void toMarkdown(const XmlElement *root_elem,
         if (!prefix.isEmpty()) fullname += prefix + " - ";
         fullname += topic->attribute("public_name");
         if (!suffix.isEmpty()) fullname += " (" + suffix + ")";
-        topic_names.insert(topic, fullname);
+        topic_full_name.insert(topic, fullname);
+        QString vfn = validFilename(fullname);
+        if (vfn != fullname) qWarning() << "Filename (" << vfn << ") different for " << fullname;
         topic_files.insert(topic->attribute("topic_id"), validFilename(fullname));
     }
 
@@ -1725,7 +1639,6 @@ void toMarkdown(const XmlElement *root_elem,
 
     // Tidy up memory
     class_of_style.clear();
-    all_topics.clear();
-    topic_names.clear();
+    topic_full_name.clear();
     topic_files.clear();
 }
