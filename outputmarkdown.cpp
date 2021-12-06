@@ -74,6 +74,8 @@ extern bool show_full_map_pin_tooltip;
 static QString assetsDir("asset-files");
 static QString imported_date;
 static QString mainPageName;
+static const QString newline("\n");
+static const int newlinelen = newline.length();
 
 #define DUMP_LEVEL 0
 
@@ -219,12 +221,8 @@ static const QString write_meta_child(const QString &meta_name, const XmlElement
 {
     QString result;
     XmlElement *child = details->xmlChild(child_name);
-    if (child)
-    {
-        result = "**" + meta_name + ":** " + child->childString() + "\n\n";
-    }
-    return result;
-
+    if (!child) return "";
+    return "**" + meta_name + ":** " + child->childString() + "\n\n";
 }
 
 static const QString write_head_meta(const XmlElement *root_elem)
@@ -279,12 +277,12 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
     }
     if (!description.isEmpty())
     {
-        if (!result.isEmpty()) result += "\n";
+        if (!result.isEmpty()) result += newline;
         result += map_pin_description.arg(description);
     }
     if (!gm_directions.isEmpty())
     {
-        if (!result.isEmpty()) result += "\n";
+        if (!result.isEmpty()) result += newline;
         result += map_pin_gm_directions.arg(gm_directions);
     }
     return result;
@@ -348,9 +346,9 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
 }
 
 
-static const QString hlabel(const QString &label, const QString &text)
+static const QString hlabel(const QString &label)
 {
-    return "**" + label + "**: " + text;
+    return "**" + label + "**: ";
 }
 
 
@@ -368,8 +366,10 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
 
     bool close = false;
     QString sntype = elem->objectName();
-    if (sntype == "snippet" || sntype == "p")
-        result += "\n";
+    if (sntype == "snippet")
+        ;
+    else if (sntype == "p")
+        result += newline;
     else if (sntype == "ul")
         listtype = "\n- ";
     else if (sntype == "ol")
@@ -398,7 +398,7 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
     }
     // Anything to put AFTER the child elements?
     if (sntype == "snippet" || sntype == "p" || sntype == "ul" || sntype == "ol")
-        result += "\n";
+        result += newline;
     else if (close)
         result += "</" + elem->objectName() + ">";
 
@@ -412,22 +412,12 @@ static const QString write_para_children(XmlElement *parent, const LinkageList &
     qDebug() << "...write para-children";
 #endif
     QString result;
-    for (auto para: parent->xmlChildren())
+    for (auto child: parent->xmlChildren())
     {
-        result += write_para(para, links, QString());
+        result += write_para(child, links, QString());
     }
-    return result;
-}
-
-
-static const QString write_annotation(XmlElement *annotation, const LinkageList &links)
-{
-    static const QString endline("\n");
-    QString result = write_para_children(annotation, links);
-    // Strip leading and trailing line breaks
-    if (result.startsWith(endline)) result = result.mid(endline.length());
-    if (result.endsWith(endline))   result = result.mid(0, result.length() - endline.length());
-    return result;
+    // Remove leading/trailing white space, which includes line breaks
+    return result.trimmed();
 }
 
 
@@ -451,7 +441,7 @@ static QString mapCoord(int coord)
  */
 
 static const QString write_image(const QString &image_name, const QByteArray &orig_data, XmlElement *mask_elem,
-                       const QString &orig_filename, XmlElement *annotation, const LinkageList &links,
+                       const QString &orig_filename, const QString &annotation,
                        const QString &usemap = QString(), const QList<XmlElement*> pins = QList<XmlElement*>())
 {
     Q_UNUSED(usemap)
@@ -534,7 +524,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         int height = image_size.height();
         // The leaflet plugin for Obsidian uses latitude/longitude, so (y,x)
         result += "\n```leaflet\n";
-        result += "id: " + image_name + "\n";
+        result += "id: " + image_name + newline;
         result += "image: [[" + filename + "]]\n";
         if (height > 1500) result += "height: " + mapCoord(height * 2) + "px\n";   // double the scaled height seems to work
         result += "draw: false\n";
@@ -567,7 +557,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
                 result += internal_link(link);
                 //if (tooltip != link_name) result += ", \"" + tooltip.replace("\"","'") + "\"";
             }
-            result += "\n";
+            result += newline;
         }
         result += "```\n";
     }
@@ -576,8 +566,8 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         // No pins required
         result += "![" + image_name + "!](" + filename.replace(" ","%20") + ")\n";
         // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-        if (annotation)
-            result += "[" + write_annotation(annotation, links) + "](" + filename.replace(" ","%20") + ")\n";
+        if (!annotation.isEmpty())
+            result += "[" + annotation + "](" + filename.replace(" ","%20") + ")\n";
         else
             result += "[open outside](" + filename.replace(" ","%20") + ")\n";
     }
@@ -586,8 +576,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
 }
 
 
-static const QString write_ext_object(const QString &obj_name, const QByteArray &data,
-                             const QString &filename, XmlElement *annotation, const LinkageList &links)
+static const QString write_ext_object(const QString &obj_name, const QByteArray &data, const QString &filename, const QString &annotation)
 {
     Q_UNUSED(obj_name)
 
@@ -609,13 +598,43 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     result += "![" + filename + "!](" + valid_filename + ")\n";
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-    if (annotation)
-        result += "[" + write_annotation(annotation, links) + "](" + valid_filename + ")\n";
+    if (!annotation.isEmpty())
+        result += "[" + annotation + "](" + valid_filename + ")\n";
     else
         result += "[open outside](" + valid_filename + ")\n";
 
     return result;
 }
+
+
+static const QString getTags(const XmlElement *node, bool wrapped=true)
+{
+    auto tag_nodes = node->xmlChildren("tag_assign");
+    if (tag_nodes.length() == 0) return "";
+
+    QStringList tags;
+    for (auto tag : tag_nodes)
+    {
+        QString tag_name    = tag->attribute("tag_name");
+        QString domain_name = tag->attribute("domain_name");
+        // Don't include:
+        //   Export/<any tag>  <- always present on every single topic during export.
+        //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
+        if (!domain_name.isEmpty() &&
+            domain_name != "Export" &&
+            (domain_name != "Utility" || tag_name != "Empty)"))
+        {
+            tags.append("#" + validTag(domain_name) + "/" + validTag(tag_name));
+        }
+    }
+    if (tags.length() == 0)
+        return "";
+    else if (wrapped)
+        return tags.join(" ") + newline;
+    else
+        return tags.join(" ");
+}
+
 
 /**
  * @brief output_gumbo_children
@@ -659,7 +678,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
 #if 1
             // See what to put before the text
             if (tag == "p")
-                result += "\n";
+                result += newline;
             else if (tag == "br")
                 result += "\n\n";
             else if (tag == "b")
@@ -706,7 +725,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
                         int slash = src.indexOf("/");
                         QString extension = src.mid(slash+1, base64-slash-1);
                         QString filename = QString("gumbodatafile%1.%2").arg(gumbofilenumber++).arg(extension);
-                        result += write_ext_object("", buffer, filename, nullptr, LinkageList());
+                        result += write_ext_object("", buffer, filename, /*annotation*/ QString());
                     }
                 }
                 else
@@ -722,7 +741,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
 #ifndef GUMBO_TABLE
             // Table support - just use normal HTML
             else if (tag == "tr")
-                result += "\n";
+                result += newline;
             else if (tag == "td")
                 result += "|";
             else if (tag == "table" || tag == "tbody")
@@ -756,7 +775,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
 
             // Now, see if we need to terminate this node
             if (tag == "p")
-                result += "\n";
+                result += newline;
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
@@ -774,7 +793,7 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
             else if (tag == "tr" || tag == "table" || tag == "tbody")
                 ;
             else if (tag == "td")
-                result += "\n";    // normally the end of a row
+                result += newline;    // normally the end of a row
 #else
 #ifndef GUMBO_TABLE
             else if (tag == "tr")
@@ -877,13 +896,13 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     if (use_fixed_title)
     {
         // Nothing else in the header
-        result += "\n";
+        result += newline;
     }
     else
     {
         const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
         // title should only be text
-        if (title) result += ": " + output_gumbo_children(title) + "\n";
+        if (title) result += ": " + output_gumbo_children(title) + newline;
     }
 
     // Maybe we have a CSS that we can put inline.
@@ -914,6 +933,20 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 }
 
 
+static inline const QString annotationText(XmlElement *snippet, const LinkageList &links, bool wrapped = true)
+{
+    XmlElement *annotation = snippet->xmlChild("annotation");
+    if (!annotation) return "";
+
+    // Remove newline from either end of paragraph
+    QString result = write_para_children(annotation, links);
+    if (!wrapped)
+        return result;
+    else
+        return " ; " + result;
+}
+
+
 static const QString write_snippet(XmlElement *snippet, const LinkageList &links)
 {
     QString result;
@@ -926,34 +959,39 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     if (sn_type == "Multi_Line")
     {
         // child is either <contents> or <gm_directions> or both
-        for (auto gm_directions: snippet->xmlChildren("gm_directions"))
+        if (auto gm_directions = snippet->xmlChild("gm_directions"))
             result += write_para_children(gm_directions, links);
 
-        for (auto contents: snippet->xmlChildren("contents"))
+        if (auto contents = snippet->xmlChild("contents"))
             result += write_para_children(contents, links);
+
+        // Multi_Line has no annotation
+        result += newline + getTags(snippet) + newline;
     }
     else if (sn_type == "Labeled_Text")
     {
-        for (auto contents: snippet->xmlChildren("contents"))
+        if (auto contents = snippet->xmlChild("contents"))
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            result += hlabel(/*prefix*/snippet->snippetName(), "");
-            result += write_para_children(contents, links);  // has its own 'p'
+            // Remove newline from either end of paragraph
+            result += hlabel(snippet->snippetName()) + write_para_children(contents, links);  // has its own 'p'
         }
+        // Labeled_Text has no annotation
+        result += newline + getTags(snippet) + newline;
     }
     else if (sn_type == "Portfolio")
     {
         // As for other EXT OBJECTS, but with unzipping involved to get statblocks
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        for (auto ext_object: snippet->xmlChildren("ext_object"))
+        if (auto ext_object = snippet->xmlChild("ext_object"))
         {
-            for (auto asset: ext_object->xmlChildren("asset"))
+            if (auto asset = ext_object->xmlChild("asset"))
             {
                 QString filename = asset->attribute("filename");
                 XmlElement *contents = asset->xmlChild("contents");
                 if (contents)
                 {
-                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
+                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotationText(snippet, links, false));
+                    result += getTags(snippet) + newline;
 
                     // Put in markers for statblock
                     QByteArray store = contents->byteData();
@@ -993,41 +1031,38 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         // TODO: if filename ends with .html then we can put it inline.
 
         // ext_object child, asset grand-child
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        for (auto ext_object: snippet->xmlChildren("ext_object"))
+        if (auto ext_object = snippet->xmlChild("ext_object"))
         {
-            for (auto asset: ext_object->xmlChildren("asset"))
+            if (auto asset = ext_object->xmlChild("asset"))
             {
-                QString filename = asset->attribute("filename");
-                XmlElement *contents = asset->xmlChild("contents");
-                if (contents)
+                if (auto contents = asset->xmlChild("contents"))
                 {
+                    QString filename = asset->attribute("filename");
+                    auto annotation = annotationText(snippet, links, false);
                     if (sn_type == "Picture")
                     {
-                        result += write_image(ext_object->attribute("name"), contents->byteData(),
-                                   /*mask*/nullptr, filename, annotation, links);
+                        result += write_image(ext_object->attribute("name"), contents->byteData(), /*mask*/nullptr, filename, annotation);
                     }
                     else if (filename.endsWith(".html") ||
                              filename.endsWith(".htm")  ||
                              filename.endsWith(".rtf"))
                     {
-                        //result += "\n\nDecoded " + filename + "\n";
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
+                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation);
                         result += write_html(true, sn_type, contents->byteData());
                     }
                     else
                     {
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation, links);
+                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation);
                     }
+                    result += getTags(snippet) + newline;
                 }
             }
         }
     }
     else if (sn_type == "Smart_Image")
     {
-        XmlElement *annotation = snippet->xmlChild("annotation");
         // ext_object child, asset grand-child
-        for (auto smart_image: snippet->xmlChildren("smart_image"))
+        if (auto smart_image = snippet->xmlChild("smart_image"))
         {
             XmlElement *asset = smart_image->xmlChild("asset");
             XmlElement *mask  = smart_image->xmlChild("subset_mask");
@@ -1041,85 +1076,54 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            result += write_image(smart_image->attribute("name"), contents->byteData(),
-                        mask, filename, annotation, links, usemap, pins);
+            result += write_image(smart_image->attribute("name"), contents->byteData(), mask, filename, annotationText(snippet, links, false), usemap, pins);
         }
+        result += newline + getTags(snippet) + newline;
     }
     else if (sn_type == "Date_Game")
     {
-        XmlElement *date       = snippet->xmlChild("game_date");
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        if (date == nullptr) return result;
-
-        QString bodytext = date->attribute("display");
-        result += "**" + snippet->snippetName() + "**: " + bodytext;
-
-        if (annotation)
-            result += " ; " + write_annotation(annotation, links) + "\n\n";
-        else
-            result += write_para(snippet, links, QString());
+        if (auto date = snippet->xmlChild("game_date"))
+        {
+            result += "**" + snippet->snippetName() + "**: " + date->attribute("display");
+            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+        }
     }
     else if (sn_type == "Date_Range")
     {
-        XmlElement *date       = snippet->xmlChild("date_range");
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        if (date == nullptr) return result;
-
-        QString bodytext = "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
-        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
-        if (annotation)
-            result += " ; " + write_annotation(annotation, links) + "\n\n";
-        else
-            result += write_para(snippet, links, QString());
+        if (auto date = snippet->xmlChild("date_range"))
+        {
+            result += hlabel(snippet->snippetName()) + "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
+            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+        }
     }
     else if (sn_type == "Tag_Standard")
     {
-        XmlElement *tag        = snippet->xmlChild("tag_assign");
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        if (tag == nullptr) return result;
-
-        // Too many things use Tag_Standard for us to create Obsidian tags from them
-//        QString bodytext = "#" + validTag(tag->attribute("tag_name"));
-        QString bodytext = tag->attribute("tag_name");
-        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
-
-        if (annotation)
-            result += " ; " + write_annotation(annotation, links) + "\n\n";
-        else
-            result += write_para(snippet, links, QString());
+        QStringList tags;
+        for (auto tag: snippet->xmlChildren("tag_assign"))
+            tags.append(tag->attribute("tag_name"));
+        if (tags.length() > 0)
+        {
+            // In non-tag text before showing all connected tags
+            result += hlabel(snippet->snippetName()) + tags.join(", ");
+            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+        }
     }
     else if (sn_type == "Numeric")
     {
-        XmlElement *contents   = snippet->xmlChild("contents");
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        if (contents == nullptr) return result;
-
-        const QString &bodytext = contents->childString();
-        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
-        if (annotation)
-            result += " ; " + write_annotation(annotation, links) + "\n\n";
-        else
-            result += write_para(snippet, links, QString());
-
+        if (auto contents = snippet->xmlChild("contents"))
+        {
+            result += hlabel(snippet->snippetName()) + contents->childString();
+            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+        }
     }
     else if (sn_type == "Tag_Multi_Domain")
     {
-        QList<XmlElement*> tags = snippet->xmlChildren("tag_assign");
-        if (tags.isEmpty()) return result;
-
-        QStringList values;
-        for (auto tag : tags)
+        QString tags = getTags(snippet, /*wrapped*/false);   // tags will be on the same line as this snippet
+        if (!tags.isEmpty())
         {
-            values.append("#" + validTag(tag->attribute("domain_name")) + "/" + validTag(tag->attribute("tag_name")));
+            result += hlabel(snippet->snippetName()) + tags;
+            result += annotationText(snippet, links) + newline + newline;
         }
-        QString bodytext = values.join(", ");
-
-        XmlElement *annotation = snippet->xmlChild("annotation");
-        result += hlabel(/*prefix*/snippet->snippetName(), bodytext);
-        if (annotation)
-            result += " ; " + write_annotation(annotation, links) + "\n\n";
-        else
-            result += write_para(snippet, links, QString());
     }
     // Hybrid_Tag
 
@@ -1135,7 +1139,7 @@ static const QString write_section(XmlElement *section, const LinkageList &links
 #endif
 
     // Start with HEADER for the section (H1 used for topic title)
-    result += "\n" + QString(level+1,'#') + ' ' + section->attribute("name") + "\n";
+    result += newline + QString(level+1,'#') + ' ' + section->attribute("name") + newline;
 
     // Write snippets
     for (auto snippet: section->xmlChildren("snippet"))
@@ -1161,7 +1165,7 @@ static void startFile(QTextStream &stream)
 
     // The first part of the FRONTMATTER
     stream << "---\n";
-    stream << "ImportedOn: " << imported_date << "\n";
+    stream << "ImportedOn: " << imported_date << newline;
 
 }
 
@@ -1259,26 +1263,26 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "Aliases:\n";
         for (auto alias : aliases)
         {
-            stream << "  - " << alias->attribute("name") << "\n";
+            stream << "  - " << alias->attribute("name") << newline;
         }
     }
-    stream << "Tags: Category/" << validTag(category_name) << "\n";
+    stream << "Tags: Category/" << validTag(category_name) << newline;
 
     if (parent) {
         // Don't tell Breadcrumbs about the main page!
         QString link = (parent->objectName() == "topic") ? topic_files.value(parent->attribute("topic_id")) : validFilename(category_name);
-        stream << "parent:\n  - " << link << "\nup:\n  - " << link << "\n";
+        stream << "parent:\n  - " << link << "\nup:\n  - " << link << newline;
     }
     if (prev)
     {
         QString link = topic_files.value(prev->attribute("topic_id"));
-        stream << "prev:\n  - " << link << "\n";
+        stream << "prev:\n  - " << link << newline;
     }
     if (next)
     {
         QString link = topic_files.value(next->attribute("topic_id"));
-        stream << "next:\n  - " << link << "\n";
-        //stream << "same:\n  - " << link << "\n";
+        stream << "next:\n  - " << link << newline;
+        //stream << "same:\n  - " << link << newline;
     }
     const auto children = topic->xmlChildren("topic");
     if (children.length() > 0)
@@ -1286,16 +1290,16 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "down:\n";
         for (auto child: topic->xmlChildren("topic"))
         {
-            stream << "  - " << topic_files.value(child->attribute("topic_id")) << "\n";
+            stream << "  - " << topic_files.value(child->attribute("topic_id")) << newline;
         }
     }
-    stream << "RWtopicId: " << topic->attribute("topic_id") << "\n";
+    stream << "RWtopicId: " << topic->attribute("topic_id") << newline;
 
     // Connections
     for (auto child : topic->xmlChildren("connection"))
     {
         // Remove spaces from tag
-        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id"), child->attribute("target_name")) << "\n";
+        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id"), child->attribute("target_name")) << newline;
     }
     stream << "---\n";
 
@@ -1314,7 +1318,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << " |\n\n";
     }
 
-    stream << "# " << topic_full_name.value(topic) << "\n";
+    stream << "# " << topic_full_name.value(topic) << newline;
 
     // Process <linkage> first, to ensure we can remap strings
     LinkageList links;
@@ -1341,7 +1345,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         std::sort(child_topics.begin(), child_topics.end(), sort_topics);
         for (auto child: child_topics)
         {
-            stream << "- " << topic_link(child) << "\n";
+            stream << "- " << topic_link(child) << newline;
         }
     }
 
@@ -1355,8 +1359,15 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
             XmlElement *annot = connection->xmlChild("annotation");
             if (annot) stream << " ; " << annot->xmlChild()->fixedText();
-            stream << "\n";
+            stream << newline;
         }
+    }
+
+    // If any tags are defined at the topic level, then add them now
+    QString topic_tags = getTags(topic, /*wrapped*/ false);
+    if (topic_tags.length() > 0)
+    {
+        stream << "\n\n---\n## Tags\n" << topic_tags << newline;
     }
 
     if (show_nav_panel && !nav_at_start)
@@ -1378,7 +1389,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 
 static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int level)
 {
-    stream << QString(level * 2, ' ') << "- " << topic_link(topic) << "\n";
+    stream << QString(level * 2, ' ') << "- " << topic_link(topic) << newline;
 
     auto child_topics = topic->xmlChildren("topic");
     if (!child_topics.isEmpty())
@@ -1460,7 +1471,7 @@ static void write_separate_index(const XmlElement *root_elem)
 
             for (auto cat : unique_keys)
             {
-                stream << "# " << internal_link(cat) << "\n";
+                stream << "# " << internal_link(cat) << newline;
 
                 // Organise topics alphabetically
                 auto topics = categories.values(cat);
@@ -1535,7 +1546,7 @@ static void write_category_files(const XmlElement *tree)
         startFile(stream);
 
         // frontmatter for folder information
-        stream << "up:\n  - " << mainPageName << "\n";
+        stream << "up:\n  - " << mainPageName << newline;
         stream << "down:\n";
         auto topics = categories.values(catname);
         std::sort(topics.begin(), topics.end(), sort_topics);
@@ -1543,16 +1554,16 @@ static void write_category_files(const XmlElement *tree)
         {
             if (topic->attribute("category_name") == catname)
             {
-                stream << "  - " << topic_files.value(topic->attribute("topic_id")) << "\n";
+                stream << "  - " << topic_files.value(topic->attribute("topic_id")) << newline;
             }
         }
         stream << "same:\n";
         foreach (const QString other_cat, category_names)
         {
-            if (other_cat != catname) stream << "  - " << validFilename(other_cat) << "\n";
+            if (other_cat != catname) stream << "  - " << validFilename(other_cat) << newline;
         }
         stream << "---\n";
-        stream << "# " << catname << "\n";
+        stream << "# " << catname << newline;
         file.close();
     }
 }

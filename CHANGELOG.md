@@ -1,3 +1,13 @@
+# 3.9
+Tags are now also created from Tag_Standard snippets (placed on the following line).
+
+All tags on a Tag_Standard snippet are now created (rather than only the first).
+
+All tags manually added to snippets and/or topics are created (except the automatic Export/<name> and Utility/Empty tags).
+
+# 3.8.1
+Fix an issue with the category notes not being created as UTF-8 files.
+
 # 3.8
 Create placeholder note for the category of each top-level topic.
 
