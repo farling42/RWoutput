@@ -1,3 +1,10 @@
+# 3.11
+Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
+
+The handling includes bold, italic, strikethrough, underline, superscript, subscript: 
+- Internal links will work with bold, italic, and strikethrough.
+- Internal links will not work if inside underline, superscript or subscript text.
+
 # 3.10
 Attempt to decode tables into markdown format (so that links will work) - tables inside HL portfolio files and statblocks remain as HTML.
 

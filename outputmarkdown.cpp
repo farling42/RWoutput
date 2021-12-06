@@ -314,12 +314,182 @@ static QString topic_link(const XmlElement *topic)
     return internal_link(topic->attribute("topic_id"), topic_full_name.value(topic));
 }
 
+/*
+ * Text enhancements
+ */
+struct TextStyles {
+    TextStyles(const XmlElement *elem);
+    TextStyles(const QString &details) { decode(details); };
+    TextStyles() {};
+    bool bold=false;
+    bool italic=false;
+    bool strikethrough=false;
+    bool underline=false;
+    bool superscript=false;
+    bool subscript=false;
+    const QString start() const;
+    const QString finish() const;
+    const QString toString() const;
+    bool isEmpty() const { return is_empty; };
+private:
+    void decode(const QString&);
+    bool is_empty;
+};
+typedef QHash<QString,TextStyles> GumboStyles;
+
+TextStyles::TextStyles(const XmlElement *elem)
+{
+    if (elem->objectName() == "sup") superscript = true;
+    if (elem->objectName() == "sub") subscript   = true;
+    decode(elem->attribute("style"));
+}
+
+const QString TextStyles::toString() const
+{
+    QStringList result;
+    if (bold) result.append("bold");
+    if (italic) result.append("italic");
+    if (strikethrough) result.append("strikethrough");
+    if (underline) result.append("underline");
+    if (superscript) result.append("superscript");
+    if (subscript) result.append("subscript");
+    return result.join(",");
+}
+
+GumboStyles getStyles(const GumboNode *node)
+{
+    GumboStyles result;
+    if (!node) return result;
+    // Check the attribute type="text/css"
+    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+    bool found=false;
+    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
+    {
+        const GumboAttribute *attr = *attributes++;
+        if (QString(attr->name)  == "type" &&
+            QString(attr->value) == "text/css") {
+            found=true;
+            break;
+        }
+    }
+    qDebug() << "TextStyles(Gumbo): with " << node->v.element.attributes.length << " attributes, found text/css = " << found;
+    if (!found) return result;
+
+    QString string;
+    GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
+    for (unsigned count = node->v.element.children.length; count > 0; --count)
+    {
+        const GumboNode *node = *children++;
+        if (node->type == GUMBO_NODE_TEXT)
+        {
+            // each line is of the form:
+            // .cs1157FFE2{text-align:right;text-indent:0pt;margin:0pt 0pt 0pt 0pt}
+            QString body(node->v.text.text);
+            for (const QString &line : body.trimmed().split("\n"))
+            {
+                // remove trailing "}"
+                QStringList parts = line.mid(0,line.length()-1).trimmed().split("{");
+                if (parts.length() != 2) {
+                    qWarning() << "Invalid syntax in GUMBO style: line";
+                }
+                TextStyles style(parts.last());
+                if (!style.isEmpty())
+                {
+                    result.insert(parts.first().mid(1), style);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+void TextStyles::decode(const QString &style)
+{
+    for (auto part : style.split(";"))
+    {
+        const auto bits = part.split(":");
+        if (bits.length() != 2) continue;
+        const auto values = bits.last().split(" ");
+        const auto attr = bits.first();
+        if (attr == "font-weight")
+        {
+            for (auto value : values)
+            {
+                if (value == "bold") bold = true;
+                else qWarning() << "Unknown element in font-weight: " << value;
+            }
+        }
+        else if (attr == "font-style")
+        {
+            // normal|italic|oblique|initial|inherit
+            for (auto value : values)
+            {
+                if (value == "italic") italic = true;
+                else qWarning() << "Unknown element in font-style: " << value;
+            }
+        }
+        else if (attr == "text-decoration" || attr == "text-decoration-style")
+        {
+            // solid|double|dotted|dashed|wavy|initial|inherit
+            for (auto value : values)
+            {
+                if      (value == "line-through") strikethrough = true;
+                else if (value == "underline")    underline = true;
+                else if (value == "none") ;
+                else qWarning() << "Unknown element in text-decoration: " << value;
+            }
+        }
+        else if (attr != "color" &&
+                 attr != "font-family" &&
+                 attr != "background-color" &&
+                 attr != "font-size")
+        {
+            qWarning() << "Unknown element of style: " << bits.first();
+        }
+    }
+    is_empty = !(bold||italic||strikethrough||underline||superscript||subscript);
+}
+
+const QString TextStyles::start() const
+{
+    QString result;
+    if (italic)        result += "*";
+    if (bold)          result += "**";
+    if (strikethrough) result += "~~";
+    if (underline)     result += "<u>";
+    if (superscript)   result += "<sup>";
+    if (subscript)     result += "<sub>";
+    return result;
+}
+
+const QString TextStyles::finish() const
+{
+    // reverse order of startStyle
+    QString result;
+    if (subscript)     result += "</sub>";
+    if (superscript)   result += "</sup>";
+    if (underline)     result += "</u>";
+    if (strikethrough) result += "~~";
+    if (bold)          result += "**";
+    if (italic)        result += "*";
+    return result;
+}
+
+
 static const QString write_span(XmlElement *elem, const LinkageList &links)
 {
     QString result;
 #if DEBUG_LEVEL > 5
     qDebug() << "....span";
 #endif
+
+    //QString cls = elem->attribute("class");
+    //if (!cls.isEmpty() & !cls.startsWith("RW")) qWarning() << elem->objectName() << " has class " << cls;
+    //QString dstyle = elem->attribute("style");
+    //if (!dstyle.isEmpty()) qWarning() << elem->objectName() << " has style " << dstyle;
+
+    TextStyles style(elem);
 
     if (elem->isFixedString())
     {
@@ -334,12 +504,14 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
     }
     else
     {
+        result += style.start();
         // Only put in span if we really require it
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
         {
             result += write_span(child, links);
         }
+        result += style.finish();
     }
     return result;
 }
@@ -452,6 +624,12 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
 #if DEBUG_LEVEL > 5
     qDebug() << "....paragraph";
 #endif
+
+    //QString cls = elem->attribute("class");
+    //if (!cls.isEmpty() & !cls.startsWith("RW")) qWarning() << elem->objectName() << " has class " << cls;
+    //QString style = elem->attribute("style");
+    //if (!style.isEmpty()) qWarning() << elem->objectName() << " has style " << style;
+
     if (elem->isFixedString())
     {
         return write_span(elem, links);
@@ -743,6 +921,34 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
 }
 
 
+static const QString getAttribute(const GumboNode *node, const QString &name)
+{
+    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
+    {
+        const GumboAttribute *attr = *attributes++;
+        if (name == attr->name) return attr->value;
+    }
+    return QString();
+}
+
+static const QString startGumboStyle(const GumboNode *node, const GumboStyles &styles)
+{
+    const QString cls = getAttribute(node, "class");
+    if (cls.isEmpty()) return QString();
+    //qDebug() << "Applying GUMBO style " << cls << ":" << styles[cls].toString();
+    return styles[cls].start();
+}
+
+static const QString finishGumboStyle(const GumboNode *node, const GumboStyles &styles)
+{
+    const QString cls = getAttribute(node, "class");
+    if (cls.isEmpty()) return QString();
+    //qDebug() << "Removing GUMBO style " << cls << ":" << styles[cls].toString();
+    return styles[cls].finish();
+}
+
+
 /**
  * @brief output_gumbo_children
  * Takes the GUMBO tree and calls the relevant methods of QTextStream
@@ -750,7 +956,7 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
  * @param node
  */
 
-static const QString output_gumbo_children(const GumboNode *parent, bool top=false)
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, bool top=false)
 {
     QString result;
     Q_UNUSED(top)
@@ -785,7 +991,9 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
 #if 1
             // See what to put before the text
             if (tag == "p")
-                result += newline;
+            {
+                result += newline + startGumboStyle(node, styles);
+            }
             else if (tag == "br")
                 result += "\n\n";
             else if (tag == "b")
@@ -856,7 +1064,10 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
 #endif
 #endif
             else if (tag == "span")
+            {
                 ;  // do nothing with spans (we might need to get any style from it
+                result += startGumboStyle(node, styles);
+            }
             else if (tag == "sup" || tag == "sub") {
                 result += "<" + tag + ">";
                 close=true;
@@ -878,11 +1089,13 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
                 stream->writeAttribute(attr->name, attr->value);
             }
 #endif
-            result += output_gumbo_children(node);
+            result += output_gumbo_children(node, styles);
 
             // Now, see if we need to terminate this node
             if (tag == "p")
-                result += newline;
+            {
+                result += finishGumboStyle(node,styles) + newline;
+            }
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
@@ -895,7 +1108,9 @@ static const QString output_gumbo_children(const GumboNode *parent, bool top=fal
                 term_img = false;
             }
             else if (tag == "span")
-                ;  // ignore span
+            {
+                result += finishGumboStyle(node,styles);
+            }
 #ifdef IGNORE_GUMBO_TABLE
             else if (tag == "tr" || tag == "table" || tag == "tbody")
                 ;
@@ -999,6 +1214,10 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     dump_children("HEAD", head);
 #endif
 
+    // Read styles which are used in the statblock
+    const GumboNode *style = head ? find_named_child(head, "style") : nullptr;
+    GumboStyles styles = getStyles(style);
+
     result += "\n---\n\n# " + sntype;
     if (use_fixed_title)
     {
@@ -1009,7 +1228,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     {
         const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
         // title should only be text
-        if (title) result += ": " + output_gumbo_children(title) + newline;
+        if (title) result += ": " + output_gumbo_children(title, styles) + newline;
     }
 
     // Maybe we have a CSS that we can put inline.
@@ -1022,7 +1241,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     if (style)
     {
         result += "\n```\ngumbo-style: {";
-        result += output_gumbo_children(style);  // it should only be text
+        result += output_gumbo_children(style, styles);  // it should only be text
         result += "}\n```\n\n";
     }
 #endif
@@ -1031,7 +1250,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 #ifdef DUMP_CHILDREN
         dump_children("BODY", body);
 #endif
-        result += output_gumbo_children(body, /*top*/true);
+        result += output_gumbo_children(body, styles, /*top*/true);
     }
 
     // Get GUMBO to release all the memory
