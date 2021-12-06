@@ -1,4 +1,4 @@
-# 3.11
+# 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
 
 The handling includes bold, italic, strikethrough, underline, superscript, subscript: 
