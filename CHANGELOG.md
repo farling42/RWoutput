@@ -5,6 +5,8 @@ The handling includes bold, italic, strikethrough, underline, superscript, subsc
 - Internal links will work with bold, italic, and strikethrough.
 - Internal links will not work if inside underline, superscript or subscript text.
 
+It is possible that text containing multiple changes of text style adjacent to each other might not be converted properly.
+
 # 3.10
 Attempt to decode tables into markdown format (so that links will work) - tables inside HL portfolio files and statblocks remain as HTML.
 

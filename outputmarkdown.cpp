@@ -314,6 +314,18 @@ static QString topic_link(const XmlElement *topic)
     return internal_link(topic->attribute("topic_id"), topic_full_name.value(topic));
 }
 
+static const QString getGumboAttribute(const GumboNode *node, const QString &name)
+{
+    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
+    {
+        const GumboAttribute *attr = *attributes++;
+        if (name == attr->name) return attr->value;
+    }
+    return QString();
+}
+
+
 /*
  * Text enhancements
  */
@@ -361,19 +373,7 @@ GumboStyles getStyles(const GumboNode *node)
     GumboStyles result;
     if (!node) return result;
     // Check the attribute type="text/css"
-    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-    bool found=false;
-    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
-    {
-        const GumboAttribute *attr = *attributes++;
-        if (QString(attr->name)  == "type" &&
-            QString(attr->value) == "text/css") {
-            found=true;
-            break;
-        }
-    }
-    qDebug() << "TextStyles(Gumbo): with " << node->v.element.attributes.length << " attributes, found text/css = " << found;
-    if (!found) return result;
+    if (getGumboAttribute(node, "type") != "text/css") return result;
 
     QString string;
     GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
@@ -921,20 +921,9 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
 }
 
 
-static const QString getAttribute(const GumboNode *node, const QString &name)
-{
-    GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-    for (unsigned count = node->v.element.attributes.length; count > 0; --count)
-    {
-        const GumboAttribute *attr = *attributes++;
-        if (name == attr->name) return attr->value;
-    }
-    return QString();
-}
-
 static const QString startGumboStyle(const GumboNode *node, const GumboStyles &styles)
 {
-    const QString cls = getAttribute(node, "class");
+    const QString cls = getGumboAttribute(node, "class");
     if (cls.isEmpty()) return QString();
     //qDebug() << "Applying GUMBO style " << cls << ":" << styles[cls].toString();
     return styles[cls].start();
@@ -942,7 +931,7 @@ static const QString startGumboStyle(const GumboNode *node, const GumboStyles &s
 
 static const QString finishGumboStyle(const GumboNode *node, const GumboStyles &styles)
 {
-    const QString cls = getAttribute(node, "class");
+    const QString cls = getGumboAttribute(node, "class");
     if (cls.isEmpty()) return QString();
     //qDebug() << "Removing GUMBO style " << cls << ":" << styles[cls].toString();
     return styles[cls].finish();
