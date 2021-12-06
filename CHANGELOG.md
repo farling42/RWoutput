@@ -1,3 +1,14 @@
+# 3.10
+Attempt to decode tables into markdown format (so that links will work) - tables inside HL portfolio files and statblocks remain as HTML.
+
+Tables with varying number of columns per row (e.g. cells spread across multiple columns) will most likely not be converted properly.
+
+Tables consisting of a single row will be formatted with a thin row above the imported row (since markdown requires a heading row and at least one data row).
+
+Incorporate the "preserveAspect" flag for smart images (courtesy of Leaflet version 4.4.0)
+
+Note that Leaflet version 4.3.7 allows tooltips to appear on map pins without requiring them to be linked to an actual topic :-)
+
 # 3.9
 Tags are now also created from Tag_Standard snippets (placed on the following line).
 

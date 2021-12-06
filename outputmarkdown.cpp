@@ -75,7 +75,6 @@ static QString assetsDir("asset-files");
 static QString imported_date;
 static QString mainPageName;
 static const QString newline("\n");
-static const int newlinelen = newline.length();
 
 #define DUMP_LEVEL 0
 
@@ -351,8 +350,102 @@ static const QString hlabel(const QString &label)
     return "**" + label + "**: ";
 }
 
+static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype, bool inside_table=false);
 
-static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype)
+static const QString table(XmlElement *elem, const LinkageList &links, const QString &listtype)
+{
+    // Optional thead and tbody inside,
+    // need to collect all the rows (tr)
+    // then each of the cells in each row (td)
+    QList<XmlElement*> rows;
+    for (auto child: elem->xmlChildren())
+    {
+        const auto type = child->objectName();
+        if (type == "thead")
+        {
+            for (auto sub: child->xmlChildren())
+            {
+                if (sub->objectName() == "tr")
+                    rows.append(sub);
+                else
+                    qDebug() << "Unsupported node in thead: " << sub->objectName();
+            }
+        }
+        else if (type == "tbody")
+        {
+            for (auto sub: child->xmlChildren())
+            {
+                if (sub->objectName() == "tr")
+                    rows.append(sub);
+                else
+                    qDebug() << "Unsupported node in tbody: " << sub->objectName();
+            }
+        }
+        else if (type == "tr")
+        {
+            rows.append(child);
+        }
+        else
+        {
+            qDebug() << "Unsupported node in table: " << type;
+        }
+    }
+    //qDebug() << "Table has " << rows.length() << " rows";
+    QString result;
+    if (rows.length() > 0)
+    {
+        // Table needs blank line before its start
+        result += "\n";
+        bool first=true;
+        bool onerow=(rows.length()==1);
+        int colcount=0;
+        for (auto row : rows)
+        {
+            QString rowtext;
+            for (auto sub : row->xmlChildren())
+            {
+                if (sub->objectName() == "td")
+                {
+                    // trimmed() removes leading and trailing new lines as well as space
+                    // Note that we first replace TWO line breaks with a SINGLE br, since we generate blank lines between paragraphs
+                    // Escape pipes found in the cell.
+                    QString cell = write_para(sub, links, listtype, /*inside_table*/ true).trimmed().replace("\n\n", "<br>").replace("\n", "<br>").replace("|","\\|");
+                    rowtext += "| " + cell + " ";
+                    if (first) colcount++;
+                }
+                else
+                    qDebug() << "Unsupported node in tr: " << sub->objectName();
+            }
+            if (onerow)
+            {
+                QString row1("|"), row2("|");
+                // Special handling for table with ONE row: put a blank row above the "|---|---|---|" row
+                while (colcount--)
+                {
+                    row1 += "   |";
+                    row2 += "---|";
+                }
+                result += row1 + newline + row2 + newline + rowtext + "|\n";
+            }
+            else
+            {
+                // All normal tables
+                result += rowtext + "|\n";
+                if (first)
+                {
+                    result += "|";
+                    while (colcount--) result += "---|";
+                    result += newline;
+                    first=false;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype, bool inside_table)
 {
     QString result;
     QString listtype = orig_listtype;
@@ -376,7 +469,20 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
         listtype = "\n+ ";
     else if (sntype == "li")
         result += listtype;
-    else if (sntype == "table" || sntype == "tbody" || sntype == "tr" || sntype == "td")
+    else if (sntype == "table")
+    {
+        QString tbody = table(elem, links, orig_listtype);
+        // Don't process children later in this routine, since table will do them all!
+        if (!tbody.isEmpty()) return tbody;
+
+        // If the table creation failed, then process as normal
+        qDebug() << "Markdown table creation failed - building normal table";
+        result += "<" + elem->objectName() + ">";
+        close=true;
+    }
+    else if (inside_table && sntype == "td")
+        ; // no specific presentation, handled by table() function above
+    else if (!inside_table && (sntype == "table" || sntype == "tbody" || sntype == "tr" || sntype == "td"))
     {
         // Always inline table elements
         result += "<" + elem->objectName() + ">";
@@ -529,6 +635,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         if (height > 1500) result += "height: " + mapCoord(height * 2) + "px\n";   // double the scaled height seems to work
         result += "draw: false\n";
         result += "showAllMarkers: true\n";
+        result += "preserveAspect: true\n";   // added to Leaflet in 4.4.0
         result += "bounds:\n";
         result += "    - [0, 0]\n";
         result += "    - [" + mapCoord(height) + ", " + mapCoord(image_size.width()) + "]\n";
@@ -622,7 +729,7 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
         //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
         if (!domain_name.isEmpty() &&
             domain_name != "Export" &&
-            (domain_name != "Utility" || tag_name != "Empty)"))
+            (domain_name != "Utility" || tag_name != "Empty"))
         {
             tags.append("#" + validTag(domain_name) + "/" + validTag(tag_name));
         }
