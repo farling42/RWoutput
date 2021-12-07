@@ -288,21 +288,27 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
 }
 
 
-static QString createLink(const QString &filename, const QString &label)
+static inline QString createMarkdownLink(const QString &filename, const QString &label)
+{
+    // Label is always present
+    // The filename needs spaces replaced by URL syntax.
+    return QString("[%1](%2)").arg(label.isEmpty() ? filename : label, QString(filename).replace(" ", "%20"));
+}
+
+static inline QString createWikilink(const QString &filename, const QString &label)
+{
+    if (label.isEmpty() || filename == label)
+        return QString("[[%1]]").arg(filename);
+    else
+        return QString("[[%1|%2]]").arg(filename, label);
+}
+
+static inline QString createLink(const QString &filename, const QString &label)
 {
     if (use_wikilinks)
-    {
-        if (label.isEmpty() || filename == label)
-            return QString("[[%1]]").arg(filename);
-        else
-            return QString("[[%1|%2]]").arg(filename, label);
-    }
+        return createWikilink(filename, label);
     else
-    {
-        // Label is always present
-        // The filename needs spaces replaced by URL syntax.
-        return QString("[%1](%2)").arg(label.isEmpty() ? filename : label, QString(filename).replace(" ", "%20"));
-    }
+        return createMarkdownLink(filename, label);
 }
 
 
@@ -516,8 +522,13 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         else
             result += doEscape(text);
     }
+    else if (elem->objectName() == "img")
+    {
+        result = createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ elem->attribute("alt"));
+    }
     else
     {
+        if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
         result += style.start();
         // Only put in span if we really require it
         // All sorts of HTML can appear inside the text
@@ -526,6 +537,12 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
             result += write_span(child, links);
         }
         swapSpace(result, style.finish());
+
+        // Now handle external link
+        if (elem->objectName() == "a")
+        {
+            result = createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ result);
+        }
     }
     return result;
 }
@@ -953,7 +970,8 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
     QString result;
     Q_UNUSED(top)
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    bool term_img=false;
+    bool capture=false;
+    QString captured;
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
@@ -995,6 +1013,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             else if (tag == "hr")
                 result += "\n---\n\n";
             else if (tag == "a") {
+                href.clear();
                 GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
                 for (unsigned count = node->v.element.attributes.length; count > 0; --count)
                 {
@@ -1004,8 +1023,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                         href = attr->value;
                     // what about style?
                 }
-                // Always use [ link ] (never wikilinks)
-                result += "[";
+                capture=true;
             }
             else if (tag == "img")
             {
@@ -1038,8 +1056,8 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 }
                 else
                 {
-                    result +="![" + alt + "](" + src + " \"";
-                    term_img = true;
+                    // Build a link to the external URL
+                    result += "!" + createMarkdownLink(/*filename*/ src, /*label*/ alt);
                 }
             }
 #ifdef IGNORE_GUMBO_TABLE
@@ -1082,7 +1100,10 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 stream->writeAttribute(attr->name, attr->value);
             }
 #endif
-            result += output_gumbo_children(node, styles);
+            if (capture)
+                captured = output_gumbo_children(node, styles);
+            else
+                result += output_gumbo_children(node, styles);
 
             // Now, see if we need to terminate this node
             if (tag == "p")
@@ -1095,12 +1116,9 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             else if (tag == "i")
                 swapSpace(result, "*");
             else if (tag == "a")
-                // anchors never use [[ ]]
-                result += "](" + href + ")";
-            else if (tag == "img" && term_img)
             {
-                result += "\")";
-                term_img = false;
+                result += createMarkdownLink(/*filename*/ href, /*label*/ captured);
+                capture = false;
             }
             else if (tag == "span")
             {
