@@ -801,7 +801,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     file.close();
 
     QString result;
-    if (!image_name.isEmpty()) result += "### " + image_name;
+    if (!image_name.isEmpty()) result += "### " + image_name + newline;
 
     if (show_leaflet_pins && !pins.isEmpty())
     {
@@ -876,7 +876,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     file.write (data);
     file.close();
 
-    if (!obj_name.isEmpty()) result += "### " + obj_name;
+    if (!obj_name.isEmpty()) result += "### " + obj_name + newline;
     QString valid_filename = filename;
     valid_filename.replace(" ","%20");
 
