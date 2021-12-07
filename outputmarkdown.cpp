@@ -849,13 +849,13 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     else
     {
         // No pins required
-        result += "![" + image_name + "](" + filename.replace(" ","%20") + ")\n";
-        // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-        if (!annotation.isEmpty())
-            result += "[" + annotation + "](" + filename.replace(" ","%20") + ")\n";
-        else
-            result += "[open outside](" + filename.replace(" ","%20") + ")\n";
+        result += "![" + image_name + "](" + filename.replace(" ","%20") + ")";
     }
+    // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
+    if (!annotation.isEmpty())
+        result += "[" + annotation + "](" + filename.replace(" ","%20") + ")\n";
+    else
+        result += "[open outside](" + filename.replace(" ","%20") + ")\n";
 
     return result;
 }
@@ -880,7 +880,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     QString valid_filename = filename;
     valid_filename.replace(" ","%20");
 
-    result += "![" + filename + "](" + valid_filename + ")\n";
+    result += "![" + filename + "](" + valid_filename + ")";
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
     if (!annotation.isEmpty())
@@ -1467,6 +1467,7 @@ static const QString write_section(XmlElement *section, const LinkageList &links
     {
         result += write_section(subsection, links, level+1);
     }
+
     return result;
 }
 
@@ -1648,7 +1649,11 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     // Process all <sections>, applying the linkage for this topic
     for (auto section: topic->xmlChildren("section"))
     {
-        stream << write_section(section, links, /*level*/ 1);
+        // Remove leading and trailing white space (including blank lines)
+        // Replace two or more blank lines with just one blank line
+        QString text = write_section(section, links, /*level*/ 1);
+        text.replace(QRegExp("\n\n[\n]+"), "\n\n");
+        stream << text;
     }
 
     // Provide summary of links to child topics

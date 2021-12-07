@@ -1,3 +1,10 @@
+# 3.14
+Newline added after title of ext_object or image
+
+Remove unnecessary ! in front of ]
+
+No line break between ext_object/image and it's annotation link.
+
 # 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
 
