@@ -144,6 +144,20 @@ static const QString topicDirFile(const XmlElement *topic)
 }
 
 
+static bool isInlineFile(const QString &filename)
+{
+    static const QSet<QString> validExtensions{
+        /*markd*/ ".md",
+        /*image*/ ".png",".jpg",".jpeg",".gif",".bmp",".svg",
+        /*audio*/ ".mp3",".webm",".wav",".m4a",".ogg",".3gp",".flac",
+        /*video*/ ".mp4",".ogv",
+        /*pdf  */ ".pdf"};
+    foreach (const auto ext, validExtensions)
+        if (filename.endsWith(ext)) return true;
+    return false;
+}
+
+
 // Sort topics, first by prefix, and then by topic name
 static bool sort_topics(const XmlElement *left, const XmlElement *right)
 {
@@ -541,7 +555,11 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         // Now handle external link
         if (elem->objectName() == "a")
         {
-            result = createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ result);
+            QString filename = elem->attribute("href");
+            if (isInlineFile(filename))
+                result = "!" + createMarkdownLink(/*filename*/ filename, /*label*/ result);
+            else
+                result = createMarkdownLink(/*filename*/ filename, /*label*/ result);
         }
     }
     return result;
