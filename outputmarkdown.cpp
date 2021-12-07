@@ -51,7 +51,7 @@ static bool apply_reveal_mask = true;
 static bool sort_by_prefix = true;
 static QCollator collator;
 static bool category_folders = true;
-static bool obsidian_links = false;
+static bool use_wikilinks = false;
 static bool show_leaflet_pins = true;
 static bool show_nav_panel = true;
 static bool nav_at_start = true;
@@ -288,12 +288,9 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
 }
 
 
-static QString internal_link(const QString &topic_id, const QString &label = QString())
+static QString createLink(const QString &filename, const QString &label)
 {
-    QString filename = topic_files.value(topic_id);
-    if (filename.isEmpty()) filename = validFilename(topic_id);
-
-    if (obsidian_links)
+    if (use_wikilinks)
     {
         if (label.isEmpty() || filename == label)
             return QString("[[%1]]").arg(filename);
@@ -302,11 +299,18 @@ static QString internal_link(const QString &topic_id, const QString &label = QSt
     }
     else
     {
-        if (label.isEmpty() || filename == label)
-            return QString("[%1]").arg(filename);
-        else
-            return QString("[%1](%2)").arg(filename, label);
+        // Label is always present
+        // The filename needs spaces replaced by URL syntax.
+        return QString("[%1](%2)").arg(label.isEmpty() ? filename : label, QString(filename).replace(" ", "%20"));
     }
+}
+
+
+static QString internal_link(const QString &topic_id, const QString &label = QString())
+{
+    QString filename = topic_files.value(topic_id);
+    if (filename.isEmpty()) filename = validFilename(topic_id);
+    return createLink(filename, label);
 }
 
 static QString topic_link(const XmlElement *topic)
@@ -330,8 +334,16 @@ static const QString getGumboAttribute(const GumboNode *node, const QString &nam
  * Text enhancements
  */
 struct TextStyles {
-    TextStyles(const XmlElement *elem);
-    TextStyles(const QString &details) { decode(details); };
+    TextStyles(const XmlElement *elem)
+    {
+        if (elem->objectName() == "sup") superscript = true;
+        if (elem->objectName() == "sub") subscript   = true;
+        decode(elem->attribute("style"));
+    }
+    TextStyles(const QString &details)
+    {
+        decode(details);
+    };
     TextStyles() {};
     bool bold=false;
     bool italic=false;
@@ -339,34 +351,92 @@ struct TextStyles {
     bool underline=false;
     bool superscript=false;
     bool subscript=false;
-    const QString start() const;
-    const QString finish() const;
-    const QString toString() const;
+    const QString start() const
+    {
+        QString result;
+        if (italic)        result += "*";
+        if (bold)          result += "**";
+        if (strikethrough) result += "~~";
+        if (underline)     result += "<u>";
+        if (superscript)   result += "<sup>";
+        if (subscript)     result += "<sub>";
+        return result;
+    }
+    const QString finish() const
+    {
+        // reverse order of startStyle
+        QString result;
+        if (subscript)     result += "</sub>";
+        if (superscript)   result += "</sup>";
+        if (underline)     result += "</u>";
+        if (strikethrough) result += "~~";
+        if (bold)          result += "**";
+        if (italic)        result += "*";
+        return result;
+    };
+    const QString toString() const
+    {
+        QStringList result;
+        if (bold) result.append("bold");
+        if (italic) result.append("italic");
+        if (strikethrough) result.append("strikethrough");
+        if (underline) result.append("underline");
+        if (superscript) result.append("superscript");
+        if (subscript) result.append("subscript");
+        return result.join(",");
+    };
     bool isEmpty() const { return is_empty; };
 private:
-    void decode(const QString&);
-    bool is_empty;
+    bool is_empty=true;
+    void decode(const QString &style)
+    {
+        for (auto part : style.split(";"))
+        {
+            const auto bits = part.split(":");
+            if (bits.length() != 2) continue;
+            const auto values = bits.last().split(" ");
+            const auto attr = bits.first();
+            if (attr == "font-weight")
+            {
+                for (auto value : values)
+                {
+                    if (value == "bold") bold = true;
+                    else qWarning() << "Unknown element in font-weight: " << value;
+                }
+            }
+            else if (attr == "font-style")
+            {
+                // normal|italic|oblique|initial|inherit
+                for (auto value : values)
+                {
+                    if (value == "italic") italic = true;
+                    else qWarning() << "Unknown element in font-style: " << value;
+                }
+            }
+            else if (attr == "text-decoration" || attr == "text-decoration-style")
+            {
+                // solid|double|dotted|dashed|wavy|initial|inherit
+                for (auto value : values)
+                {
+                    if      (value == "line-through") strikethrough = true;
+                    else if (value == "underline")    underline = true;
+                    else if (value == "none") ;
+                    else qWarning() << "Unknown element in text-decoration: " << value;
+                }
+            }
+            else if (attr != "color" &&
+                     attr != "font-family" &&
+                     attr != "background-color" &&
+                     attr != "font-size")
+            {
+                qWarning() << "Unknown element of style: " << bits.first();
+            }
+        }
+        is_empty = !(bold||italic||strikethrough||underline||superscript||subscript);
+    };
 };
 typedef QHash<QString,TextStyles> GumboStyles;
 
-TextStyles::TextStyles(const XmlElement *elem)
-{
-    if (elem->objectName() == "sup") superscript = true;
-    if (elem->objectName() == "sub") subscript   = true;
-    decode(elem->attribute("style"));
-}
-
-const QString TextStyles::toString() const
-{
-    QStringList result;
-    if (bold) result.append("bold");
-    if (italic) result.append("italic");
-    if (strikethrough) result.append("strikethrough");
-    if (underline) result.append("underline");
-    if (superscript) result.append("superscript");
-    if (subscript) result.append("subscript");
-    return result.join(",");
-}
 
 GumboStyles getStyles(const GumboNode *node)
 {
@@ -404,93 +474,20 @@ GumboStyles getStyles(const GumboNode *node)
 }
 
 
-void TextStyles::decode(const QString &style)
-{
-    for (auto part : style.split(";"))
-    {
-        const auto bits = part.split(":");
-        if (bits.length() != 2) continue;
-        const auto values = bits.last().split(" ");
-        const auto attr = bits.first();
-        if (attr == "font-weight")
-        {
-            for (auto value : values)
-            {
-                if (value == "bold") bold = true;
-                else qWarning() << "Unknown element in font-weight: " << value;
-            }
-        }
-        else if (attr == "font-style")
-        {
-            // normal|italic|oblique|initial|inherit
-            for (auto value : values)
-            {
-                if (value == "italic") italic = true;
-                else qWarning() << "Unknown element in font-style: " << value;
-            }
-        }
-        else if (attr == "text-decoration" || attr == "text-decoration-style")
-        {
-            // solid|double|dotted|dashed|wavy|initial|inherit
-            for (auto value : values)
-            {
-                if      (value == "line-through") strikethrough = true;
-                else if (value == "underline")    underline = true;
-                else if (value == "none") ;
-                else qWarning() << "Unknown element in text-decoration: " << value;
-            }
-        }
-        else if (attr != "color" &&
-                 attr != "font-family" &&
-                 attr != "background-color" &&
-                 attr != "font-size")
-        {
-            qWarning() << "Unknown element of style: " << bits.first();
-        }
-    }
-    is_empty = !(bold||italic||strikethrough||underline||superscript||subscript);
-}
-
-const QString TextStyles::start() const
-{
-    QString result;
-    if (italic)        result += "*";
-    if (bold)          result += "**";
-    if (strikethrough) result += "~~";
-    if (underline)     result += "<u>";
-    if (superscript)   result += "<sup>";
-    if (subscript)     result += "<sub>";
-    return result;
-}
-
-const QString TextStyles::finish() const
-{
-    // reverse order of startStyle
-    QString result;
-    if (subscript)     result += "</sub>";
-    if (superscript)   result += "</sup>";
-    if (underline)     result += "</u>";
-    if (strikethrough) result += "~~";
-    if (bold)          result += "**";
-    if (italic)        result += "*";
-    return result;
-}
-
-
 /**
  * @brief swapSpace
  * If result ends with a space, then put append before that space and put the space after it.
  * This is used to ensure that the closure of a style is appended onto the previous text rather
  * than merged with the next text.
- * @param result
- * @param append
+ * @param result The string to be checked and possibly modified
+ * @param append The text to appear before the final space
  */
 static inline void swapSpace(QString &result, const QString &append)
 {
     if (!append.isEmpty() && result.endsWith(" "))
-    {
         result.insert(result.length()-1, append);
-    }
+    else
+        result += append;
 }
 
 
@@ -866,14 +863,10 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     else
     {
         // No pins required
-        result += "![" + image_name + "](" + filename.replace(" ","%20") + ")";
+        result += "!" + createLink(filename, image_name);
     }
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-    if (!annotation.isEmpty())
-        result += "[" + annotation + "](" + filename.replace(" ","%20") + ")\n";
-    else
-        result += "[open outside](" + filename.replace(" ","%20") + ")\n";
-
+    result += newline + createLink(filename, annotation.isEmpty() ? "open outside" : annotation) + newline;
     return result;
 }
 
@@ -894,17 +887,10 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     file.close();
 
     if (!obj_name.isEmpty()) result += "### " + obj_name + newline;
-    QString valid_filename = filename;
-    valid_filename.replace(" ","%20");
-
-    result += "![" + filename + "](" + valid_filename + ")";
+    result += "!" + createLink(filename, filename);
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-    if (!annotation.isEmpty())
-        result += "[" + annotation + "](" + valid_filename + ")\n";
-    else
-        result += "[open outside](" + valid_filename + ")\n";
-
+    result += createLink(filename, annotation.isEmpty() ? "open outside" : annotation) + newline;
     return result;
 }
 
@@ -1018,6 +1004,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                         href = attr->value;
                     // what about style?
                 }
+                // Always use [ link ] (never wikilinks)
                 result += "[";
             }
             else if (tag == "img")
@@ -1108,6 +1095,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             else if (tag == "i")
                 swapSpace(result, "*");
             else if (tag == "a")
+                // anchors never use [[ ]]
                 result += "](" + href + ")";
             else if (tag == "img" && term_img)
             {
@@ -1929,7 +1917,7 @@ void toMarkdown(const XmlElement *root_elem,
     Q_UNUSED(use_reveal_mask)
     apply_reveal_mask = false; //use_reveal_mask;
     category_folders  = folders_by_category;
-    obsidian_links    = do_obsidian_links;
+    use_wikilinks    = do_obsidian_links;
     show_leaflet_pins = create_leaflet_pins;
     show_nav_panel    = create_nav_panel;
     collator.setNumericMode(true);
