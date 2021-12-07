@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>455</width>
+    <width>465</width>
     <height>459</height>
    </rect>
   </property>
@@ -192,10 +192,10 @@ FILE</string>
             <item>
              <widget class="QCheckBox" name="obsidianLinks">
               <property name="toolTip">
-               <string>When unchecked, all links will use [_]</string>
+               <string>When unchecked, all links will use markdown link syntax</string>
               </property>
               <property name="text">
-               <string>Use [[_]] for internal links</string>
+               <string>Use wikilinks where possible</string>
               </property>
               <property name="checked">
                <bool>true</bool>
@@ -328,7 +328,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>455</width>
+     <width>465</width>
      <height>21</height>
     </rect>
    </property>

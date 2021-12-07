@@ -1,7 +1,7 @@
 # 3.14
 Newline added after title of ext_object or image
 
-Remove unnecessary ! in front of ]
+Remove unnecessary ! in front of ], and use wikilinks style links wherever possible.
 
 No line break between ext_object/image and it's annotation link.
 
