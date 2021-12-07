@@ -9,7 +9,7 @@ Remove excessive blank lines.
 
 Ensure ending of a text format occurs BEFORE the preceding space.
 
-Handle anchors (external links) in snippets.
+Handle anchors (external links) in snippets; with supported file extensions being displayed inline.
 
 # 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
