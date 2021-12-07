@@ -477,6 +477,23 @@ const QString TextStyles::finish() const
 }
 
 
+/**
+ * @brief swapSpace
+ * If result ends with a space, then put append before that space and put the space after it.
+ * This is used to ensure that the closure of a style is appended onto the previous text rather
+ * than merged with the next text.
+ * @param result
+ * @param append
+ */
+static inline void swapSpace(QString &result, const QString &append)
+{
+    if (!append.isEmpty() && result.endsWith(" "))
+    {
+        result.insert(result.length()-1, append);
+    }
+}
+
+
 static const QString write_span(XmlElement *elem, const LinkageList &links)
 {
     QString result;
@@ -511,7 +528,7 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         {
             result += write_span(child, links);
         }
-        result += style.finish();
+        swapSpace(result, style.finish());
     }
     return result;
 }
@@ -1083,12 +1100,13 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             // Now, see if we need to terminate this node
             if (tag == "p")
             {
-                result += finishGumboStyle(node,styles) + newline;
+                swapSpace(result, finishGumboStyle(node,styles));
+                result += newline;
             }
             else if (tag == "b")
-                result += "**";
+                swapSpace(result, "**");
             else if (tag == "i")
-                result += "*";
+                swapSpace(result, "*");
             else if (tag == "a")
                 result += "](" + href + ")";
             else if (tag == "img" && term_img)
@@ -1098,7 +1116,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             }
             else if (tag == "span")
             {
-                result += finishGumboStyle(node,styles);
+                swapSpace(result, finishGumboStyle(node,styles));
             }
 #ifdef IGNORE_GUMBO_TABLE
             else if (tag == "tr" || tag == "table" || tag == "tbody")

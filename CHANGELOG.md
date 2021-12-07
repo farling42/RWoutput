@@ -5,6 +5,11 @@ Remove unnecessary ! in front of ]
 
 No line break between ext_object/image and it's annotation link.
 
+Remove excessive blank lines.
+
+TBD: when appending one string of HTML to another string, if previous ends with "*" and new starts with "*" then insert a space. 
+Maybe simplify to: if end of last string and first of new string are the same character, then insert a space.
+
 # 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
 
