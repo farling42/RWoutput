@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>465</width>
-    <height>482</height>
+    <width>471</width>
+    <height>505</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -229,9 +229,16 @@ FILE</string>
              </widget>
             </item>
             <item>
+             <widget class="QCheckBox" name="tagForEachPrefix">
+              <property name="text">
+               <string>Add tag for each topic prefix</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QCheckBox" name="tagForEachSuffix">
               <property name="text">
-               <string>Add tag for each suffix</string>
+               <string>Add tag for each topic suffix</string>
               </property>
              </widget>
             </item>
@@ -335,7 +342,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>465</width>
+     <width>471</width>
      <height>21</height>
     </rect>
    </property>

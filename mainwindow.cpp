@@ -210,6 +210,7 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->foldersByCategory->isChecked(),
                ui->obsidianLinks->isChecked(),
                ui->createNavPanel->isChecked(),
+               ui->tagForEachPrefix->isChecked(),
                ui->tagForEachSuffix->isChecked());
 
     setStatusText("Markdown file SAVE complete.");

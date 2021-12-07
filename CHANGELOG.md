@@ -11,6 +11,8 @@ Ensure ending of a text format occurs BEFORE the preceding space.
 
 Handle anchors (external links) in snippets; with supported file extensions being displayed inline.
 
+Add an option to create a tag for every topic suffix (issue #42)
+
 # 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).
 
