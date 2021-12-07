@@ -849,7 +849,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     else
     {
         // No pins required
-        result += "![" + image_name + "!](" + filename.replace(" ","%20") + ")\n";
+        result += "![" + image_name + "](" + filename.replace(" ","%20") + ")\n";
         // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
         if (!annotation.isEmpty())
             result += "[" + annotation + "](" + filename.replace(" ","%20") + ")\n";
@@ -880,7 +880,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     QString valid_filename = filename;
     valid_filename.replace(" ","%20");
 
-    result += "![" + filename + "!](" + valid_filename + ")\n";
+    result += "![" + filename + "](" + valid_filename + ")\n";
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
     if (!annotation.isEmpty())
@@ -1034,7 +1034,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 }
                 else
                 {
-                    result +="![" + alt + "!](" + src + " \"";
+                    result +="![" + alt + "](" + src + " \"";
                     term_img = true;
                 }
             }
