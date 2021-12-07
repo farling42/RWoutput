@@ -35,6 +35,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool use_reveal_mask,
                 bool folders_by_category,
                 bool obsidian_links,
-                bool create_nav_panel);
+                bool create_nav_panel,
+                bool tag_for_each_suffix);
 
 #endif // OUTPUTMARKDOWN_H

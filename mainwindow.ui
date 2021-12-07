@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>465</width>
-    <height>459</height>
+    <height>482</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -225,6 +225,13 @@ FILE</string>
               </property>
               <property name="checked">
                <bool>false</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="tagForEachSuffix">
+              <property name="text">
+               <string>Add tag for each suffix</string>
               </property>
              </widget>
             </item>

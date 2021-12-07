@@ -56,6 +56,7 @@ static bool show_leaflet_pins = true;
 static bool show_nav_panel = true;
 static bool nav_at_start = true;
 static int  max_index_level = 99;
+static bool create_suffix_tag = false;
 
 #undef DUMP_CHILDREN
 
@@ -1624,7 +1625,14 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             stream << "  - " << alias->attribute("name") << newline;
         }
     }
-    stream << "Tags: Category/" << validTag(category_name) << newline;
+    stream << "Tags: Category/" << validTag(category_name);
+    if (create_suffix_tag)
+    {
+        // Issue #41
+        QString suffix = validTag(topic->attribute("suffix"));
+        if (!suffix.isEmpty()) stream << " " << suffix;
+    }
+    stream << newline;
 
     if (parent) {
         // Don't tell Breadcrumbs about the main page!
@@ -1944,7 +1952,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool use_reveal_mask,
                 bool folders_by_category,
                 bool do_obsidian_links,
-                bool create_nav_panel)
+                bool create_nav_panel,
+                bool tag_for_each_suffix)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -1956,6 +1965,7 @@ void toMarkdown(const XmlElement *root_elem,
     use_wikilinks    = do_obsidian_links;
     show_leaflet_pins = create_leaflet_pins;
     show_nav_panel    = create_nav_panel;
+    create_suffix_tag = tag_for_each_suffix;
     collator.setNumericMode(true);
 
     imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());
