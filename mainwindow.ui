@@ -89,33 +89,10 @@ FILE</string>
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="maxImageWidth">
+             <widget class="QLineEdit" name="maxImageWidth">
               <property name="toolTip">
-               <string>Define the maximum picture width</string>
+               <string>Leave blank to allow any width</string>
               </property>
-              <property name="currentIndex">
-               <number>2</number>
-              </property>
-              <item>
-               <property name="text">
-                <string>Original Size</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>512</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>1024</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>2048</string>
-               </property>
-              </item>
              </widget>
             </item>
             <item>

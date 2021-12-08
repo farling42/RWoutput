@@ -53,6 +53,7 @@ private:
     XmlElement *root_element;
     QFile in_file;
     void setStatusText(const QString &text);
+    int maxWidth();
 };
 
 #endif // MAINWINDOW_H

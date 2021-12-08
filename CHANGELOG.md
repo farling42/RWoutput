@@ -11,7 +11,9 @@ Ensure ending of a text format occurs BEFORE the preceding space.
 
 Handle anchors (external links) in snippets; with supported file extensions being displayed inline.
 
-Add an option to create a tag for every topic suffix (issue #42)
+Add an option to create a tag for every topic prefix and/or suffix (issue #42). Each will be put into the Prefix/ or Suffix/ tag group.
+
+Change the "max. width (pixels)" input to allow any number to be entered. This will be applied to plain images in markdown (but not smart images). (issue #41)
 
 # 3.13
 Add detection of text styles to snippet conversion and to embedded HTML file conversion (e.g. statblocks and HL portfolio files).

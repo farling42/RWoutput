@@ -58,6 +58,8 @@ static bool nav_at_start = true;
 static int  max_index_level = 99;
 static bool create_prefix_tag = false;
 static bool create_suffix_tag = false;
+static int  image_max_width   = -1;
+static int gumbofilenumber = 0;
 
 #undef DUMP_CHILDREN
 
@@ -304,35 +306,38 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
 }
 
 
-static inline QString createMarkdownLink(const QString &filename, const QString &label)
+static inline QString createMarkdownLink(const QString &filename, const QString &label, int max_width=-1)
 {
+    Q_UNUSED(max_width)
     // Label is always present
     // The filename needs spaces replaced by URL syntax.
     return QString("[%1](%2)").arg(label.isEmpty() ? filename : label, QString(filename).replace(" ", "%20"));
 }
 
-static inline QString createWikilink(const QString &filename, const QString &label)
+static inline QString createWikilink(const QString &filename, const QString &label, int max_width=-1)
 {
+    QString extra;
+    if (max_width>0) extra=QString("|%1").arg(max_width);
     if (label.isEmpty() || filename == label)
-        return QString("[[%1]]").arg(filename);
+        return QString("[[%1%2]]").arg(filename, extra);
     else
-        return QString("[[%1|%2]]").arg(filename, label);
+        return QString("[[%1|%2%3]]").arg(filename, label, extra);
 }
 
-static inline QString createLink(const QString &filename, const QString &label)
+static inline QString createLink(const QString &filename, const QString &label, int max_width=-1)
 {
     if (use_wikilinks)
-        return createWikilink(filename, label);
+        return createWikilink(filename, label, max_width);
     else
-        return createMarkdownLink(filename, label);
+        return createMarkdownLink(filename, label, max_width);
 }
 
 
-static QString internal_link(const QString &topic_id, const QString &label = QString())
+static QString internal_link(const QString &topic_id, const QString &label = QString(), int max_width=-1)
 {
     QString filename = topic_files.value(topic_id);
     if (filename.isEmpty()) filename = validFilename(topic_id);
-    return createLink(filename, label);
+    return createLink(filename, label, max_width);
 }
 
 static QString topic_link(const XmlElement *topic)
@@ -544,7 +549,7 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
     }
     else
     {
-        if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
+        //if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
         result += style.start();
         // Only put in span if we really require it
         // All sorts of HTML can appear inside the text
@@ -859,7 +864,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         int height = image_size.height();
         // The leaflet plugin for Obsidian uses latitude/longitude, so (y,x)
         result += "\n```leaflet\n";
-        result += "id: " + image_name + newline;
+        if (!image_name.isEmpty()) result += "id: " + image_name + newline;
         result += "image: [[" + filename + "]]\n";
         if (height > 1500) result += "height: " + mapCoord(height * 2) + "px\n";   // double the scaled height seems to work
         result += "draw: false\n";
@@ -900,7 +905,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     else
     {
         // No pins required
-        result += "!" + createLink(filename, image_name);
+        result += "!" + createLink(filename, image_name, (image_size.width() > image_max_width) ? image_max_width : -1);
     }
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
     result += newline + createLink(filename, annotation.isEmpty() ? "open outside" : annotation) + newline;
@@ -1066,12 +1071,11 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                     int base64 = src.indexOf(";base64,");
                     if (base64 > 0)
                     {
-                        static int gumbofilenumber = 0;
                         QByteArray buffer = QByteArray::fromBase64(src.mid(base64+8).toLatin1());
                         int slash = src.indexOf("/");
                         QString extension = src.mid(slash+1, base64-slash-1);
                         QString filename = QString("gumbodatafile%1.%2").arg(gumbofilenumber++).arg(extension);
-                        result += write_ext_object("", buffer, filename, /*annotation*/ QString());
+                        result += write_image("", buffer, /*mask*/nullptr, filename, /*no annotation*/ QString());
                     }
                 }
                 else
@@ -1955,6 +1959,7 @@ static void write_category_files(const XmlElement *tree)
  * @param do_obsidian_links
  */
 void toMarkdown(const XmlElement *root_elem,
+                int  max_image_width,
                 bool create_leaflet_pins,
                 bool use_reveal_mask,
                 bool folders_by_category,
@@ -1975,6 +1980,8 @@ void toMarkdown(const XmlElement *root_elem,
     show_nav_panel    = create_nav_panel;
     create_prefix_tag = tag_for_each_prefix,
     create_suffix_tag = tag_for_each_suffix;
+    image_max_width   = max_image_width;
+    gumbofilenumber   = 0;
     collator.setNumericMode(true);
 
     imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());

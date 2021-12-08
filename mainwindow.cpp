@@ -23,6 +23,8 @@
 #include <QDebug>
 #include <QFileDialog>
 #include <QHeaderView>
+#include <QIntValidator>
+#include <QLineEdit>
 #include <QSettings>
 #include <QPrinter>
 #include <QPdfWriter>
@@ -68,6 +70,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->simpleHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
     ui->output->setEnabled(false);
+    if (QLineEdit *edit = qobject_cast<QLineEdit*>(ui->maxImageWidth))
+        edit->setValidator(new QIntValidator(100,5000));
 
     connect(ui->separateTopicFiles, &QCheckBox::clicked, ui->indexOnEveryPage, &QCheckBox::setEnabled);
     ui->indexOnEveryPage->setEnabled(ui->separateTopicFiles->isChecked());
@@ -76,6 +80,20 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+
+int MainWindow::maxWidth()
+{
+    QString value;
+    if (QLineEdit *edit = qobject_cast<QLineEdit*>(ui->maxImageWidth))
+        value = edit->text();
+    //if (QComboBox *edit = qobject_cast<QComboBox*>(ui->maxImageWidth))
+    //    value = ui->maxImageWidth->currentText();
+    bool ok = true;
+    int number = value.toInt(&ok);
+    if (!ok) number = -1;
+    return number;
 }
 
 
@@ -160,14 +178,11 @@ void MainWindow::on_saveHtml_clicked()
     settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
     QDir::setCurrent(dir.absolutePath());
 
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
     setStatusText("Saving XHTML file...");
     qApp->processEvents();
 
     toHtml(path, root_element,
-           max_image_width,
+           maxWidth(),
            separate_files,
            ui->revealMask->isChecked(),
            separate_files && ui->indexOnEveryPage->isChecked());
@@ -198,13 +213,11 @@ void MainWindow::on_saveMarkdown_clicked()
     settings.setValue(SAVE_DIRECTORY_PARAM, dir.absolutePath());
     QDir::setCurrent(dir.absolutePath());
 
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
     setStatusText("Saving Markdown file...");
     qApp->processEvents();
 
     toMarkdown(root_element,
+               maxWidth(),
                ui->createMapPins->isChecked(),
                ui->revealMask->isChecked(),
                ui->foldersByCategory->isChecked(),
@@ -246,10 +259,6 @@ void MainWindow::on_savePdf_clicked()
         return;
     }
 
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
-
     static QTextDocument doc;
     doc.clear();
     // Ensure layout uses correct margins (and hide page numbers)
@@ -260,12 +269,12 @@ void MainWindow::on_savePdf_clicked()
     {
         QString result;   // only keep long enough to call doc.setHtml
         QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
-        outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
+        outHtml4Subset(stream, root_element, maxWidth(), ui->revealMask->isChecked());
         setStatusText("Transferring to QTextDocument...");
         doc.setHtml(result);
     }
 #else
-    genTextDocument(doc, root_element, max_image_width, ui->revealMask->isChecked());
+    genTextDocument(doc, root_element, maxWidth(), ui->revealMask->isChecked());
 #endif
 
     setStatusText("Saving PDF file...");
@@ -285,10 +294,6 @@ void MainWindow::on_print_clicked()
     QPrintDialog dialog(&printer, this);
     if (dialog.exec() != QDialog::Accepted) return;
 
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
-
     static QTextDocument doc;
     doc.clear();
     // Ensure layout uses correct margins (and hide page numbers)
@@ -298,7 +303,7 @@ void MainWindow::on_print_clicked()
     {
         QString result;   // only keep long enough to call doc.setHtml
         QTextStream stream(&result, QIODevice::WriteOnly|QIODevice::Text);
-        outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
+        outHtml4Subset(stream, root_element, maxWidth(), ui->revealMask->isChecked());
         setStatusText("Transferring to QTextDocument...");
         doc.setHtml(result);
     }
@@ -334,13 +339,9 @@ void MainWindow::on_simpleHtml_clicked()
         return;
     }
 
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
-
     setStatusText("Saving HTML4 file...");
     QTextStream stream(&file);
-    outHtml4Subset(stream, root_element, max_image_width, ui->revealMask->isChecked());
+    outHtml4Subset(stream, root_element, maxWidth(), ui->revealMask->isChecked());
 
     setStatusText("Simple HTML4 SAVE complete.");
 
@@ -457,9 +458,6 @@ void MainWindow::on_saveFgMod_clicked()
     //
     // Perform the actual conversion
     //
-    bool ok = true;
-    int max_image_width = ui->maxImageWidth->currentText().toInt(&ok);
-    if (!ok) max_image_width = -1;
     setStatusText("Saving MOD file...");
     qApp->processEvents();
 
