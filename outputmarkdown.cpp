@@ -268,6 +268,9 @@ static const QString write_head_meta(const XmlElement *root_elem)
 static QString doEscape(const QString &original)
 {
     QString result = original;
+    // Escape any [ characters
+    // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
+    // Occasionally there is a zero-width-space, which we'll assume should be no space at all
     return result.replace("[","\\[");
 }
 
@@ -562,7 +565,7 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
         // Now handle external link
         if (elem->objectName() == "a")
         {
-            QString filename = elem->attribute("href");
+            QString filename = doEscape(elem->attribute("href"));
             if (isInlineFile(filename))
                 result = "!" + createMarkdownLink(/*filename*/ filename, /*label*/ result);
             else
@@ -742,7 +745,7 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
     else if (close)
         result += "</" + elem->objectName() + ">";
 
-    return result;
+    return result.replace("\u00a0"," ").replace("\u200b","");
 }
 
 
@@ -1010,7 +1013,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             int pos = text.lastIndexOf(" - created with Hero Lab");
             if (pos >= 0) text = text.left(pos);
             // Escape any text in square brackets
-            result += text.replace("[","\\[");
+            result += doEscape(text);
         }
             break;
         case GUMBO_NODE_COMMENT:
@@ -1177,7 +1180,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             break;
         }
     }
-    return result;
+    return result.replace("\u00a0"," ").replace("\u200b","");
 }
 
 static const GumboNode *find_named_child(const GumboNode *parent, const QString &name)
@@ -1713,6 +1716,8 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         // Remove leading and trailing white space (including blank lines)
         // Replace two or more blank lines with just one blank line
         QString text = write_section(section, links, /*level*/ 1);
+        if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
+        if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
         text.replace(QRegExp("\n\n[\n]+"), "\n\n");
         stream << text;
     }
