@@ -1,3 +1,7 @@
+# 3.15
+Provide better formatting by ensuring that end of format is placed before a preceding space.
+Try to keep style flowing from one span to the next in the same paragraph.
+
 # 3.14
 Newline added after title of ext_object or image
 

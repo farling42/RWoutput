@@ -360,60 +360,142 @@ static const QString getGumboAttribute(const GumboNode *node, const QString &nam
 }
 
 
+/**
+ * @brief swapSpace
+ * If result ends with a space, then put append before that space and put the space after it.
+ * This is used to ensure that the closure of a style is appended onto the previous text rather
+ * than merged with the next text.
+ * @param result The string to be checked and possibly modified
+ * @param append The text to appear before the final space
+ */
+static inline void swapSpace(QString &result, const QString &append)
+{
+    if (append.isEmpty()) return;
+    if (!result.isEmpty() && result.back() == ' ')
+        result.insert(result.length()-1, append);
+    else
+        result += append;
+}
+
+
 /*
  * Text enhancements
  */
-struct TextStyles {
-    TextStyles(const XmlElement *elem)
-    {
-        if (elem->objectName() == "sup") superscript = true;
-        if (elem->objectName() == "sub") subscript   = true;
-        decode(elem->attribute("style"));
-    }
-    TextStyles(const QString &details)
+struct TextStyle {
+    struct Values {
+        bool bold=false;
+        bool italic=false;
+        bool strikethrough=false;
+        bool underline=false;
+        bool superscript=false;
+        bool subscript=false;
+        void clear()
+        {
+            bold=false;
+            italic=false;
+            strikethrough=false;
+            underline=false;
+            superscript=false;
+            subscript=false;
+        }
+        bool operator==(const Values &other)
+        {
+            return bold==other.bold &&
+                    italic==other.italic &&
+                    subscript==other.subscript &&
+                    superscript==other.superscript &&
+                    underline==other.underline &&
+                    strikethrough==other.strikethrough;
+        }
+        const QString toString() const
+        {
+            QStringList result;
+            if (bold) result.append("bold");
+            if (italic) result.append("italic");
+            if (strikethrough) result.append("strikethrough");
+            if (underline) result.append("underline");
+            if (superscript) result.append("superscript");
+            if (subscript) result.append("subscript");
+            return result.join(",");
+        };
+    };
+    Values current;
+
+    TextStyle(const QString &details)
     {
         decode(details);
     };
-    TextStyles() {};
-    bool bold=false;
-    bool italic=false;
-    bool strikethrough=false;
-    bool underline=false;
-    bool superscript=false;
-    bool subscript=false;
-    const QString start() const
+    TextStyle() {};
+
+    void startStyleElement(QString &result, const QString &name)
     {
-        QString result;
-        if (italic)        result += "*";
-        if (bold)          result += "**";
-        if (strikethrough) result += "~~";
-        if (underline)     result += "<u>";
-        if (superscript)   result += "<sup>";
-        if (subscript)     result += "<sub>";
-        return result;
+        Values other = current;
+        if      (name == "sup") other.superscript = true;
+        else if (name == "sub") other.subscript   = true;
+        swap(result, other);
     }
-    const QString finish() const
+    void finishStyleElement(QString &result, const QString &name)
+    {
+        Values other = current;
+        if      (name == "sup") other.superscript = false;
+        else if (name == "sub") other.subscript   = false;
+        swap(result, other);
+    }
+
+    void start(QString &result) const
+    {
+        QString starttext;
+        if (current.italic)        starttext += "*";
+        if (current.bold)          starttext += "**";
+        if (current.strikethrough) starttext += "~~";
+        if (current.underline)     starttext += "<u>";
+        if (current.superscript)   starttext += "<sup>";
+        if (current.subscript)     starttext += "<sub>";
+        result += starttext;
+    }
+    void modify(QString &result, const TextStyle &other)
+    {
+        swap(result, other.current);
+    }
+    void swap(QString &result, const Values &other)
+    {
+        // Which things to switch off
+        QString endtext;
+        if (current.subscript     && !other.subscript)     endtext += "</sub>";
+        if (current.superscript   && !other.superscript)   endtext += "</sup>";
+        if (current.underline     && !other.underline)     endtext += "</u>";
+        if (current.strikethrough && !other.strikethrough) endtext += "~~";
+        if (current.bold          && !other.bold)          endtext += "**";
+        if (current.italic        && !other.italic)        endtext += "*";
+        swapSpace(result, endtext);
+
+        // Which things to switch on (opposite order to OFF)
+        QString starttext;
+        if (!current.italic        && other.italic)        starttext += "*";
+        if (!current.bold          && other.bold)          starttext += "**";
+        if (!current.strikethrough && other.strikethrough) starttext += "~~";
+        if (!current.underline     && other.underline)     starttext += "<u>";
+        if (!current.superscript   && other.superscript)   starttext += "<sup>";
+        if (!current.subscript     && other.subscript)     starttext += "<sub>";
+        result += starttext;
+
+        current = other;
+    }
+    void finish(QString &result) const
     {
         // reverse order of startStyle
-        QString result;
-        if (subscript)     result += "</sub>";
-        if (superscript)   result += "</sup>";
-        if (underline)     result += "</u>";
-        if (strikethrough) result += "~~";
-        if (bold)          result += "**";
-        if (italic)        result += "*";
-        return result;
+        QString endtext;
+        if (current.subscript)     endtext += "</sub>";
+        if (current.superscript)   endtext += "</sup>";
+        if (current.underline)     endtext += "</u>";
+        if (current.strikethrough) endtext += "~~";
+        if (current.bold)          endtext += "**";
+        if (current.italic)        endtext += "*";
+        swapSpace(result, endtext);
     };
     const QString toString() const
     {
-        QStringList result;
-        if (bold) result.append("bold");
-        if (italic) result.append("italic");
-        if (strikethrough) result.append("strikethrough");
-        if (underline) result.append("underline");
-        if (superscript) result.append("superscript");
-        if (subscript) result.append("subscript");
-        return result.join(",");
+        return current.toString();
     };
     bool isEmpty() const { return is_empty; };
 private:
@@ -430,8 +512,8 @@ private:
             {
                 for (auto value : values)
                 {
-                    if (value == "bold") bold = true;
-                    else qWarning() << "Unknown element in font-weight: " << value;
+                    if (value == "bold") current.bold = true;
+                    //else qWarning() << "Unknown element in font-weight: " << value;
                 }
             }
             else if (attr == "font-style")
@@ -439,8 +521,8 @@ private:
                 // normal|italic|oblique|initial|inherit
                 for (auto value : values)
                 {
-                    if (value == "italic") italic = true;
-                    else qWarning() << "Unknown element in font-style: " << value;
+                    if (value == "italic") current.italic = true;
+                    //else qWarning() << "Unknown element in font-style: " << value;
                 }
             }
             else if (attr == "text-decoration" || attr == "text-decoration-style")
@@ -448,10 +530,10 @@ private:
                 // solid|double|dotted|dashed|wavy|initial|inherit
                 for (auto value : values)
                 {
-                    if      (value == "line-through") strikethrough = true;
-                    else if (value == "underline")    underline = true;
-                    else if (value == "none") ;
-                    else qWarning() << "Unknown element in text-decoration: " << value;
+                    if      (value == "line-through") current.strikethrough = true;
+                    else if (value == "underline")    current.underline = true;
+                    //else if (value == "none") ;
+                    //else qWarning() << "Unknown element in text-decoration: " << value;
                 }
             }
             else if (attr != "color" &&
@@ -459,13 +541,13 @@ private:
                      attr != "background-color" &&
                      attr != "font-size")
             {
-                qWarning() << "Unknown element of style: " << bits.first();
+                ; //qWarning() << "Unknown element of style: " << bits.first();
             }
         }
-        is_empty = !(bold||italic||strikethrough||underline||superscript||subscript);
+        is_empty = !(current.bold || current.italic || current.strikethrough || current.underline || current.superscript || current.subscript);
     };
 };
-typedef QHash<QString,TextStyles> GumboStyles;
+typedef QHash<QString,TextStyle> GumboStyles;
 
 
 GumboStyles getStyles(const GumboNode *node)
@@ -492,11 +574,8 @@ GumboStyles getStyles(const GumboNode *node)
                 if (parts.length() != 2) {
                     qWarning() << "Invalid syntax in GUMBO style: line";
                 }
-                TextStyles style(parts.last());
-                if (!style.isEmpty())
-                {
-                    result.insert(parts.first().mid(1), style);
-                }
+                TextStyle style(parts.last());
+                result.insert(parts.first().mid(1), style);
             }
         }
     }
@@ -504,36 +583,11 @@ GumboStyles getStyles(const GumboNode *node)
 }
 
 
-/**
- * @brief swapSpace
- * If result ends with a space, then put append before that space and put the space after it.
- * This is used to ensure that the closure of a style is appended onto the previous text rather
- * than merged with the next text.
- * @param result The string to be checked and possibly modified
- * @param append The text to appear before the final space
- */
-static inline void swapSpace(QString &result, const QString &append)
+static void write_span(QString &result, TextStyle &currentStyle, XmlElement *elem, const LinkageList &links)
 {
-    if (!append.isEmpty() && result.endsWith(" "))
-        result.insert(result.length()-1, append);
-    else
-        result += append;
-}
-
-
-static const QString write_span(XmlElement *elem, const LinkageList &links)
-{
-    QString result;
 #if DEBUG_LEVEL > 5
     qDebug() << "....span";
 #endif
-
-    //QString cls = elem->attribute("class");
-    //if (!cls.isEmpty() & !cls.startsWith("RW")) qWarning() << elem->objectName() << " has class " << cls;
-    //QString dstyle = elem->attribute("style");
-    //if (!dstyle.isEmpty()) qWarning() << elem->objectName() << " has style " << dstyle;
-
-    TextStyles style(elem);
 
     if (elem->isFixedString())
     {
@@ -553,14 +607,20 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
     else
     {
         //if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
-        result += style.start();
+        if (elem->objectName() == "span")
+        {
+            currentStyle.modify(result, TextStyle(elem->attribute("style")));
+        }
+        else if (elem->objectName() == "sub" || elem->objectName() == "sup")
+        {
+            currentStyle.startStyleElement(result, elem->objectName());
+        }
         // Only put in span if we really require it
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
         {
-            result += write_span(child, links);
+            write_span(result, currentStyle, child, links);
         }
-        swapSpace(result, style.finish());
 
         // Now handle external link
         if (elem->objectName() == "a")
@@ -570,9 +630,11 @@ static const QString write_span(XmlElement *elem, const LinkageList &links)
                 result = "!" + createMarkdownLink(/*filename*/ filename, /*label*/ result);
             else
                 result = createMarkdownLink(/*filename*/ filename, /*label*/ result);
+        } else if (elem->objectName() == "sub" || elem->objectName() == "sup")
+        {
+            currentStyle.finishStyleElement(result, elem->objectName());
         }
     }
-    return result;
 }
 
 
@@ -684,20 +746,19 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
     qDebug() << "....paragraph";
 #endif
 
-    //QString cls = elem->attribute("class");
-    //if (!cls.isEmpty() & !cls.startsWith("RW")) qWarning() << elem->objectName() << " has class " << cls;
-    //QString style = elem->attribute("style");
-    //if (!style.isEmpty()) qWarning() << elem->objectName() << " has style " << style;
-
+    TextStyle currentStyle;
     if (elem->isFixedString())
     {
-        return write_span(elem, links);
+        write_span(result, currentStyle, elem, links);
+        return result;
     }
 
     bool close = false;
     QString sntype = elem->objectName();
     if (sntype == "snippet")
         ;
+    else if (sntype == "span")
+        qWarning() << "SPAN found in write_para";
     else if (sntype == "p")
         result += newline;
     else if (sntype == "ul")
@@ -731,19 +792,22 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
         //result += "<" + elem->objectName() + ">";
         //close=true;
     }
+
     for (auto child : elem->xmlChildren())
     {
         if (child->objectName() == "span")
-            result += write_span(child, links);
+            write_span(result, currentStyle, child, links);
         else if (child->objectName() != "tag_assign")
             // Ignore certain children
             result += write_para(child, links, listtype);
     }
+
     // Anything to put AFTER the child elements?
     if (sntype == "snippet" || sntype == "p" || sntype == "ul" || sntype == "ol")
         result += newline;
     else if (close)
         result += "</" + elem->objectName() + ">";
+    currentStyle.finish(result);
 
     return result.replace("\u00a0"," ").replace("\u200b","");
 }
@@ -969,20 +1033,16 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
 }
 
 
-static const QString startGumboStyle(const GumboNode *node, const GumboStyles &styles)
+static void startGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles)
 {
     const QString cls = getGumboAttribute(node, "class");
-    if (cls.isEmpty()) return QString();
-    //qDebug() << "Applying GUMBO style " << cls << ":" << styles[cls].toString();
-    return styles[cls].start();
+    if (!cls.isEmpty()) styles[cls].start(result);
 }
 
-static const QString finishGumboStyle(const GumboNode *node, const GumboStyles &styles)
+static void finishGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles)
 {
     const QString cls = getGumboAttribute(node, "class");
-    if (cls.isEmpty()) return QString();
-    //qDebug() << "Removing GUMBO style " << cls << ":" << styles[cls].toString();
-    return styles[cls].finish();
+    if (!cls.isEmpty()) styles[cls].finish(result);
 }
 
 
@@ -1030,7 +1090,8 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             // See what to put before the text
             if (tag == "p")
             {
-                result += newline + startGumboStyle(node, styles);
+                result += newline;
+                startGumboStyle(result, node, styles);
             }
             else if (tag == "br")
                 result += "\n\n";
@@ -1103,15 +1164,12 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
 #endif
             else if (tag == "span")
             {
-                ;  // do nothing with spans (we might need to get any style from it
-                result += startGumboStyle(node, styles);
+                startGumboStyle(result, node, styles);
             }
             else if (tag == "sup" || tag == "sub") {
                 result += "<" + tag + ">";
                 close=true;
             }
-            else if (tag == "span")
-                ; // ignore span
             else {
                 result += "<" + tag + ">";
                 close=true;
@@ -1135,7 +1193,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             // Now, see if we need to terminate this node
             if (tag == "p")
             {
-                swapSpace(result, finishGumboStyle(node,styles));
+                finishGumboStyle(result, node,styles);
                 result += newline;
             }
             else if (tag == "b")
@@ -1149,7 +1207,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             }
             else if (tag == "span")
             {
-                swapSpace(result, finishGumboStyle(node,styles));
+                finishGumboStyle(result, node,styles);
             }
 #ifdef IGNORE_GUMBO_TABLE
             else if (tag == "tr" || tag == "table" || tag == "tbody")
