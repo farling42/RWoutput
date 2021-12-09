@@ -271,7 +271,7 @@ static QString doEscape(const QString &original)
     // Escape any [ characters
     // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
     // Occasionally there is a zero-width-space, which we'll assume should be no space at all
-    return result.replace("[","\\[");
+    return result.replace("[","\\[").replace("*","\\*").replace("~","\\~");
 }
 
 
@@ -602,8 +602,11 @@ static void write_span(QString &result, TextStyle &currentStyle, XmlElement *ele
     }
     else if (elem->objectName() == "img")
     {
-        result = createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ elem->attribute("alt"));
+        result += createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ elem->attribute("alt"));
     }
+    else if (elem->objectName() == "br")
+        // Keep explicit breaks (don't convert into \n\n)
+        result += "<br/>";
     else
     {
         //if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
@@ -1094,7 +1097,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 startGumboStyle(result, node, styles);
             }
             else if (tag == "br")
-                result += "\n\n";
+                result += "<br/>";
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
