@@ -293,7 +293,7 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
         if (description.isEmpty() && gm_directions.isEmpty())
             result = title;
         else
-            result += map_pin_title.arg(title);
+            result = map_pin_title.arg(title);
     }
     if (!description.isEmpty())
     {
@@ -605,11 +605,27 @@ static void write_span(QString &result, TextStyle &currentStyle, XmlElement *ele
         result += createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ elem->attribute("alt"));
     }
     else if (elem->objectName() == "br")
+    {
         // Keep explicit breaks (don't convert into \n\n)
         result += "<br/>";
+    }
+    else if (elem->objectName() == "a")
+    {
+        // Need to collect child elements to be the LABEL for the link, rather than appending directly to result
+        QString label;
+        TextStyle labelStyle;
+        for (auto child: elem->xmlChildren())
+        {
+            write_span(label, labelStyle, child, links);
+        }
+        QString filename = doEscape(elem->attribute("href"));
+        if (isInlineFile(filename))
+            result += "!" + createMarkdownLink(/*filename*/ filename, /*label*/ label);
+        else
+            result += createMarkdownLink(/*filename*/ filename, /*label*/ label);
+    }
     else
     {
-        //if (elem->objectName() != "span") qDebug() << "Trying to encode element: " << elem->objectName();
         if (elem->objectName() == "span")
         {
             currentStyle.modify(result, TextStyle(elem->attribute("style")));
@@ -618,6 +634,7 @@ static void write_span(QString &result, TextStyle &currentStyle, XmlElement *ele
         {
             currentStyle.startStyleElement(result, elem->objectName());
         }
+
         // Only put in span if we really require it
         // All sorts of HTML can appear inside the text
         for (auto child: elem->xmlChildren())
@@ -625,15 +642,7 @@ static void write_span(QString &result, TextStyle &currentStyle, XmlElement *ele
             write_span(result, currentStyle, child, links);
         }
 
-        // Now handle external link
-        if (elem->objectName() == "a")
-        {
-            QString filename = doEscape(elem->attribute("href"));
-            if (isInlineFile(filename))
-                result = "!" + createMarkdownLink(/*filename*/ filename, /*label*/ result);
-            else
-                result = createMarkdownLink(/*filename*/ filename, /*label*/ result);
-        } else if (elem->objectName() == "sub" || elem->objectName() == "sup")
+        if (elem->objectName() == "sub" || elem->objectName() == "sup")
         {
             currentStyle.finishStyleElement(result, elem->objectName());
         }
@@ -663,7 +672,7 @@ static const QString table(XmlElement *elem, const LinkageList &links, const QSt
             {
                 if (sub->objectName() == "tr")
                     rows.append(sub);
-                else
+                else if (!sub->objectName().isEmpty())
                     qDebug() << "Unsupported node in thead: " << sub->objectName();
             }
         }
@@ -673,7 +682,7 @@ static const QString table(XmlElement *elem, const LinkageList &links, const QSt
             {
                 if (sub->objectName() == "tr")
                     rows.append(sub);
-                else
+                else if (!sub->objectName().isEmpty())
                     qDebug() << "Unsupported node in tbody: " << sub->objectName();
             }
         }
@@ -681,7 +690,7 @@ static const QString table(XmlElement *elem, const LinkageList &links, const QSt
         {
             rows.append(child);
         }
-        else
+        else if (!type.isEmpty())
         {
             qDebug() << "Unsupported node in table: " << type;
         }
@@ -709,7 +718,7 @@ static const QString table(XmlElement *elem, const LinkageList &links, const QSt
                     rowtext += "| " + cell + " ";
                     if (first) colcount++;
                 }
-                else
+                else if (!sub->objectName().isEmpty())
                     qDebug() << "Unsupported node in tr: " << sub->objectName();
             }
             if (onerow)
@@ -760,8 +769,6 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
     QString sntype = elem->objectName();
     if (sntype == "snippet")
         ;
-    else if (sntype == "span")
-        qWarning() << "SPAN found in write_para";
     else if (sntype == "p")
         result += newline;
     else if (sntype == "ul")
@@ -1362,6 +1369,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 
 static inline const QString annotationText(XmlElement *snippet, const LinkageList &links, bool wrapped = true)
 {
+    // No need to consider TextStyle, since this is called at the SNIPPET level, not the paragraph level
     XmlElement *annotation = snippet->xmlChild("annotation");
     if (!annotation) return "";
 
