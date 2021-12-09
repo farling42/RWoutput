@@ -806,11 +806,11 @@ static const QString write_para(XmlElement *elem, const LinkageList &links, cons
     }
 
     // Anything to put AFTER the child elements?
+    currentStyle.finish(result);
     if (sntype == "snippet" || sntype == "p" || sntype == "ul" || sntype == "ol")
         result += newline;
     else if (close)
         result += "</" + elem->objectName() + ">";
-    currentStyle.finish(result);
 
     return result.replace("\u00a0"," ").replace("\u200b","");
 }
