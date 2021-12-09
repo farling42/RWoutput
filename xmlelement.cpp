@@ -190,7 +190,7 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
             //qDebug().noquote() << "NoToken";
             break;
         case QXmlStreamReader::Invalid:
-            //qDebug().noquote() << "Invalid:" << reader->errorString();
+            qWarning().noquote() << "Invalid:" << reader->errorString();
             break;
         case QXmlStreamReader::StartDocument:
             //qDebug().noquote() << "StartDocument:" << reader->documentVersion();
@@ -239,6 +239,7 @@ void XmlElement::parse_gumbo_nodes(const GumboNode *node)
 #ifdef PRINT_GUMBO
             qDebug() << "GUMBO_NODE_WHITESPACE ignored";
 #endif
+            new XmlElement(child->v.text.text, this);
             break;
 
         case GUMBO_NODE_DOCUMENT:
