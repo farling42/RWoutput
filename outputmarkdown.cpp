@@ -636,7 +636,7 @@ static void write_span(QString &result, TextStyle &currentStyle, XmlElement *ele
     else if (elem->objectName() == "br")
     {
         // Keep explicit breaks (don't convert into \n\n)
-        result += "<br/>";
+        result += "<br>";
     }
     else if (elem->objectName() == "a")
     {
@@ -1133,7 +1133,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 startGumboStyle(result, node, styles);
             }
             else if (tag == "br")
-                result += "\n";  // Using <br/> breaks formatting in portfolio files
+                result += "\n";  // Using <br> breaks formatting in portfolio files
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
