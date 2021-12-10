@@ -35,6 +35,7 @@
 #include <QStaticText>
 #include <future>
 #include <QDateTime>
+#include <QRegularExpression>
 #ifdef TIME_CONVERSION
 #include <QElapsedTimer>
 #endif
@@ -85,7 +86,8 @@ static const QString newline("\n");
 static inline const QString validFilename(const QString &string)
 {
     // full character list from https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
-    static const QRegExp invalid_chars("[<>:\"/\\|?*]");
+    static const QRegularExpression invalid_chars("[<>:\"/\\|?*]");
+    if (!invalid_chars.isValid()) qWarning() << "validFilename has invalid regexp";
     QString result(string);
     return result.replace(invalid_chars,"_");
 }
@@ -95,10 +97,24 @@ static inline const QString validTag(const QString &string)
 {
     // Tag can only contain letters (case sensitive), digits, underscore and dash
     // "/" is allowed for nested tags
-    QString result = string;
+
     // First replace is for things like "Region: Geographical", renaming it to just "Region-Geographical" rather than "Region--Geographical"
-   // return result.replace(": ","-").replace(QRegExp("[^\\w-]"), "-");
-    return result.replace(QRegExp("[^\\w-]"), "-");
+    // return result.replace(": ","-").replace(QRegularExpression("[^\\w-]"), "-");
+    // QRegularExpression documentation says that "\w" - Matches a word character (QChar::isLetterOrNumber(), QChar::isMark(), or '_').
+    // isLetterOrNumber matches Letter_* or Number_*  (Number_DecimalDigit (Nd), Number_Letter (Nl), Number_Other (No)
+    // isMark           matches Mark_NonSpacing (Mn), Mark_SpacingCombining (Mc), Mark_Enclosing (Me)  (unicode class name)
+    //
+    // Officially, Obsidian only allows letters, numbers, and the symbols _ (underscore), - (dash)
+    // reserving the use of / (forward slash) for nested tags.
+    //
+    // Unofficially, some other characters appear to be allowed
+    //
+    // Symbol_Other (°), Symbol_Modifier, Symbol_Currency (£), Symbol_Math
+    //
+    static const QRegularExpression invalid_chars("[^\\w°£¬]");
+    if (!invalid_chars.isValid()) qWarning() << "validTag has invalid regexp";
+    QString result(string);
+    return result.replace(invalid_chars, "-");
 }
 
 
@@ -457,17 +473,27 @@ struct TextStyle {
     {
         swap(result, other.current);
     }
+    void inline remove(QString &result, const QString &addition, const QString &endswith) const
+    {
+        if (result.endsWith(endswith))
+            // There is no text between the start and end of this formatting, so remove the START indicator
+            result.truncate(result.length() - endswith.length());
+        else
+            result.append(addition);
+    }
     void swap(QString &result, const Values &other)
     {
         // Which things to switch off
-        QString endtext;
-        if (current.subscript     && !other.subscript)     endtext += "</sub>";
-        if (current.superscript   && !other.superscript)   endtext += "</sup>";
-        if (current.underline     && !other.underline)     endtext += "</u>";
-        if (current.strikethrough && !other.strikethrough) endtext += "~~";
-        if (current.bold          && !other.bold)          endtext += "**";
-        if (current.italic        && !other.italic)        endtext += "*";
-        swapSpace(result, endtext);
+        // Ensure space (if any) is AFTER the close
+        bool space = result.endsWith(' ');
+        if (space) result.truncate(result.length()-1);
+        if (current.subscript     && !other.subscript)     remove(result, "</sub>", "<sub>");
+        if (current.superscript   && !other.superscript)   remove(result, "</sup>", "<sup>");
+        if (current.underline     && !other.underline)     remove(result, "</u>",   "<u>");
+        if (current.strikethrough && !other.strikethrough) remove(result, "~~",     "~~");
+        if (current.bold          && !other.bold)          remove(result, "**",     "**");
+        if (current.italic        && !other.italic)        remove(result, "*",      "*");
+        if (space) result += ' ';
 
         // Which things to switch on (opposite order to OFF)
         QString starttext;
@@ -484,14 +510,17 @@ struct TextStyle {
     void finish(QString &result) const
     {
         // reverse order of startStyle
-        QString endtext;
-        if (current.subscript)     endtext += "</sub>";
-        if (current.superscript)   endtext += "</sup>";
-        if (current.underline)     endtext += "</u>";
-        if (current.strikethrough) endtext += "~~";
-        if (current.bold)          endtext += "**";
-        if (current.italic)        endtext += "*";
-        swapSpace(result, endtext);
+        // Ensure space (if any) is AFTER the close
+        bool space = result.endsWith(' ');
+        if (space) result.truncate(result.length()-1);
+
+        if (current.subscript)     remove(result, "</sub>", "<sub>");
+        if (current.superscript)   remove(result, "</sup>", "<sup>");
+        if (current.underline)     remove(result, "</u>",   "<u>");
+        if (current.strikethrough) remove(result, "~~",     "~~");
+        if (current.bold)          remove(result, "**",     "**");
+        if (current.italic)        remove(result, "*",      "*");
+        if (space) result += ' ';
     };
     const QString toString() const
     {
@@ -1104,7 +1133,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 startGumboStyle(result, node, styles);
             }
             else if (tag == "br")
-                result += "<br/>";
+                result += "\n";  // Using <br/> breaks formatting in portfolio files
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
@@ -1787,7 +1816,9 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         QString text = write_section(section, links, /*level*/ 1);
         if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
         if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
-        text.replace(QRegExp("\n\n[\n]+"), "\n\n");
+        static const QRegularExpression reduce_newlines("\n\n[\n]+");
+        if (!reduce_newlines.isValid()) qWarning() << "Invalid regexp in write_topic_file";
+        text.replace(reduce_newlines, "\n\n");
         stream << text;
     }
 

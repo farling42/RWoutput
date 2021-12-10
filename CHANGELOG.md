@@ -1,5 +1,13 @@
+# 3.16
+Add some non-ASCII characters to the valid characters allowed in Tags (°&¬)
+
+Remove formatting markers which don't include any actual text.
+
+Revert change when processing HTML (HL Portfolio files and Statblocks) so that "<br>" is replaced by "\n" again.
+
 # 3.15
 Provide better formatting by ensuring that end of format is placed before a preceding space.
+
 Try to keep style flowing from one span to the next in the same paragraph.
 
 # 3.14
