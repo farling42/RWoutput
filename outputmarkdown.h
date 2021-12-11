@@ -18,7 +18,7 @@
 #ifndef OUTPUTMARKDOWN_H
 #define OUTPUTMARKDOWN_H
 
-#include <QTextStream>
+#include <QString>
 class XmlElement;
 
 extern const QString map_pin_title_default;

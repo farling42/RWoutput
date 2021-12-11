@@ -21,6 +21,7 @@
 
 #include "outputmarkdown.h"
 
+#include <Qt>
 #include <QBitmap>
 #include <QBuffer>
 #include <QCollator>
@@ -33,6 +34,7 @@
 #include <QApplication>
 #include <QStyle>
 #include <QStaticText>
+#include <QTextStream>
 #include <future>
 #include <QDateTime>
 #include <QRegularExpression>
@@ -287,7 +289,7 @@ static QString doEscape(const QString &original)
     // Escape any [ characters
     // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
     // Occasionally there is a zero-width-space, which we'll assume should be no space at all
-    return result.replace("[","\\[").replace("*","\\*").replace("~","\\~");
+    return result.replace('[',"\\[").replace('*',"\\*").replace('~',"\\~");
 }
 
 
@@ -596,15 +598,19 @@ GumboStyles getStyles(const GumboNode *node)
             // each line is of the form:
             // .cs1157FFE2{text-align:right;text-indent:0pt;margin:0pt 0pt 0pt 0pt}
             QString body(node->v.text.text);
-            for (const QString &line : body.trimmed().split("\n"))
+            for (const QString &oneline : body.trimmed().split("\n", QString::SkipEmptyParts))
             {
-                // remove trailing "}"
-                QStringList parts = line.mid(0,line.length()-1).trimmed().split("{");
-                if (parts.length() != 2) {
-                    qWarning() << "Invalid syntax in GUMBO style: line";
+                // Some files have more than one style on a single line
+                for (const QString &line : oneline.trimmed().split("}", QString::SkipEmptyParts))
+                {
+                    // remove trailing "}"
+                    QStringList parts = line.split("{");
+                    if (parts.length() != 2) {
+                        qWarning() << "Invalid syntax in GUMBO style: " << line;
+                    }
+                    TextStyle style(parts.last());
+                    result.insert(parts.first().mid(1), style);
                 }
-                TextStyle style(parts.last());
-                result.insert(parts.first().mid(1), style);
             }
         }
     }
@@ -1844,7 +1850,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             // Remove spaces from tag
             stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
             XmlElement *annot = connection->xmlChild("annotation");
-            if (annot) stream << " ; " << annot->xmlChild()->fixedText();
+            if (annot) stream << " ; " << doEscape(annot->xmlChild()->fixedText());
             stream << newline;
         }
     }
