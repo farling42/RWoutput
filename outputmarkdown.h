@@ -38,6 +38,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool obsidian_links,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
-                bool tag_for_each_suffix);
+                bool tag_for_each_suffix,
+                bool prefix_gm_directions);
 
 #endif // OUTPUTMARKDOWN_H

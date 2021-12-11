@@ -62,7 +62,8 @@ static int  max_index_level = 99;
 static bool create_prefix_tag = false;
 static bool create_suffix_tag = false;
 static int  image_max_width   = -1;
-static int gumbofilenumber = 0;
+static int  gumbofilenumber = 0;
+static bool prefix_gmdir=true;
 
 #undef DUMP_CHILDREN
 
@@ -1429,7 +1430,8 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        result += "***GMDIR***: " + write_para_children(gm_directions, links) + "\n";
+        if (prefix_gmdir) result += "***GMDIR***: ";
+        result += write_para_children(gm_directions, links) + "\n";
         // The following nice style prevents links from working
         //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + write_para_children(gm_directions, links) + "</p>";
     }
@@ -2082,7 +2084,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool do_obsidian_links,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
-                bool tag_for_each_suffix)
+                bool tag_for_each_suffix,
+                bool prefix_gm_directions)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -2097,6 +2100,7 @@ void toMarkdown(const XmlElement *root_elem,
     create_prefix_tag = tag_for_each_prefix,
     create_suffix_tag = tag_for_each_suffix;
     image_max_width   = max_image_width;
+    prefix_gmdir      = prefix_gm_directions;
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
 

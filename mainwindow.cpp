@@ -224,7 +224,8 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->obsidianLinks->isChecked(),
                ui->createNavPanel->isChecked(),
                ui->tagForEachPrefix->isChecked(),
-               ui->tagForEachSuffix->isChecked());
+               ui->tagForEachSuffix->isChecked(),
+               ui->prefixGMDirections->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

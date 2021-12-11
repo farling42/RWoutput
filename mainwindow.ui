@@ -219,6 +219,16 @@ FILE</string>
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QCheckBox" name="prefixGMDirections">
+              <property name="text">
+               <string>Add prefix to GM Directions</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
