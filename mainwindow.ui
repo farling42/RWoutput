@@ -221,6 +221,9 @@ FILE</string>
             </item>
             <item>
              <widget class="QCheckBox" name="prefixGMDirections">
+              <property name="toolTip">
+               <string>When converting GM directions, prefix each with &quot;GMDIR:&quot; in bold italic</string>
+              </property>
               <property name="text">
                <string>Add prefix to GM Directions</string>
               </property>
