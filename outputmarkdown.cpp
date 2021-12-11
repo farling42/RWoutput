@@ -1426,12 +1426,17 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     qDebug() << "...snippet" << sn_type;
 #endif
 
+    // Put GM-Directions first - which could occur on any snippet
+    if (auto gm_directions = snippet->xmlChild("gm_directions"))
+    {
+        result += "***GMDIR***: " + write_para_children(gm_directions, links) + "\n";
+        // The following nice style prevents links from working
+        //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + write_para_children(gm_directions, links) + "</p>";
+    }
+
     if (sn_type == "Multi_Line")
     {
         // child is either <contents> or <gm_directions> or both
-        if (auto gm_directions = snippet->xmlChild("gm_directions"))
-            result += write_para_children(gm_directions, links);
-
         if (auto contents = snippet->xmlChild("contents"))
             result += write_para_children(contents, links);
 
