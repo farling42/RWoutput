@@ -89,7 +89,7 @@ static const QString newline("\n");
 static inline const QString validFilename(const QString &string)
 {
     // full character list from https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
-    static const QRegularExpression invalid_chars("[<>:\"/\\|?*]");
+    static const QRegularExpression invalid_chars("[<>:\"/\\|?*]", QRegularExpression::UseUnicodePropertiesOption);
     if (!invalid_chars.isValid()) qWarning() << "validFilename has invalid regexp";
     QString result(string);
     return result.replace(invalid_chars,"_");
@@ -114,7 +114,7 @@ static inline const QString validTag(const QString &string)
     //
     // Symbol_Other (°), Symbol_Modifier, Symbol_Currency (£), Symbol_Math
     //
-    static const QRegularExpression invalid_chars("[^\\w°£¬]");
+    static const QRegularExpression invalid_chars("[^\\w°£¬]", QRegularExpression::UseUnicodePropertiesOption);
     if (!invalid_chars.isValid()) qWarning() << "validTag has invalid regexp";
     QString result(string);
     return result.replace(invalid_chars, "-");
@@ -1829,7 +1829,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         QString text = write_section(section, links, /*level*/ 1);
         if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
         if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
-        static const QRegularExpression reduce_newlines("\n\n[\n]+");
+        static const QRegularExpression reduce_newlines("\n\n[\n]+", QRegularExpression::UseUnicodePropertiesOption);
         if (!reduce_newlines.isValid()) qWarning() << "Invalid regexp in write_topic_file";
         text.replace(reduce_newlines, "\n\n");
         stream << text;
