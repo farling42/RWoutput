@@ -79,7 +79,8 @@ extern QString map_pin_gm_directions;
 extern bool show_full_link_tooltip;
 extern bool show_full_map_pin_tooltip;
 
-static QString assetsDir("asset-files");
+static QString oldAssetsDir("asset-files");
+static QString assetsDir("zz_asset-files");
 static QString imported_date;
 static QString mainPageName;
 static const QString newline("\n");
@@ -2158,6 +2159,10 @@ void toMarkdown(const XmlElement *root_elem,
     collator.setNumericMode(true);
 
     imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());
+
+    // Patch name of assets directory
+    if (QDir(oldAssetsDir).exists() && !QDir(assetsDir).exists())
+        QDir::current().rename(oldAssetsDir, assetsDir);
 
     // Get a full list of the individual STYLE attributes of every single topic,
     // with a view to putting them into the CSS instead.

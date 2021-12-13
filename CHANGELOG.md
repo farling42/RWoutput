@@ -1,3 +1,20 @@
+# 3.18
+For each Tag_Standard or Tag_Multi_Domain snippet, put a corresponding line in the frontmatter.
+Tag_Multi_Domain will be created as a YAML array, Tag_Standard will be created as a single value variable.
+The name of the variable will be a valid obsidian tag (e.g. spaces replaced by "-").
+
+Rename asset-files to zz_asset-files so that it doesn't appear at the top of the File Explorer view (it renames the old directory if it exists).
+
+
+
+# 3.17.1
+Set QRegularExpression so that it will actually check for UNICODE characters when checking letters (by default it only supports ASCII!)
+
+# 3.17
+When decoding GM Directions. they are now put onto their own line before the converted snippet.
+
+There is an option to have each GM Direction prefixed with the string "GMDIR: " in bold+italic.
+
 # 3.16
 Add some non-ASCII characters to the valid characters allowed in Tags (°&¬)
 
