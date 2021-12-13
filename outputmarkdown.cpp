@@ -64,6 +64,7 @@ static bool create_suffix_tag = false;
 static int  image_max_width   = -1;
 static int  gumbofilenumber = 0;
 static bool prefix_gmdir=true;
+static bool connections_as_graph=true;
 
 #undef DUMP_CHILDREN
 
@@ -197,6 +198,12 @@ inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, cons
         if (child->objectName() != "topic") result.append(topicDescendents(child, name));
     }
     return result;
+}
+
+
+static inline const QString mermaid_node(const QString &topic_id)
+{
+    return topic_id + "([\"" + topic_files.value(topic_id) + "\"]); class " + topic_id + " internal-link";
 }
 
 
@@ -1434,7 +1441,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 }
 
 
-static inline const QString annotationText(XmlElement *snippet, const LinkageList &links, bool wrapped = true)
+static inline const QString annotationText(const XmlElement *snippet, const LinkageList &links, bool wrapped = true)
 {
     // No need to consider TextStyle, since this is called at the SNIPPET level, not the paragraph level
     XmlElement *annotation = snippet->xmlChild("annotation");
@@ -1708,6 +1715,45 @@ static const QMap<QString,QString> nature_mapping{
     { "Public_Attitude_Towards", "Public Attitude Towards" },
     { "Private_Attitude_Towards", "Private Attitude Towards" }
 };
+static const QMap<QString,bool> nature_directional{
+    { "Arbitrary", false},
+    { "Generic",   false},
+    { "Union",     false },
+    { "Parent_To_Offspring", true},
+    { "Offspring_To_Parent", true },
+    { "Master_To_Minion", true },
+    { "Minion_To_Master", true },
+    { "Public_Attitude_Towards", true },
+    { "Private_Attitude_Towards", true }
+};
+static const QMap<QString,bool> nature_incoming{
+    { "Arbitrary", false},
+    { "Generic",   false},
+    { "Union",     false },
+    { "Parent_To_Offspring",      false },
+    { "Offspring_To_Parent",      true  },
+    { "Master_To_Minion",         false },
+    { "Minion_To_Master",         true  },
+    { "Public_Attitude_Towards",  false },
+    { "Private_Attitude_Towards", false }
+};
+
+static QString connection_qualifier(const QString &nature, const QString &qualifier)
+{
+    QString result = qualifier;
+    if (nature == "Master_To_Minion")
+    {
+        auto quals = result.split(" / ");
+        if (quals.length() > 1) result = quals[0];
+    }
+    else if (nature == "Minion_To_Master")
+    {
+        auto quals = result.split(" / ");
+        if (quals.length() > 1) result = quals[1];
+    }
+    return result;
+}
+
 
 static QString relationship(XmlElement *connection)
 {
@@ -1720,19 +1766,7 @@ static QString relationship(XmlElement *connection)
     if (result.isEmpty()) result = "Unknown Relationship";
 
     if (!qualifier.isEmpty())
-    {
-        if (nature == "Master_To_Minion")
-        {
-            auto quals = qualifier.split(" / ");
-            if (quals.length() > 1) qualifier = quals[0];
-        }
-        else if (nature == "Minion_To_Master")
-        {
-            auto quals = qualifier.split(" / ");
-            if (quals.length() > 1) qualifier = quals[1];
-        }
-        result += "-" + qualifier;
-    }
+        result += "-" + connection_qualifier(nature, qualifier);
     else if (!attitude.isEmpty())
         result += "-" + attitude;
     else if (!rating.isEmpty())
@@ -1906,13 +1940,63 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     if (connections.length() > 0)
     {
         stream << "\n\n---\n## Connections\n";
-        for (auto connection : connections)
+        if (!connections_as_graph)
         {
-            // Remove spaces from tag
-            stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
-            XmlElement *annot = connection->xmlChild("annotation");
-            if (annot) stream << " ; " << doEscape(annot->xmlChild()->fixedText());
-            stream << newline;
+            for (auto connection : connections)
+            {
+                // Remove spaces from tag
+                stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
+                XmlElement *annot = connection->xmlChild("annotation");
+                if (annot) stream << " ; " << doEscape(annot->xmlChild()->fixedText());
+                stream << newline;
+            }
+        } else {
+            // Now create a MERMAID flowchart
+            const QString topic_id    = topic->attribute("topic_id");
+            const QString topic_name  = topic->attribute("public_name");
+
+            QSet<QString> nodes;
+            QSet<QString> relationships;
+
+            for (auto connection : connections)
+            {
+                QString source_id         = topic_id;
+                QString target_id         = connection->attribute("target_id");
+                const QString nature      = connection->attribute("nature");
+                const QString attitude    = connection->attribute("attitude");
+                const QString qualifier   = connection->attribute("qualifier");
+
+                // Need to be incoming links
+                if (nature_incoming.value(nature)) source_id.swap(target_id);
+
+                const QString arrow = nature_directional.value(nature) ? "-->" : "<-->";
+
+                // Add the source and target to the list of nodes
+                // (square brackets make the box have rounded ends instead of square)
+                nodes.insert(mermaid_node(source_id));
+                nodes.insert(mermaid_node(target_id));
+
+                QString label = nature_mapping.value(nature);
+                if (!attitude.isEmpty())  label += ':' + newline + attitude;
+                if (!qualifier.isEmpty()) label += newline + '(' + connection_qualifier(nature, qualifier) + ')';
+                QString annotation  = annotationText(connection, links, false);  // not const so we can do annotation.replace later
+                if (!annotation.isEmpty()) label += newline + annotation.replace("&#xd;\n","\n");
+
+                if (!label.isEmpty()) label = "-- \"" + label + "\" ";
+
+                relationships.insert(source_id + label + arrow + target_id);
+            }
+
+            if (!nodes.isEmpty() && !relationships.isEmpty())
+            {
+                stream << "```mermaid" << newline;
+                // graph doesn't allow two-headed arrows
+                // TD = topdown, rather than LR = left-to-right
+                stream << "flowchart TD" << newline;
+                stream << nodes.values().join(newline) << newline;
+                stream << relationships.values().join(newline) << newline;
+                stream << "```\n";
+            }
         }
     }
 
@@ -2121,6 +2205,101 @@ static void write_category_files(const XmlElement *tree)
     }
 }
 
+
+static const XmlElement *findTopicParent(const XmlElement *elem)
+{
+    QObject const * node = elem;
+    while (node && node->objectName() != "topic")
+        node = node->parent();
+    return qobject_cast<const XmlElement*>(node);
+}
+
+
+static void write_relationships(const XmlElement *root_elem)
+{
+    const QString folderName("Relationships");
+    static const LinkageList nolinks;
+
+    QMultiMap<QString, const XmlElement*> connections;
+    for (const auto connection: root_elem->findChildren<XmlElement*>("connection"))
+    {
+        QString nature = connection->attribute("nature");
+        // Don't include child nodes
+        if (nature == "Minion_To_Master" ||
+            nature == "Offspring_To_Parent")
+            continue;
+        connections.insert(nature, connection);
+    }
+
+    for (auto nature : connections.keys())
+    {
+        QSet<QString> nodes;
+        QSet<QString> relationships;
+
+        bool directional = nature_directional.value(nature);
+        const QString arrow = directional ? "-->" : "<-->";
+
+        for (auto connection: connections.values(nature))
+        {
+            const XmlElement *topic = findTopicParent(connection);
+            if (!topic)
+            {
+                qWarning() << "create_relationships: failed to find topic node for connection!";
+                continue;
+            }
+
+            const QString topic_id    = topic->attribute("topic_id");
+            const QString topic_name  = topic->attribute("public_name");
+            const QString target_id   = connection->attribute("target_id");
+            const QString attitude    = connection->attribute("attitude");
+            const QString qualifier   = connection->attribute("qualifier");
+            QString annotation  = annotationText(connection, nolinks, false);  // not const so we can do annotation.replace later
+
+            // Add the source and target to the list of nodes
+            // (square brackets make the box have rounded ends instead of square)
+            nodes.insert(mermaid_node(topic_id));
+            nodes.insert(mermaid_node(target_id));
+
+            // If not directional, ensure it only occurs ONCE in the relationships SET
+            QString from=topic_id, to=target_id;
+            if (!directional && from > to) from.swap(to);
+
+            QStringList labels;
+            if (!attitude.isEmpty()) labels.append(attitude);
+            if (nature == "Generic" && !qualifier.isEmpty()) labels.append(qualifier);
+            if (!annotation.isEmpty()) labels.append(annotation.replace("&#xd;\n","\n"));
+
+            QString label = (!labels.isEmpty()) ? "-- \"" + labels.join(newline) + "\" " : QString();
+
+            relationships.insert(from + label + arrow + to);
+        }
+
+        if (!nodes.isEmpty() && !relationships.isEmpty())
+        {
+            QFile file(dirFile(folderName, nature_mapping.value(nature) + ".md"));
+
+            if (!file.open(QFile::WriteOnly|QFile::Text))
+            {
+                qWarning() << "Failed to create file for relationships";
+                return;
+            }
+            QTextStream stream(&file);
+            startFile(stream);
+            stream << "---\n\n";
+
+            stream << "```mermaid" << newline;
+            // graph doesn't allow two-headed arrows
+            // TD = topdown, rather than LR = left-to-right
+            stream << "flowchart TD" << newline;
+            stream << nodes.values().join(newline) << newline;
+            stream << relationships.values().join(newline) << newline;
+            stream << "```\n";
+            file.close();
+        }
+    }
+}
+
+
 /**
  * @brief toHtml
  * Generate Markdown representation of the supplied XmlElement tree
@@ -2139,7 +2318,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
                 bool tag_for_each_suffix,
-                bool prefix_gm_directions)
+                bool prefix_gm_directions,
+                bool graph_connections)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -2155,6 +2335,7 @@ void toMarkdown(const XmlElement *root_elem,
     create_suffix_tag = tag_for_each_suffix;
     image_max_width   = max_image_width;
     prefix_gmdir      = prefix_gm_directions;
+    connections_as_graph = graph_connections;
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
 
@@ -2206,6 +2387,8 @@ void toMarkdown(const XmlElement *root_elem,
     write_support_files();
     write_separate_index(root_elem);
     write_category_files(root_elem);
+
+    write_relationships(root_elem);
 
     // A separate file for every single topic
     write_child_topics(root_elem->findChild<XmlElement*>("contents"));

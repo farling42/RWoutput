@@ -225,7 +225,8 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->createNavPanel->isChecked(),
                ui->tagForEachPrefix->isChecked(),
                ui->tagForEachSuffix->isChecked(),
-               ui->prefixGMDirections->isChecked());
+               ui->prefixGMDirections->isChecked(),
+               ui->graphConnections->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

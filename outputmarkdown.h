@@ -39,6 +39,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
                 bool tag_for_each_suffix,
-                bool prefix_gm_directions);
+                bool prefix_gm_directions,
+                bool graph_connections);
 
 #endif // OUTPUTMARKDOWN_H

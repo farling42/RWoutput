@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>471</width>
-    <height>505</height>
+    <width>505</width>
+    <height>551</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -232,6 +232,19 @@ FILE</string>
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QCheckBox" name="graphConnections">
+              <property name="toolTip">
+               <string>If not selected, then text description is given for each connection</string>
+              </property>
+              <property name="text">
+               <string>Use Mermaid Graph for Connections</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -332,7 +345,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>471</width>
+     <width>505</width>
      <height>21</height>
     </rect>
    </property>

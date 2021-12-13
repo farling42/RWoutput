@@ -5,7 +5,9 @@ The name of the variable will be a valid obsidian tag (e.g. spaces replaced by "
 
 Rename asset-files to zz_asset-files so that it doesn't appear at the top of the File Explorer view (it renames the old directory if it exists).
 
+Provide a new output option "Use Mermaid Graph for Connections" which will replace the textual Connections section of each topic with a mermaid graph of the topic's relationships.
 
+Create a new folder called "Relationships" which contains one note per relationship type; each containing all relationships of that type in the realm (potentially very large graphs).
 
 # 3.17.1
 Set QRegularExpression so that it will actually check for UNICODE characters when checking letters (by default it only supports ASCII!)
