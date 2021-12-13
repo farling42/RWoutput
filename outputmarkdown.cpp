@@ -180,6 +180,24 @@ static bool isInlineFile(const QString &filename)
     return false;
 }
 
+/**
+ * @brief xmlChildren
+ * Find all descendents WITHIN THIS TOPIC with the matching name.
+ * @param name
+ * @return
+ */
+inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, const QString &name)
+{
+    QList<const XmlElement*>result;
+    if (parent->objectName() == name) result.append(parent);
+
+    for (const auto child: parent->xmlChildren())
+    {
+        if (child->objectName() != "topic") result.append(topicDescendents(child, name));
+    }
+    return result;
+}
+
 
 // Sort topics, first by prefix, and then by topic name
 static bool sort_topics(const XmlElement *left, const XmlElement *right)
@@ -1049,6 +1067,27 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     return result;
 }
 
+static inline QString tag_string(const QString &domain, const QString &label)
+{
+    return validTag(domain) + '/' + validTag(label);
+}
+
+
+static QString tag_label(const XmlElement *tag_assign)
+{
+    QString tag_name    = tag_assign->attribute("tag_name");
+    QString domain_name = tag_assign->attribute("domain_name");
+    // Don't include:
+    //   Export/<any tag>  <- always present on every single topic during export.
+    //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
+    if (!domain_name.isEmpty() &&
+        domain_name != "Export" &&
+        (domain_name != "Utility" || tag_name != "Empty"))
+    {
+        return tag_string(domain_name, tag_name);
+    }
+    return QString();
+}
 
 static const QString getTags(const XmlElement *node, bool wrapped=true)
 {
@@ -1056,19 +1095,10 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
     if (tag_nodes.length() == 0) return "";
 
     QStringList tags;
-    for (auto tag : tag_nodes)
+    for (auto tag_assign : tag_nodes)
     {
-        QString tag_name    = tag->attribute("tag_name");
-        QString domain_name = tag->attribute("domain_name");
-        // Don't include:
-        //   Export/<any tag>  <- always present on every single topic during export.
-        //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
-        if (!domain_name.isEmpty() &&
-            domain_name != "Export" &&
-            (domain_name != "Utility" || tag_name != "Empty"))
-        {
-            tags.append("#" + validTag(domain_name) + "/" + validTag(tag_name));
-        }
+        QString tag = tag_label(tag_assign);
+        if (!tag.isEmpty()) tags.append("#" + tag);
     }
     if (tags.length() == 0)
         return "";
@@ -1744,20 +1774,43 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             stream << "  - " << alias->attribute("name") << newline;
         }
     }
-    stream << "Tags: Category/" << validTag(category_name);
+    QStringList tags;
+    tags.append(tag_string("Category", category_name));
     if (create_prefix_tag)
     {
-        // Issue #41
-        QString prefix = validTag(topic->attribute("prefix"));
-        if (!prefix.isEmpty()) stream << " Prefix/" << prefix;
+        QString prefix = topic->attribute("prefix");
+        if (!prefix.isEmpty()) tags.append(tag_string("Prefix", prefix));
     }
     if (create_suffix_tag)
     {
-        // Issue #41
-        QString suffix = validTag(topic->attribute("suffix"));
-        if (!suffix.isEmpty()) stream << " Suffix/" << suffix;
+        QString suffix = topic->attribute("suffix");
+        if (!suffix.isEmpty()) tags.append(tag_string("Suffix", suffix));
     }
+    stream << "Tags: " << tags.join(" ");
     stream << newline;
+
+    // For each field with a tag_assign, create the field name in the frontmatter, e.g.
+    // Class: name
+    // School: name
+    for (const auto snippet: topicDescendents(topic, "snippet"))
+    {
+        auto sntype = snippet->attribute("type");
+        if (sntype == "Tag_Standard")
+        {
+            const XmlElement *tag = snippet->xmlChild("tag_assign");
+            if (tag) stream << validTag(snippet->attribute("facet_name")) << ": " << tag->attribute("tag_name") << newline;
+        }
+        else if (sntype == "Tag_Multi_Domain")
+        {
+            QStringList tags;
+            for (const auto tag : snippet->xmlChildren("tag_assign"))
+                tags.append('"' + tag->attribute("tag_name") + '"');
+            if (tags.length() == 1)
+                stream << validTag(snippet->attribute("label")) << ": " << tags.first() << newline;
+            else if (tags.length() > 1)
+                stream << validTag(snippet->attribute("label")) << ": [ " << tags.join(",") << " ]" << newline;
+        }
+    }
 
     if (parent) {
         // Don't tell Breadcrumbs about the main page!
