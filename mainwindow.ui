@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>505</width>
+    <width>522</width>
     <height>551</height>
    </rect>
   </property>
@@ -35,9 +35,12 @@
         <layout class="QVBoxLayout" name="verticalLayout_2">
          <item>
           <widget class="QPushButton" name="loadFile">
+           <property name="toolTip">
+            <string>Load RWexport file for Metadata, RWoutput for all other outputs</string>
+           </property>
            <property name="text">
             <string>LOAD
-rwoutput
+Realm Works
 FILE</string>
            </property>
            <property name="icon">
@@ -265,76 +268,98 @@ FILE</string>
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="output">
-        <property name="title">
-         <string>Output</string>
+       <layout class="QVBoxLayout" name="outputs" stretch="1,3">
+        <property name="spacing">
+         <number>0</number>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_4">
-         <item>
-          <widget class="QPushButton" name="saveHtml">
-           <property name="toolTip">
-            <string>Create one or more HTML files (HTML5)</string>
-           </property>
-           <property name="text">
-            <string>Create HTML file(s)</string>
-           </property>
-           <property name="icon">
-            <iconset theme="document-save">
-             <normaloff>.</normaloff>.</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="saveMarkdown">
-           <property name="text">
-            <string>Create Markdown file(s)</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="savePdf">
-           <property name="toolTip">
-            <string>Produce a single PDF document with all topics in alphabetical order</string>
-           </property>
-           <property name="text">
-            <string>Create PDF file</string>
-           </property>
-           <property name="icon">
-            <iconset theme="document-save">
-             <normaloff>.</normaloff>.</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="print">
-           <property name="toolTip">
-            <string>Print all the topics in alphabetical order</string>
-           </property>
-           <property name="text">
-            <string>Print</string>
-           </property>
-           <property name="icon">
-            <iconset theme="document-print">
-             <normaloff>.</normaloff>.</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="simpleHtml">
-           <property name="toolTip">
-            <string>This is the interim format for PDF and Print generation</string>
-           </property>
-           <property name="text">
-            <string>Create HTML4 file</string>
-           </property>
-           <property name="icon">
-            <iconset theme="document-save">
-             <normaloff>.</normaloff>.</iconset>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>5</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="rwexport">
+          <property name="title">
+           <string>RWexport</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_8">
+           <item>
+            <widget class="QPushButton" name="saveMarkdown">
+             <property name="text">
+              <string>Create Markdown file(s)</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="rwoutput">
+          <property name="title">
+           <string>RWoutput</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_4">
+           <item>
+            <widget class="QPushButton" name="saveHtml">
+             <property name="toolTip">
+              <string>Create one or more HTML files (HTML5)</string>
+             </property>
+             <property name="text">
+              <string>Create HTML file(s)</string>
+             </property>
+             <property name="icon">
+              <iconset theme="document-save">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="savePdf">
+             <property name="toolTip">
+              <string>Produce a single PDF document with all topics in alphabetical order</string>
+             </property>
+             <property name="text">
+              <string>Create PDF file</string>
+             </property>
+             <property name="icon">
+              <iconset theme="document-save">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="print">
+             <property name="toolTip">
+              <string>Print all the topics in alphabetical order</string>
+             </property>
+             <property name="text">
+              <string>Print</string>
+             </property>
+             <property name="icon">
+              <iconset theme="document-print">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="simpleHtml">
+             <property name="toolTip">
+              <string>This is the interim format for PDF and Print generation</string>
+             </property>
+             <property name="text">
+              <string>Create HTML4 file</string>
+             </property>
+             <property name="icon">
+              <iconset theme="document-save">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </item>
@@ -345,7 +370,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>505</width>
+     <width>522</width>
      <height>21</height>
     </rect>
    </property>

@@ -16,8 +16,6 @@
 */
 
 #define TIME_CONVERSION
-#define IGNORE_GUMBO_TABLE
-#undef  GUMBO_TABLE
 
 #include "outputmarkdown.h"
 
@@ -85,8 +83,25 @@ static QString assetsDir("zz_asset-files");
 static QString imported_date;
 static QString mainPageName;
 static const QString newline("\n");
-
+static QMap<QString,QString> global_names;
+static QString frontmatterMarker("---\n");
 #define DUMP_LEVEL 0
+
+
+struct ExportLink;
+struct ExportLink
+{
+    ExportLink(const QString target_id, int start, int length) :
+        target_id(target_id), start(start), length(length) {}
+    QString target_id;
+    int start, length;
+};
+typedef QList<ExportLink> ExportLinks;
+void sortLinks(ExportLinks &list)
+{
+    // Get entries in order starting with HIGHEST start, and proceeding to LOWEST start.
+    std::sort(list.begin(), list.end(), [](ExportLink left, ExportLink right) { return right.start < left.start; });
+}
 
 static inline const QString validFilename(const QString &string)
 {
@@ -95,6 +110,17 @@ static inline const QString validFilename(const QString &string)
     if (!invalid_chars.isValid()) qWarning() << "validFilename has invalid regexp";
     QString result(string);
     return result.replace(invalid_chars,"_");
+}
+
+
+static const QString snippetName(XmlElement *elem)
+{
+    QString result;
+    result = elem->attribute("label");   // For Labeled_Text with manual label
+    if (!result.isEmpty()) return result;
+    result = elem->attribute("facet_name");
+    if (!result.isEmpty()) return result;
+    return global_names.value(elem->attribute("facet_id"));
 }
 
 
@@ -145,7 +171,7 @@ static const QString parentDirName(const XmlElement *topic)
     if (parent && parent->objectName() == "topic")
         return parentDirName(parent) + QDir::separator() + topic_files.value(parent->attribute("topic_id"));
     else
-        return validFilename(topic->attribute("category_name"));
+        return validFilename(global_names.value(topic->attribute("category_id")));
 }
 
 
@@ -157,7 +183,7 @@ static const QString topicDirFile(const XmlElement *topic)
     const QString filename = topic_files.value(topic->attribute("topic_id"));
     if (category_folders)
     {
-        return dirFile(validFilename(topic->attribute("category_name")), filename) + ".md";
+        return dirFile(validFilename(global_names.value(topic->attribute("category_id"))), filename) + ".md";
     }
     else
     {
@@ -200,10 +226,17 @@ inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, cons
     return result;
 }
 
+static inline const QString mermaid_node_raw(const QString &name, const QString &label, bool internal_link=true)
+{
+    QString result = name + "([\"" + label + "\"])";
+    if (internal_link) result += "; class " + name + " internal-link";
+    return result;
+}
+
 
 static inline const QString mermaid_node(const QString &topic_id)
 {
-    return topic_id + "([\"" + topic_files.value(topic_id) + "\"]); class " + topic_id + " internal-link";
+    return mermaid_node_raw(topic_id, topic_files.value(topic_id));
 }
 
 
@@ -315,8 +348,10 @@ static QString doEscape(const QString &original)
     QString result = original;
     // Escape any [ characters
     // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
-    // Occasionally there is a zero-width-space, which we'll assume should be no space at all
-    return result.replace('[',"\\[").replace('*',"\\*").replace('~',"\\~");
+    // Occasionally there is a zero-width-space, which we'll assume should be no space at all.
+    // write_para_children is now putting internal links before this is called, so we need to handle [[ specially.
+    // &forall; = \u8704 (U+2200) - to get [[ passed the first replace
+    return result.replace("\[","\\[").replace('*',"\\*").replace('~',"\\~").replace(QChar(8704),"[");
 }
 
 
@@ -502,9 +537,10 @@ struct TextStyle {
     {
         swap(result, other.current);
     }
-    void inline remove(QString &result, const QString &addition, const QString &endswith) const
+    void inline remove(QString &result, const QString &addition, const QString &endswith, bool optimise=true) const
     {
-        if (result.endsWith(endswith))
+        // Doesn't cancel bold+italic properly
+        if (optimise && result.endsWith(endswith))
             // There is no text between the start and end of this formatting, so remove the START indicator
             result.truncate(result.length() - endswith.length());
         else
@@ -520,8 +556,8 @@ struct TextStyle {
         if (current.superscript   && !other.superscript)   remove(result, "</sup>", "<sup>");
         if (current.underline     && !other.underline)     remove(result, "</u>",   "<u>");
         if (current.strikethrough && !other.strikethrough) remove(result, "~~",     "~~");
-        if (current.bold          && !other.bold)          remove(result, "**",     "**");
-        if (current.italic        && !other.italic)        remove(result, "*",      "*");
+        if (current.bold          && !other.bold)          remove(result, "**",     "**", false);
+        if (current.italic        && !other.italic)        remove(result, "*",      "*", false);
         if (space) result += ' ';
 
         // Which things to switch on (opposite order to OFF)
@@ -547,8 +583,8 @@ struct TextStyle {
         if (current.superscript)   remove(result, "</sup>", "<sup>");
         if (current.underline)     remove(result, "</u>",   "<u>");
         if (current.strikethrough) remove(result, "~~",     "~~");
-        if (current.bold)          remove(result, "**",     "**");
-        if (current.italic)        remove(result, "*",      "*");
+        if (current.bold)          remove(result, "**",     "**", false);
+        if (current.italic)        remove(result, "*",      "*", false);
         if (space) result += ' ';
     };
     const QString toString() const
@@ -606,6 +642,8 @@ private:
     };
 };
 typedef QHash<QString,TextStyle> GumboStyles;
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString());
+static const GumboNode *find_named_child(const GumboNode *parent, const QString &name);
 
 
 GumboStyles getStyles(const GumboNode *node)
@@ -644,258 +682,79 @@ GumboStyles getStyles(const GumboNode *node)
     return result;
 }
 
-
-static void write_span(QString &result, TextStyle &currentStyle, XmlElement *elem, const LinkageList &links)
-{
-#if DEBUG_LEVEL > 5
-    qDebug() << "....span";
-#endif
-
-    if (elem->isFixedString())
-    {
-        // TODO - the span containing the link might have style or class information!
-        // Check to see if the fixed text should be replaced with a link.
-        const QString text = elem->fixedText();
-        const QString link_text = links.find(text);
-        if (!link_text.isNull())
-            result += internal_link(link_text, doEscape(text));  // adjacent links don't have spaces between them!
-        else
-            result += doEscape(text);
-    }
-    else if (elem->objectName() == "img")
-    {
-        result += createMarkdownLink(/*filename*/ elem->attribute("href"), /*label*/ elem->attribute("alt"));
-    }
-    else if (elem->objectName() == "br")
-    {
-        // Keep explicit breaks (don't convert into \n\n)
-        result += "<br>";
-    }
-    else if (elem->objectName() == "a")
-    {
-        // Need to collect child elements to be the LABEL for the link, rather than appending directly to result
-        QString label;
-        TextStyle labelStyle;
-        for (auto child: elem->xmlChildren())
-        {
-            write_span(label, labelStyle, child, links);
-        }
-        QString filename = doEscape(elem->attribute("href"));
-        if (isInlineFile(filename))
-            result += "!" + createMarkdownLink(/*filename*/ filename, /*label*/ label);
-        else
-            result += createMarkdownLink(/*filename*/ filename, /*label*/ label);
-    }
-    else
-    {
-        if (elem->objectName() == "span")
-        {
-            currentStyle.modify(result, TextStyle(elem->attribute("style")));
-        }
-        else if (elem->objectName() == "sub" || elem->objectName() == "sup")
-        {
-            currentStyle.startStyleElement(result, elem->objectName());
-        }
-
-        // Only put in span if we really require it
-        // All sorts of HTML can appear inside the text
-        for (auto child: elem->xmlChildren())
-        {
-            write_span(result, currentStyle, child, links);
-        }
-
-        if (elem->objectName() == "sub" || elem->objectName() == "sup")
-        {
-            currentStyle.finishStyleElement(result, elem->objectName());
-        }
-    }
-}
-
-
 static const QString hlabel(const QString &label)
 {
     return "**" + label + "**: ";
 }
 
-static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype, bool inside_table=false);
 
-static const QString table(XmlElement *elem, const LinkageList &links, const QString &listtype)
+static const QString escape_bracket(const QString &input)
 {
-    // Optional thead and tbody inside,
-    // need to collect all the rows (tr)
-    // then each of the cells in each row (td)
-    QList<XmlElement*> rows;
-    for (auto child: elem->xmlChildren())
-    {
-        const auto type = child->objectName();
-        if (type == "thead")
-        {
-            for (auto sub: child->xmlChildren())
-            {
-                if (sub->objectName() == "tr")
-                    rows.append(sub);
-                else if (!sub->objectName().isEmpty())
-                    qDebug() << "Unsupported node in thead: " << sub->objectName();
-            }
-        }
-        else if (type == "tbody")
-        {
-            for (auto sub: child->xmlChildren())
-            {
-                if (sub->objectName() == "tr")
-                    rows.append(sub);
-                else if (!sub->objectName().isEmpty())
-                    qDebug() << "Unsupported node in tbody: " << sub->objectName();
-            }
-        }
-        else if (type == "tr")
-        {
-            rows.append(child);
-        }
-        else if (!type.isEmpty())
-        {
-            qDebug() << "Unsupported node in table: " << type;
-        }
-    }
-    //qDebug() << "Table has " << rows.length() << " rows";
+    QString result = input;
+    result.replace('[', QChar(8704));
+    return result;
+}
+
+
+/**
+ * @brief textContent
+ * Extract only the text elements from the given node tree (just like in JS Node::textContent)
+ * @param node
+ * @return
+ */
+static const QString textContent(const QString &source)
+{
+    // If no HTML, then simply return the original text.
+    if (source.indexOf(">") == -1) return source;
+
+    // Get all the text that is between >...<
+    const QRegularExpression plaintext(">([^<]+)<");
     QString result;
-    if (rows.length() > 0)
+    QRegularExpressionMatchIterator i = plaintext.globalMatch(source);
+    while (i.hasNext())
     {
-        // Table needs blank line before its start
-        result += "\n";
-        bool first=true;
-        bool onerow=(rows.length()==1);
-        int colcount=0;
-        for (auto row : rows)
-        {
-            QString rowtext;
-            for (auto sub : row->xmlChildren())
-            {
-                if (sub->objectName() == "td")
-                {
-                    // trimmed() removes leading and trailing new lines as well as space
-                    // Note that we first replace TWO line breaks with a SINGLE br, since we generate blank lines between paragraphs
-                    // Escape pipes found in the cell.
-                    QString cell = write_para(sub, links, listtype, /*inside_table*/ true).trimmed().replace("\n\n", "<br>").replace("\n", "<br>").replace("|","\\|");
-                    rowtext += "| " + cell + " ";
-                    if (first) colcount++;
-                }
-                else if (!sub->objectName().isEmpty())
-                    qDebug() << "Unsupported node in tr: " << sub->objectName();
-            }
-            if (onerow)
-            {
-                QString row1("|"), row2("|");
-                // Special handling for table with ONE row: put a blank row above the "|---|---|---|" row
-                while (colcount--)
-                {
-                    row1 += "   |";
-                    row2 += "---|";
-                }
-                result += row1 + newline + row2 + newline + rowtext + "|\n";
-            }
-            else
-            {
-                // All normal tables
-                result += rowtext + "|\n";
-                if (first)
-                {
-                    result += "|";
-                    while (colcount--) result += "---|";
-                    result += newline;
-                    first=false;
-                }
-            }
-        }
+        QRegularExpressionMatch match = i.next();
+        result += match.captured(1);
     }
     return result;
 }
 
 
-static const QString write_para(XmlElement *elem, const LinkageList &links, const QString &orig_listtype, bool inside_table)
-{
-    QString result;
-    QString listtype = orig_listtype;
-#if DEBUG_LEVEL > 5
-    qDebug() << "....paragraph";
-#endif
-
-    TextStyle currentStyle;
-    if (elem->isFixedString())
-    {
-        write_span(result, currentStyle, elem, links);
-        return result;
-    }
-
-    bool close = false;
-    QString sntype = elem->objectName();
-    if (sntype == "snippet")
-        ;
-    else if (sntype == "p")
-        result += newline;
-    else if (sntype == "ul")
-        listtype = "\n- ";
-    else if (sntype == "ol")
-        listtype = "\n+ ";
-    else if (sntype == "li")
-        result += listtype;
-    else if (sntype == "table")
-    {
-        QString tbody = table(elem, links, orig_listtype);
-        // Don't process children later in this routine, since table will do them all!
-        if (!tbody.isEmpty()) return tbody;
-
-        // If the table creation failed, then process as normal
-        qDebug() << "Markdown table creation failed - building normal table";
-        result += "<" + elem->objectName() + ">";
-        close=true;
-    }
-    else if (inside_table && sntype == "td")
-        ; // no specific presentation, handled by table() function above
-    else if (!inside_table && (sntype == "table" || sntype == "tbody" || sntype == "tr" || sntype == "td"))
-    {
-        // Always inline table elements
-        result += "<" + elem->objectName() + ">";
-        close=true;
-    }
-    else
-    {
-        qDebug() << "write_para: element = " << sntype;
-        //result += "<" + elem->objectName() + ">";
-        //close=true;
-    }
-
-    for (auto child : elem->xmlChildren())
-    {
-        if (child->objectName() == "span")
-            write_span(result, currentStyle, child, links);
-        else if (child->objectName() != "tag_assign")
-            // Ignore certain children
-            result += write_para(child, links, listtype);
-    }
-
-    // Anything to put AFTER the child elements?
-    currentStyle.finish(result);
-    if (sntype == "snippet" || sntype == "p" || sntype == "ul" || sntype == "ol")
-        result += newline;
-    else if (close)
-        result += "</" + elem->objectName() + ">";
-
-    return result.replace("\u00a0"," ").replace("\u200b","");
-}
-
-
-static const QString write_para_children(XmlElement *parent, const LinkageList &links)
+static const QString write_para_children(XmlElement *parent, const ExportLinks &links)
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children";
 #endif
     QString result;
-    for (auto child: parent->xmlChildren())
+    if (!parent->xmlChild()) return "";
+
+    QString text = parent->xmlChild()->fixedText();
+    text.replace("&#xd;", "\n");    // Get to correct length for fixing links
+
+    // Now substitute any required links
+    for (auto &link: links)
     {
-        result += write_para(child, links, QString());
+        // Replace text[start..start+finish] with the link text.
+        QString label = textContent(text.mid(link.start,link.length));
+        text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
     }
-    // Remove leading/trailing white space, which includes line breaks
+    // Now remove double links - TODO
+    text.replace("\n\n", "\n");
+
+    GumboOutput *output = gumbo_parse(text.toUtf8());
+    if (output) {
+        if (output->root)
+        {
+            if (auto body = find_named_child(output->root, "body"))
+            {
+                GumboStyles styles;
+                TextStyle currentStyle;
+                result += output_gumbo_children(body, styles, currentStyle).trimmed();
+            }
+        }
+        // Get GUMBO to release all the memory
+        gumbo_destroy_output(&kGumboDefaultOptions, output);
+    }
     return result.trimmed();
 }
 
@@ -1083,8 +942,8 @@ static inline QString tag_string(const QString &domain, const QString &label)
 
 static QString tag_label(const XmlElement *tag_assign)
 {
-    QString tag_name    = tag_assign->attribute("tag_name");
-    QString domain_name = tag_assign->attribute("domain_name");
+    QString tag_name    = global_names.value(tag_assign->attribute("tag_id"));
+    QString domain_name = global_names.value(tag_assign->attribute("domain_id"));
     // Don't include:
     //   Export/<any tag>  <- always present on every single topic during export.
     //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
@@ -1117,16 +976,24 @@ static const QString getTags(const XmlElement *node, bool wrapped=true)
 }
 
 
-static void startGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles)
+static void startGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
 {
     const QString cls = getGumboAttribute(node, "class");
-    if (!cls.isEmpty()) styles[cls].start(result);
+    const QString style = getGumboAttribute(node, "style");
+    if (!style.isEmpty()) currentStyle.modify(result, TextStyle(style));
+    else if (!cls.isEmpty() && styles.contains(cls)) styles[cls].start(result);
+    else currentStyle.modify(result, TextStyle());  // probably new span, so cancel old span
 }
 
-static void finishGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles)
+static void finishGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
 {
     const QString cls = getGumboAttribute(node, "class");
-    if (!cls.isEmpty()) styles[cls].finish(result);
+    const QString style = getGumboAttribute(node, "style");
+    if (!style.isEmpty())
+    {
+        ; //TextStyle style(style);
+    }
+    else if (!cls.isEmpty()) styles[cls].finish(result);
 }
 
 
@@ -1137,13 +1004,17 @@ static void finishGumboStyle(QString &result, const GumboNode *node, const Gumbo
  * @param node
  */
 
-static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, bool top=false)
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top, int nestedTableCount, const QString &orig_listtype)
 {
+    QString listtype = orig_listtype;
     QString result;
-    Q_UNUSED(top)
-    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     bool capture=false;
     QString captured;
+    bool addEndLine=false;
+    bool isHeader=false;
+    bool allowWhitespace=true;
+
+    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
@@ -1160,6 +1031,11 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             result += doEscape(text);
         }
             break;
+        case GUMBO_NODE_WHITESPACE:
+            //if (top) qDebug() << "GUMBO_NODE_WHITESPACE";
+            if (allowWhitespace) result += QString(node->v.text.text);
+            break;
+
         case GUMBO_NODE_COMMENT:
             //stream->writeComment(node->v.text.text);
             //if (top) qDebug() << "GUMBO_NODE_COMMENT:" << node->v.text.text;
@@ -1170,12 +1046,13 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             const QString tag = gumbo_normalized_tagname(node->v.element.tag);
             bool close = false;
             QString href;
-#if 1
+
             // See what to put before the text
             if (tag == "p")
             {
                 result += newline;
-                startGumboStyle(result, node, styles);
+                currentStyle = TextStyle();
+                startGumboStyle(result, node, styles, currentStyle);
             }
             else if (tag == "br")
                 result += "\n";  // Using <br> breaks formatting in portfolio files
@@ -1232,54 +1109,68 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                     result += "!" + createMarkdownLink(/*filename*/ src, /*label*/ alt);
                 }
             }
-#ifdef IGNORE_GUMBO_TABLE
-            else if (tag == "tr" || tag == "table" || tag == "tbody" || tag == "td")
-                ;
-#else
-#ifndef GUMBO_TABLE
             // Table support - just use normal HTML
-            else if (tag == "tr")
-                result += newline;
-            else if (tag == "td")
-                result += "|";
-            else if (tag == "table" || tag == "tbody")
-                ;  // do nothing with spans (we might need to get any style from it
-#endif
-#endif
+            else if (nestedTableCount==0 && tag == "table")
+            {
+                allowWhitespace = false;
+                capture = true;
+                nestedTableCount++;
+            }
+            else if (nestedTableCount==1 && (tag == "tr" || tag == "td"))
+            {
+                allowWhitespace = false;
+                capture = true;
+            }
+            else if (nestedTableCount==1 && tag == "tbody")
+                ; // Ignore tbody when converting tables to markdown
             else if (tag == "span")
+                startGumboStyle(result, node, styles, currentStyle);
+            else if (tag == "sup" || tag == "sub")
+                currentStyle.startStyleElement(result, tag);
+            else if (tag == "ul")
             {
-                startGumboStyle(result, node, styles);
+                listtype = "\n- ";
+                addEndLine = true;
             }
-            else if (tag == "sup" || tag == "sub") {
-                result += "<" + tag + ">";
-                close=true;
-            }
-            else {
-                result += "<" + tag + ">";
-                close=true;
-                qDebug() << "GUMBO_NODE_ELEMENT(start): unsupported = " << tag;
-            }
-#else
-            stream->writeStartElement(tag);
-            //if (top) qDebug() << "GUMBO_NODE_ELEMENT:" << tag;
-            GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
-            for (unsigned count = node->v.element.attributes.length; count > 0; --count)
+            else if (tag == "ol")
             {
-                const GumboAttribute *attr = *attributes++;
-                stream->writeAttribute(attr->name, attr->value);
+                listtype = "\n+ ";
+                addEndLine = true;
             }
-#endif
-            if (capture)
-                captured = output_gumbo_children(node, styles);
+            else if (tag == "li")
+                result += listtype;
+            else if (tag.length() == 2 && tag[0] == 'h' && tag[1].isDigit())
+            {
+                isHeader = true;
+                capture  = true;
+            }
             else
-                result += output_gumbo_children(node, styles);
+            {
+                if (tag == "table") nestedTableCount++;
 
+                result += "<" + tag + ">";
+                close=true;
+                qDebug() << "GUMBO_NODE_ELEMENT(start): not converting " << QString("<%1>").arg(tag);
+            }
+
+            //
+            // Now process the children
+            //
+            if (capture)
+                captured = output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype);
+            else
+                result += output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype);
+
+            //
             // Now, see if we need to terminate this node
+            //
             if (tag == "p")
             {
-                finishGumboStyle(result, node,styles);
+                currentStyle.finish(result);
                 result += newline;
             }
+            else if (tag == "sup" || tag == "sub")
+                currentStyle.finishStyleElement(result, tag);
             else if (tag == "b")
                 swapSpace(result, "**");
             else if (tag == "i")
@@ -1291,29 +1182,58 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             }
             else if (tag == "span")
             {
-                finishGumboStyle(result, node,styles);
+                finishGumboStyle(result, node, styles, currentStyle);
             }
-#ifdef IGNORE_GUMBO_TABLE
-            else if (tag == "tr" || tag == "table" || tag == "tbody")
-                ;
-            else if (tag == "td")
-                result += newline;    // normally the end of a row
-#else
-#ifndef GUMBO_TABLE
-            else if (tag == "tr")
-                result += "|\n";   // end of line for table row
-            else if (tag == "table")
-                result += "\n\n";
-#endif
-#endif
+            else if (isHeader)
+            {
+                result += QString(tag.midRef(1).toInt(),'#') + ' ' + captured.trimmed();
+            }
+            else if (addEndLine)
+                result += newline;    // normally the end of a row/list
+
+            else if (nestedTableCount==1 && tag == "td")
+            {
+                result += "| " + captured.trimmed().replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
+            }
+            else if (nestedTableCount==1 && tag == "tr")
+            {
+                result += captured.trimmed() + " |\n";   // end of line for table row
+            }
+            else if (nestedTableCount==1 && tag == "table")
+            {
+                // Need to add |---|---| line to tell markdown that it is a table
+                QString table = captured.trimmed(); // removes line break from last line
+                int break1 = table.indexOf('\n');
+                int barCount = (break1 < 0) ? table.count('|') : table.midRef(0,break1).count('|');
+                if (barCount==0)
+                {
+                    qWarning() << "No bars found in table";
+                }
+                else
+                {
+                    if (break1 < 0)
+                    {
+                        // Only one line in the table, so put a fake line in front of it.
+                        int count = barCount;
+                        QString header = "|";
+                        while (--count) header += " |";
+                        break1 = header.length();    // set to index of the line break we are about to add.
+                        table = header + newline + table;
+                    }
+                    // Create the line of columns
+                    QString columns = "|";
+                    while (--barCount) columns += "---|";
+                    table.insert(break1+1, columns + newline);
+                    // Count finished, so we can replace the "&#124;" with "\|" - required to have image links working
+                    table.replace("&#124;", "\\|");
+                    result += newline + table + newline + newline;
+                }
+            }
             else if (close)
                 result += "</" + tag + ">";
         }
             break;
 
-        case GUMBO_NODE_WHITESPACE:
-            //if (top) qDebug() << "GUMBO_NODE_WHITESPACE";
-            break;
         case GUMBO_NODE_DOCUMENT:
             //if (top) qDebug() << "GUMBO_NODE_DOCUMENT";
             break;
@@ -1322,6 +1242,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             break;
         }
     }
+    if (top) currentStyle.finish(result);
     return result.replace("\u00a0"," ").replace("\u200b","");
 }
 
@@ -1377,13 +1298,17 @@ static void dump_children(const QString &from, const GumboNode *parent)
 }
 #endif
 
+
 static const QString write_html(bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
-    QString result;
-
     // Put the children of the BODY into this frame.
+    QString result;
     GumboOutput *output = gumbo_parse(data);
-    if (output == nullptr) return result;
+    if (output == nullptr)
+    {
+        qWarning() << "Failed to parse HTML data";
+        return result;
+    }
 
 #ifdef DUMP_CHILDREN
     dump_children("ROOT", output->root);
@@ -1410,7 +1335,8 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     {
         const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
         // title should only be text
-        if (title) result += ": " + output_gumbo_children(title, styles) + newline;
+        TextStyle currentStyle;
+        if (title) result += ": " + output_gumbo_children(title, styles, currentStyle) + newline;
     }
 
     // Maybe we have a CSS that we can put inline.
@@ -1419,20 +1345,13 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     if (!style) style = get_gumbo_child(body, "style");
 #endif
 
-#if 0
-    if (style)
-    {
-        result += "\n```\ngumbo-style: {";
-        result += output_gumbo_children(style, styles);  // it should only be text
-        result += "}\n```\n\n";
-    }
-#endif
-    if (body)
+    //if (body)
     {
 #ifdef DUMP_CHILDREN
         dump_children("BODY", body);
 #endif
-        result += output_gumbo_children(body, styles, /*top*/true);
+        TextStyle currentStyle;
+        result += output_gumbo_children(body ? body : output->root, styles, currentStyle);
     }
 
     // Get GUMBO to release all the memory
@@ -1441,14 +1360,16 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 }
 
 
-static inline const QString annotationText(const XmlElement *snippet, const LinkageList &links, bool wrapped = true)
+static inline const QString annotationText(const XmlElement *snippet, bool wrapped = true)
 {
     // No need to consider TextStyle, since this is called at the SNIPPET level, not the paragraph level
     XmlElement *annotation = snippet->xmlChild("annotation");
     if (!annotation) return "";
 
     // Remove newline from either end of paragraph
-    QString result = write_para_children(annotation, links);
+    ExportLinks nolinks;
+    QString result = write_para_children(annotation, nolinks);
+    result.replace("&#xd;\n","\n");
     if (!wrapped)
         return result;
     else
@@ -1456,7 +1377,7 @@ static inline const QString annotationText(const XmlElement *snippet, const Link
 }
 
 
-static const QString write_snippet(XmlElement *snippet, const LinkageList &links)
+static const QString write_snippet(XmlElement *snippet)
 {
     QString result;
     QString sn_type = snippet->attribute("type");
@@ -1465,11 +1386,38 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     qDebug() << "...snippet" << sn_type;
 #endif
 
+    ExportLinks links;
+    ExportLinks gmlinks;
+
+    // Get whatever links might be on this snippet
+    for (auto link : snippet->xmlChildren("link"))
+    {
+        const QString target_id = link->attribute("target_id");
+        for (auto span_info : link->xmlChildren("span_info"))
+        {
+            for (auto span_list : span_info->xmlChildren("span_list"))
+            {
+                for (auto span : span_list->xmlChildren("span"))
+                {
+                    const int directions = span->attribute("directions").toInt();  // 0 = content, 1 = directions
+                    const int start      = span->attribute("start").toInt();
+                    const int length     = span->attribute("length").toInt();
+                    if (directions == 1)
+                        gmlinks.append(ExportLink(target_id, start, length));
+                    else
+                        links.append(ExportLink(target_id, start, length));
+                }
+            }
+        }
+    }
+    sortLinks(links);
+    sortLinks(gmlinks);
+
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
         if (prefix_gmdir) result += "***GMDIR***: ";
-        result += write_para_children(gm_directions, links) + "\n";
+        result += write_para_children(gm_directions, gmlinks) + "\n";
         // The following nice style prevents links from working
         //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + write_para_children(gm_directions, links) + "</p>";
     }
@@ -1489,7 +1437,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         {
             // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
             // Remove newline from either end of paragraph
-            result += hlabel(snippet->snippetName()) + write_para_children(contents, links);  // has its own 'p'
+            result += hlabel(snippetName(snippet)) + write_para_children(contents, links);  // has its own 'p'
         }
         // Labeled_Text has no annotation
         result += newline + getTags(snippet) + newline;
@@ -1502,10 +1450,9 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
             if (auto asset = ext_object->xmlChild("asset"))
             {
                 QString filename = asset->attribute("filename");
-                XmlElement *contents = asset->xmlChild("contents");
-                if (contents)
+                if (auto contents = asset->xmlChild("contents"))
                 {
-                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotationText(snippet, links, false));
+                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotationText(snippet, false));
                     result += getTags(snippet) + newline;
 
                     // Put in markers for statblock
@@ -1543,8 +1490,6 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
              sn_type == "Foreign" ||
              sn_type == "Rich_Text")
     {
-        // TODO: if filename ends with .html then we can put it inline.
-
         // ext_object child, asset grand-child
         if (auto ext_object = snippet->xmlChild("ext_object"))
         {
@@ -1553,21 +1498,29 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
                 if (auto contents = asset->xmlChild("contents"))
                 {
                     QString filename = asset->attribute("filename");
-                    auto annotation = annotationText(snippet, links, false);
+                    auto annotation = annotationText(snippet, false);
                     if (sn_type == "Picture")
                     {
                         result += write_image(ext_object->attribute("name"), contents->byteData(), /*mask*/nullptr, filename, annotation);
                     }
-                    else if (filename.endsWith(".html") ||
-                             filename.endsWith(".htm")  ||
-                             filename.endsWith(".rtf"))
-                    {
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation);
-                        result += write_html(true, sn_type, contents->byteData());
-                    }
                     else
                     {
                         result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation);
+
+                        if (filename.endsWith(".html") ||
+                            filename.endsWith(".htm")  ||
+                            filename.endsWith(".rtf"))
+                        {
+#ifdef INLINE
+                            QString body = QString::fromUtf8(contents->byteData());
+                            int mark1 = body.indexOf("<html");
+                            int mark2 = body.indexOf("</html>", mark1);
+                            result += body.mid(mark1,mark2-mark1+7).trimmed();
+                            qDebug() << "\nINLINE HTML:\n" << body.mid(0,500);
+#else
+                            result += write_html(true, sn_type, contents->byteData());
+#endif
+                        }
                     }
                     result += getTags(snippet) + newline;
                 }
@@ -1591,7 +1544,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
             QList<XmlElement*> pins = smart_image->xmlChildren("map_pin");
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
-            result += write_image(smart_image->attribute("name"), contents->byteData(), mask, filename, annotationText(snippet, links, false), usemap, pins);
+            result += write_image(smart_image->attribute("name"), contents->byteData(), mask, filename, annotationText(snippet, false), usemap, pins);
         }
         result += newline + getTags(snippet) + newline;
     }
@@ -1599,36 +1552,36 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
     {
         if (auto date = snippet->xmlChild("game_date"))
         {
-            result += "**" + snippet->snippetName() + "**: " + date->attribute("display");
-            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+            result += "**" + snippetName(snippet) + "**: " + date->attribute("display");
+            result += annotationText(snippet) + newline + getTags(snippet) + newline;
         }
     }
     else if (sn_type == "Date_Range")
     {
         if (auto date = snippet->xmlChild("date_range"))
         {
-            result += hlabel(snippet->snippetName()) + "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
-            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+            result += hlabel(snippetName(snippet)) + "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
+            result += annotationText(snippet) + newline + getTags(snippet) + newline;
         }
     }
     else if (sn_type == "Tag_Standard")
     {
         QStringList tags;
         for (auto tag: snippet->xmlChildren("tag_assign"))
-            tags.append(tag->attribute("tag_name"));
+            tags.append(global_names.value(tag->attribute("tag_id")));
         if (tags.length() > 0)
         {
             // In non-tag text before showing all connected tags
-            result += hlabel(snippet->snippetName()) + tags.join(", ");
-            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+            result += hlabel(snippetName(snippet)) + tags.join(", ");
+            result += annotationText(snippet) + newline + getTags(snippet) + newline;
         }
     }
     else if (sn_type == "Numeric")
     {
         if (auto contents = snippet->xmlChild("contents"))
         {
-            result += hlabel(snippet->snippetName()) + contents->childString();
-            result += annotationText(snippet, links) + newline + getTags(snippet) + newline;
+            result += hlabel(snippetName(snippet)) + contents->childString();
+            result += annotationText(snippet) + newline + getTags(snippet) + newline;
         }
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -1636,8 +1589,8 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
         QString tags = getTags(snippet, /*wrapped*/false);   // tags will be on the same line as this snippet
         if (!tags.isEmpty())
         {
-            result += hlabel(snippet->snippetName()) + tags;
-            result += annotationText(snippet, links) + newline + newline;
+            result += hlabel(snippetName(snippet)) + tags;
+            result += annotationText(snippet) + newline + newline;
         }
     }
     // Hybrid_Tag
@@ -1646,7 +1599,7 @@ static const QString write_snippet(XmlElement *snippet, const LinkageList &links
 }
 
 
-static const QString write_section(XmlElement *section, const LinkageList &links, int level)
+static const QString write_section(XmlElement *section, int level)
 {
     QString result;
 #if DUMP_LEVEL > 2
@@ -1654,18 +1607,20 @@ static const QString write_section(XmlElement *section, const LinkageList &links
 #endif
 
     // Start with HEADER for the section (H1 used for topic title)
-    result += newline + QString(level+1,'#') + ' ' + section->attribute("name") + newline;
+    QString sname = section->attribute("name");
+    if (sname.isEmpty()) sname = global_names.value(section->attribute("partition_id"));
+    result += newline + QString(level+1,'#') + ' ' + sname + newline;
 
     // Write snippets
     for (auto snippet: section->xmlChildren("snippet"))
     {
-        result += write_snippet(snippet, links);
+        result += write_snippet(snippet);
     }
 
     // Write following sections
     for (auto subsection: section->xmlChildren("section"))
     {
-        result += write_section(subsection, links, level+1);
+        result += write_section(subsection, level+1);
     }
 
     return result;
@@ -1680,7 +1635,7 @@ static void startFile(QTextStream &stream)
     stream.setCodec("UTF-8");
 
     // The first part of the FRONTMATTER
-    stream << "---\n";
+    stream << frontmatterMarker;
     stream << "ImportedOn: " << imported_date << newline;
 
 }
@@ -1707,13 +1662,24 @@ static QString nav_link(const XmlElement *topic, const QString &override = QStri
 static const QMap<QString,QString> nature_mapping{
     { "Arbitrary", "Arbitrary Connection To"},
     { "Generic",   "Simple Connection To"},
-    { "Union",     "Family Relationship To-Union With" },
-    { "Parent_To_Offspring", "Family Relationship To-Immediate Ancestor Of"},
-    { "Offspring_To_Parent", "Family Relationship To-Offspring Of" },
+    { "Union",     "Union With" },
+    { "Parent_To_Offspring", "Immediate Ancestor Of"},
+    { "Offspring_To_Parent", "Offspring Of" },
     { "Master_To_Minion", "Comprises Or Encompasses" },
     { "Minion_To_Master", "Belongs To Or Within" },
     { "Public_Attitude_Towards", "Public Attitude Towards" },
     { "Private_Attitude_Towards", "Private Attitude Towards" }
+};
+static const QMap<QString,QString> nature_attitude{
+    { "Arbitrary", ""},
+    { "Generic",   ""},
+    { "Union",     "" },
+    { "Parent_To_Offspring", ""},
+    { "Offspring_To_Parent", "" },
+    { "Master_To_Minion", "" },
+    { "Minion_To_Master", "" },
+    { "Public_Attitude_Towards",  "Publicly %1 Towards" },
+    { "Private_Attitude_Towards", "Privately %1 Towards" }
 };
 static const QMap<QString,bool> nature_directional{
     { "Arbitrary", false},
@@ -1738,39 +1704,39 @@ static const QMap<QString,bool> nature_incoming{
     { "Private_Attitude_Towards", false }
 };
 
-static QString connection_qualifier(const QString &nature, const QString &qualifier)
+
+static QString relationship(const XmlElement *connection)
 {
-    QString result = qualifier;
-    if (nature == "Master_To_Minion")
-    {
-        auto quals = result.split(" / ");
-        if (quals.length() > 1) result = quals[0];
-    }
-    else if (nature == "Minion_To_Master")
-    {
-        auto quals = result.split(" / ");
-        if (quals.length() > 1) result = quals[1];
-    }
-    return result;
-}
+    QString result;
+    QString qualifier       = connection->attribute("qualifier");
+    const QString attitude  = connection->attribute("attitude");
+    const QString rating    = connection->attribute("rating");    // Attitude will always be present
+    const QString nature    = connection->attribute("nature");
 
-
-static QString relationship(XmlElement *connection)
-{
-    QString nature    = connection->attribute("nature");
-    QString qualifier = connection->attribute("qualifier");
-    QString attitude  = connection->attribute("attitude");
-    QString rating    = connection->attribute("rating");
-
-    QString result = nature_mapping.value(nature);
-    if (result.isEmpty()) result = "Unknown Relationship";
-
+    // Determine whether to use NATURE or the specific directional QUALIFIER
     if (!qualifier.isEmpty())
-        result += "-" + connection_qualifier(nature, qualifier);
+    {
+        if (qualifier.contains(" / "))
+        {
+            auto quals = qualifier.split(" / ");
+            if (quals.length() > 1)
+            {
+                if (nature_incoming.value(nature))
+                    qualifier = quals[1];
+                else
+                    qualifier = quals[0];
+            }
+        }
+        result = qualifier;
+    }
     else if (!attitude.isEmpty())
-        result += "-" + attitude;
+        result = nature_attitude.value(nature).arg(attitude);
     else if (!rating.isEmpty())
-        result += "-" + rating;
+        result = nature_mapping.value(nature) + "-" + rating;
+    else
+        result = nature_mapping.value(nature);
+
+    if (result.isEmpty()) result = "Unknown Relationship";
 
     return result;
 }
@@ -1778,9 +1744,9 @@ static QString relationship(XmlElement *connection)
 static void write_topic_file(const XmlElement *topic, const XmlElement *parent, const XmlElement *prev, const XmlElement *next)
 {
 #if DUMP_LEVEL > 1
-    qDebug() << ".topic" << topic->objectName() << ":" << topic_names.value(topic);
+    qDebug() << ".topic" << topic->objectName() << ":" << topic_full_name.value(topic);
 #endif
-    QString category_name = topic->attribute("category_name");
+    QString category_name = global_names.value(topic->attribute("category_id"));
 
     // Create a new file for this topic
     QFile topic_file(topicDirFile(topic));
@@ -1833,13 +1799,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         if (sntype == "Tag_Standard")
         {
             const XmlElement *tag = snippet->xmlChild("tag_assign");
-            if (tag) stream << validTag(snippet->attribute("facet_name")) << ": " << tag->attribute("tag_name") << newline;
+            if (tag) stream << validTag(global_names.value(snippet->attribute("facet_id"))) << ": " << global_names.value(tag->attribute("tag_id")) << newline;
         }
         else if (sntype == "Tag_Multi_Domain")
         {
             QStringList tags;
             for (const auto tag : snippet->xmlChildren("tag_assign"))
-                tags.append('"' + tag->attribute("tag_name") + '"');
+                tags.append('"' + global_names.value(tag->attribute("tag_id")) + '"');
             if (tags.length() == 1)
                 stream << validTag(snippet->attribute("label")) << ": " << tags.first() << newline;
             else if (tags.length() > 1)
@@ -1878,9 +1844,9 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     for (auto child : topic->xmlChildren("connection"))
     {
         // Remove spaces from tag
-        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id"), child->attribute("target_name")) << newline;
+        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id")) << newline;
     }
-    stream << "---\n";
+    stream << frontmatterMarker;
 
     //
     // End of FRONTMATTER
@@ -1899,22 +1865,12 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 
     stream << "# " << topic_full_name.value(topic) << newline;
 
-    // Process <linkage> first, to ensure we can remap strings
-    LinkageList links;
-    for (auto link: topic->xmlChildren("linkage"))
-    {
-        if (link->attribute("direction") != "Inbound")
-        {
-            links.add(link->attribute("target_name"), link->attribute("target_id"));
-        }
-    }
-
     // Process all <sections>, applying the linkage for this topic
     for (auto section: topic->xmlChildren("section"))
     {
         // Remove leading and trailing white space (including blank lines)
         // Replace two or more blank lines with just one blank line
-        QString text = write_section(section, links, /*level*/ 1);
+        QString text = write_section(section, /*level*/ 1);
         if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
         if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
         static const QRegularExpression reduce_newlines("\n\n[\n]+", QRegularExpression::UseUnicodePropertiesOption);
@@ -1945,7 +1901,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             for (auto connection : connections)
             {
                 // Remove spaces from tag
-                stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"), connection->attribute("target_name"));
+                stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"));
                 XmlElement *annot = connection->xmlChild("annotation");
                 if (annot) stream << " ; " << doEscape(annot->xmlChild()->fixedText());
                 stream << newline;
@@ -1963,8 +1919,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 QString source_id         = topic_id;
                 QString target_id         = connection->attribute("target_id");
                 const QString nature      = connection->attribute("nature");
-                const QString attitude    = connection->attribute("attitude");
-                const QString qualifier   = connection->attribute("qualifier");
+                const QString annotation  = annotationText(connection, false);  // not const so we can do annotation.replace later
 
                 // Need to be incoming links
                 if (nature_incoming.value(nature)) source_id.swap(target_id);
@@ -1976,11 +1931,9 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 nodes.insert(mermaid_node(source_id));
                 nodes.insert(mermaid_node(target_id));
 
-                QString label = nature_mapping.value(nature);
-                if (!attitude.isEmpty())  label += ':' + newline + attitude;
-                if (!qualifier.isEmpty()) label += newline + '(' + connection_qualifier(nature, qualifier) + ')';
-                QString annotation  = annotationText(connection, links, false);  // not const so we can do annotation.replace later
-                if (!annotation.isEmpty()) label += newline + annotation.replace("&#xd;\n","\n");
+                QString label = relationship(connection);
+                label.replace("-", newline);
+                if (!annotation.isEmpty()) label += newline + annotation;
 
                 if (!label.isEmpty()) label = "-- \"" + label + "\" ";
 
@@ -2065,7 +2018,7 @@ static void write_separate_index(const XmlElement *root_elem)
     // start of FRONTMATTER
     //
     startFile(stream);
-    stream << "---\n";
+    stream << frontmatterMarker;
     //
     // end of FRONTMATTER
     //
@@ -2099,7 +2052,7 @@ static void write_separate_index(const XmlElement *root_elem)
             QMultiMap<QString,XmlElement*> categories;
             for (auto topic: child->xmlChildren("topic"))
             {
-                categories.insert(topic->attribute("category_name"), topic);
+                categories.insert(global_names.value(topic->attribute("category_id")), topic);
             }
 
             QStringList unique_keys(categories.keys());
@@ -2152,7 +2105,7 @@ static void write_category_files(const XmlElement *tree)
     QMultiMap<QString,XmlElement*> categories;
     for (auto topic: contents->xmlChildren("topic"))
     {
-        categories.insert(topic->attribute("category_name"), topic);
+        categories.insert(global_names.value(topic->attribute("category_id")), topic);
     }
     QStringList category_names(categories.keys());
     category_names.removeDuplicates();
@@ -2162,14 +2115,8 @@ static void write_category_files(const XmlElement *tree)
     {
         QString filename = dirFile(validFilename(catname), validFilename(catname)) + ".md";
         QFile file(filename);
+
         // If it already exists, then don't change it;
-#if 0
-        if (file.exists())
-        {
-            qDebug() << "Placeholder file already exists for category " << catname;
-            return;
-        }
-#endif
         if (!file.open(QFile::WriteOnly))
         {
             qWarning() << "writeExtObject: failed to open file for writing:" << filename;
@@ -2189,7 +2136,7 @@ static void write_category_files(const XmlElement *tree)
         std::sort(topics.begin(), topics.end(), sort_topics);
         for (auto topic: topics)
         {
-            if (topic->attribute("category_name") == catname)
+            if (global_names.value(topic->attribute("category_id")) == catname)
             {
                 stream << "  - " << topic_files.value(topic->attribute("topic_id")) << newline;
             }
@@ -2199,7 +2146,7 @@ static void write_category_files(const XmlElement *tree)
         {
             if (other_cat != catname) stream << "  - " << validFilename(other_cat) << newline;
         }
-        stream << "---\n";
+        stream << frontmatterMarker;
         stream << "# " << catname << newline;
         file.close();
     }
@@ -2218,7 +2165,7 @@ static const XmlElement *findTopicParent(const XmlElement *elem)
 static void write_relationships(const XmlElement *root_elem)
 {
     const QString folderName("Relationships");
-    static const LinkageList nolinks;
+    static const ExportLinks nolinks;
 
     QMultiMap<QString, const XmlElement*> connections;
     for (const auto connection: root_elem->findChildren<XmlElement*>("connection"))
@@ -2248,12 +2195,10 @@ static void write_relationships(const XmlElement *root_elem)
                 continue;
             }
 
-            const QString topic_id    = topic->attribute("topic_id");
-            const QString topic_name  = topic->attribute("public_name");
-            const QString target_id   = connection->attribute("target_id");
-            const QString attitude    = connection->attribute("attitude");
-            const QString qualifier   = connection->attribute("qualifier");
-            QString annotation  = annotationText(connection, nolinks, false);  // not const so we can do annotation.replace later
+            const QString topic_id   = topic->attribute("topic_id");
+            const QString topic_name = topic->attribute("public_name");
+            const QString target_id  = connection->attribute("target_id");
+            const QString annotation = annotationText(connection, false);  // not const so we can do annotation.replace later
 
             // Add the source and target to the list of nodes
             // (square brackets make the box have rounded ends instead of square)
@@ -2264,12 +2209,10 @@ static void write_relationships(const XmlElement *root_elem)
             QString from=topic_id, to=target_id;
             if (!directional && from > to) from.swap(to);
 
-            QStringList labels;
-            if (!attitude.isEmpty()) labels.append(attitude);
-            if (nature == "Generic" && !qualifier.isEmpty()) labels.append(qualifier);
-            if (!annotation.isEmpty()) labels.append(annotation.replace("&#xd;\n","\n"));
-
-            QString label = (!labels.isEmpty()) ? "-- \"" + labels.join(newline) + "\" " : QString();
+            QString label = relationship(connection);
+            label.replace("-", newline);
+            if (!annotation.isEmpty()) label += newline + annotation;
+            if (!label.isEmpty()) label = "-- \"" + label + "\" ";
 
             relationships.insert(from + label + arrow + to);
         }
@@ -2285,7 +2228,7 @@ static void write_relationships(const XmlElement *root_elem)
             }
             QTextStream stream(&file);
             startFile(stream);
-            stream << "---\n\n";
+            stream << frontmatterMarker;
 
             stream << "```mermaid" << newline;
             // graph doesn't allow two-headed arrows
@@ -2299,6 +2242,131 @@ static void write_relationships(const XmlElement *root_elem)
     }
 }
 
+
+static void write_storyboard(const XmlElement *root_elem)
+{
+    XmlElement *contents = root_elem->xmlChild("contents");
+    if (!contents) return;
+
+    // Collect all the plot ids before we start
+    for (auto plot_group : contents->xmlChildren("plot_group"))
+    {
+        for (auto plot : plot_group->xmlChildren("plot"))
+        {
+            const QString plot_id   = plot->attribute("plot_id");
+            const QString plot_name = plot->attribute("public_name");
+
+            //qDebug() << "PLOT: " << plot_id << " := " << plot_name;
+            global_names.insert(plot_id, plot_name);
+            topic_files.insert(plot_id, validFilename(plot_name));
+        }
+    }
+
+    // Now do the normal work
+    for (auto plot_group : contents->xmlChildren("plot_group"))
+    {
+        const QString group_name = plot_group->attribute("name");
+
+        for (auto plot : plot_group->xmlChildren("plot"))
+        {
+            const QString plot_id     = plot->attribute("plot_id");
+            const QString plot_name   = plot->attribute("public_name");
+            const QString description = get_elem_string(plot->xmlChild("description"));
+
+            QStringList nodes;
+            QStringList links;
+
+            for (auto node : plot->xmlChildren("node"))
+            {
+                const QString node_id       = "Node_" + node->attribute("node_id");  // number of node_X
+                const QString description   = get_elem_string(node->xmlChild("description"));
+                const QString gm_directions = get_elem_string(node->xmlChild("gm_directions"));
+                QString node_name           = node->attribute("node_name");
+
+                for (auto edge : node->xmlChildren("edge"))
+                {
+                    const QString target_node_id = edge->attribute("target_node_id");
+                    links.append(node_id + " --> " + "Node_" + target_node_id);
+                }
+                // We fudge links that have different names to the node name.
+                bool real_link=false;
+                if (auto link = node->xmlChild("link"))
+                {
+                    const QString target_id = link->attribute("target_id");  // topic_id
+                    if (!target_id.isEmpty())
+                    {
+                        //qDebug() << "\nNODE: name  = " << node_name;
+                        //qDebug() <<   "target_id   = " << global_names.value(target_id);
+                        //qDebug() <<   "target_name = " << global_names.value(target_id);
+                        QString node_link = topic_files.value(target_id);
+                        if (node_link == node_name)
+                            real_link = true;
+                        else if (node_name.isEmpty() || node_name.toLower() == global_names.value(target_id).toLower())
+                        {
+                            // If node has the BASE name (ignoring case), then use the topic name
+                            node_name = node_link;
+                            real_link = true;
+                        }
+                        else
+                        {
+                            QString fake_node = node_id + "a";
+                            nodes.append(mermaid_node_raw(fake_node, node_link));
+                            links.append(node_id + " -.-> " + fake_node);
+                        }
+                    }
+                }
+
+                // How to get original link_name to be displayed, but the LINK take us to the correct note?
+                nodes.append(mermaid_node_raw(node_id, !node_name.isEmpty() ? node_name : "Unnamed", real_link));
+            }
+
+            // Create the actual file!
+            QFile file(dirFile("Storyboard/" + group_name, plot_name + ".md"));
+            if (!file.open(QFile::WriteOnly))
+            {
+                qWarning() << "Failed to open file for PLOT " << plot_name;
+                continue;
+            }
+            QTextStream stream(&file);
+
+            startFile(stream);
+            stream << "---" << newline;
+            stream << "# " << plot_name << newline;
+            if (!description.isEmpty()) stream << description << newline;
+
+            stream << "```mermaid" << newline;
+            stream << "flowchart TD" << newline;
+            stream << nodes.join("\n") << newline;
+            stream << links.join("\n") << newline;
+            stream << "```" << newline;
+            file.close();
+        }
+    }
+}
+
+static void read_structure(XmlElement *structure)
+{
+    global_names.clear();
+    for (auto tag : structure->findChildren<XmlElement*>("tag_global"))
+        global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
+    for (auto tag : structure->findChildren<XmlElement*>("tag"))
+        global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
+
+    for (auto cat : structure->findChildren<XmlElement*>("category_global"))
+        global_names.insert(cat->attribute("category_id"), cat->attribute("name"));
+    for (auto cat : structure->findChildren<XmlElement*>("category"))
+        global_names.insert(cat->attribute("category_id"), cat->attribute("name"));
+
+    for (auto facet : structure->findChildren<XmlElement*>("facet_global"))
+        global_names.insert(facet->attribute("facet_id"), facet->attribute("name"));
+    for (auto facet : structure->findChildren<XmlElement*>("facet"))
+        global_names.insert(facet->attribute("facet_id"), facet->attribute("name"));
+
+    for (auto facet : structure->findChildren<XmlElement*>("partition_global"))
+        global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
+    for (auto facet : structure->findChildren<XmlElement*>("partition"))
+        global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
+}
 
 /**
  * @brief toHtml
@@ -2341,6 +2409,8 @@ void toMarkdown(const XmlElement *root_elem,
 
     imported_date = QDateTime::currentDateTime().toString(QLocale::system().dateTimeFormat());
 
+    read_structure(root_elem->xmlChild("structure"));
+
     // Patch name of assets directory
     if (QDir(oldAssetsDir).exists() && !QDir(assetsDir).exists())
         QDir::current().rename(oldAssetsDir, assetsDir);
@@ -2370,12 +2440,17 @@ void toMarkdown(const XmlElement *root_elem,
     {
         // Filename contains the FULL topic name including prefix and suffix
         QString fullname;
-        const QString prefix = topic->attribute("prefix");
-        const QString suffix = topic->attribute("suffix");
+        const QString prefix   = topic->attribute("prefix");
+        const QString corename = topic->attribute("public_name");
+        const QString suffix   = topic->attribute("suffix");
+
         if (!prefix.isEmpty()) fullname += prefix + " - ";
-        fullname += topic->attribute("public_name");
+        fullname += corename;
         if (!suffix.isEmpty()) fullname += " (" + suffix + ")";
+
+        global_names.insert(topic->attribute("topic_id"), corename);
         topic_full_name.insert(topic, fullname);
+
         QString vfn = validFilename(fullname);
         if (vfn != fullname) qWarning() << "Filename (" << vfn << ") different for " << fullname;
         topic_files.insert(topic->attribute("topic_id"), validFilename(fullname));
@@ -2389,6 +2464,7 @@ void toMarkdown(const XmlElement *root_elem,
     write_category_files(root_elem);
 
     write_relationships(root_elem);
+    write_storyboard(root_elem);
 
     // A separate file for every single topic
     write_child_topics(root_elem->findChild<XmlElement*>("contents"));

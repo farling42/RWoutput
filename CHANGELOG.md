@@ -1,3 +1,16 @@
+# 4.0
+Convert to using RWexport file for Markdown creation. All processing should work as before. 
+
+Nested tables will have the outer table in markdown, with inner tables using HTML markup.
+
+Create a Storyboard top-level folder containing all your story boards (plots) from Realm Works.
+
+Due to the Mermaid graphs not allowing labels to be defined separately from the link destination, any story linked to a topic using a different name will have an additional node linked by a dotted line to a node with the link inside.
+
+Shortened the names of relationships: so only the qualifier will be used if present; also the public/private relationship text is smaller.
+
+Any links which weren't created with version 3.X should now be created properly.
+
 # 3.18
 For each Tag_Standard or Tag_Multi_Domain snippet, put a corresponding line in the frontmatter.
 Tag_Multi_Domain will be created as a YAML array, Tag_Standard will be created as a single value variable.

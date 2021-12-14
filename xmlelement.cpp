@@ -28,6 +28,8 @@
 
 static int dump_indentation = 0;
 
+bool XmlElement::translate_html = true;
+
 /**
  * @brief XmlElement::XmlElement
  * Create a simple fixed-string element in the XmlElement tree.
@@ -140,8 +142,9 @@ XmlElement::XmlElement(QXmlStreamReader *reader, QObject *parent) :
                     //  so we can use toLatin1 - which doesn't do conversion)
                     p_byte_data = QByteArray::fromBase64(text.toLatin1());
                 }
-                else if (text.left(1) == "<")
+                else if (translate_html && text.left(1) == "<")
                 {
+                    qDebug() << "Converting GUMBO";
                     //
                     // Use the GUMBO library to parse the HTML5 code.
                     //

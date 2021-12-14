@@ -69,7 +69,8 @@ MainWindow::MainWindow(QWidget *parent) :
     //ui->print->setIcon(style()->standardIcon(QStyle::));
     ui->simpleHtml->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     // No options available until a file has been loaded.
-    ui->output->setEnabled(false);
+    ui->rwexport->setEnabled(false);
+    ui->rwoutput->setEnabled(false);
     if (QLineEdit *edit = qobject_cast<QLineEdit*>(ui->maxImageWidth))
         edit->setValidator(new QIntValidator(100,5000));
 
@@ -124,16 +125,20 @@ bool MainWindow::loadFile(const QString &in_filename)
         return false;
     }
 
-    ui->output->setEnabled(false);
+    ui->rwexport->setEnabled(false);
+    ui->rwoutput->setEnabled(false);
     ui->filename->setText(QFileInfo(in_file).fileName());
 
-    setStatusText("Loading RWoutput file...");
+    setStatusText("Loading Realm Works File...");
     root_element = XmlElement::readTree(&in_file);
-    setStatusText("RWoutput file LOAD complete.");
+    setStatusText("Realm Works file LOAD complete.");
 
     ui->topicCount->setText(QString("Topic Count: %1").arg(root_element->findChildren<XmlElement*>("topic").count()));
-    ui->output->setEnabled(true);
     in_file.close();
+
+    bool is_export = in_filename.endsWith(".rwexport");
+    ui->rwexport->setEnabled(is_export);
+    ui->rwoutput->setEnabled(!is_export);
     return true;
 }
 
@@ -141,11 +146,13 @@ void MainWindow::on_loadFile_clicked()
 {
     const QString LOAD_DIRECTORY_PARAM("inputDirectory");
     QSettings settings;
-    QString in_filename = QFileDialog::getOpenFileName(this, tr("Realm Works Output File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*template*/ tr("Realm Works® RWoutput Files (*.rwoutput)"));
+    QString in_filename = QFileDialog::getOpenFileName(this, tr("Realm Works Output File"), /*dir*/ settings.value(LOAD_DIRECTORY_PARAM).toString(), /*filter*/ tr("Realm Works® Files (*.rwoutput *.rwexport)"));
     if (in_filename.isEmpty()) return;
 
+    XmlElement::setTranslateHtml(in_filename.endsWith("rwoutput"));
     if (loadFile(in_filename))
     {
+        // Don't translate embedded HTML if we are processing RWEXPORT, it will be done AFTER link conversion.
         settings.setValue(LOAD_DIRECTORY_PARAM, QFileInfo(in_file).absolutePath());
     }
 }

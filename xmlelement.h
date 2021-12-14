@@ -40,6 +40,8 @@ public:
         Attribute(const QStringRef &name, const QStringRef &value) : name(name.toString()), value(value.toString()) {}
     };
 
+    static void setTranslateHtml(bool flag) { translate_html = flag; }
+
     bool hasAttribute(const QString &name) const;
     const QString &attribute(const QString &name) const;
     inline bool isFixedString() const { return is_fixed_text; }
@@ -63,6 +65,7 @@ private:
     QByteArray p_byte_data;
     QVector<Attribute> p_attributes;
     const bool is_fixed_text{false};
+    static bool translate_html;
 };
 
 #endif // XMLELEMENT_H
