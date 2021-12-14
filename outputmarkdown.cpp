@@ -1913,6 +1913,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 
             QSet<QString> nodes;
             QSet<QString> relationships;
+            QSet<QString> targets;
 
             for (auto connection : connections)
             {
@@ -1920,6 +1921,8 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 QString target_id         = connection->attribute("target_id");
                 const QString nature      = connection->attribute("nature");
                 const QString annotation  = annotationText(connection, false);  // not const so we can do annotation.replace later
+
+                targets.insert("[[ " + topic_files.value(target_id) + "]]");
 
                 // Need to be incoming links
                 if (nature_incoming.value(nature)) source_id.swap(target_id);
@@ -1949,6 +1952,8 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 stream << nodes.values().join(newline) << newline;
                 stream << relationships.values().join(newline) << newline;
                 stream << "```\n";
+
+                stream << "%%links: [ " << QStringList(targets.toList()).join(", ") << " ]";
             }
         }
     }
