@@ -2275,6 +2275,7 @@ static void write_storyboard(const XmlElement *root_elem)
 
             QStringList nodes;
             QStringList links;
+            QSet<QString> otherlinks;
 
             for (auto node : plot->xmlChildren("node"))
             {
@@ -2313,6 +2314,7 @@ static void write_storyboard(const XmlElement *root_elem)
                             nodes.append(mermaid_node_raw(fake_node, node_link));
                             links.append(node_id + " -.-> " + fake_node);
                         }
+                        otherlinks.insert("[[" + node_link + "]]");
                     }
                 }
 
@@ -2330,7 +2332,9 @@ static void write_storyboard(const XmlElement *root_elem)
             QTextStream stream(&file);
 
             startFile(stream);
-            stream << "---" << newline;
+            stream << "Tag: Storyboard" << newline;
+            stream << frontmatterMarker;
+
             stream << "# " << plot_name << newline;
             if (!description.isEmpty()) stream << description << newline;
 
@@ -2339,6 +2343,9 @@ static void write_storyboard(const XmlElement *root_elem)
             stream << nodes.join("\n") << newline;
             stream << links.join("\n") << newline;
             stream << "```" << newline;
+
+            if (!otherlinks.isEmpty())
+                stream << "%%links: [ " << QStringList(otherlinks.values()).join(", ") << " ]" << newline;
             file.close();
         }
     }

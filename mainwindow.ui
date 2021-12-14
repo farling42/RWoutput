@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>522</width>
+    <width>548</width>
     <height>551</height>
    </rect>
   </property>
@@ -162,10 +162,10 @@ FILE</string>
             <item>
              <widget class="QCheckBox" name="foldersByCategory">
               <property name="toolTip">
-               <string>When unchecked, folders will be created based on governed content.</string>
+               <string>When unchecked, topics will be arranged in topic hierarchy</string>
               </property>
               <property name="text">
-               <string>Folders by Category</string>
+               <string>Group Topics in Category Folders</string>
               </property>
              </widget>
             </item>
@@ -228,7 +228,7 @@ FILE</string>
                <string>When converting GM directions, prefix each with &quot;GMDIR:&quot; in bold italic</string>
               </property>
               <property name="text">
-               <string>Add prefix to GM Directions</string>
+               <string>Add &quot;GMDIR:&quot; prefix to GM Directions</string>
               </property>
               <property name="checked">
                <bool>true</bool>
@@ -370,7 +370,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>522</width>
+     <width>548</width>
      <height>21</height>
     </rect>
    </property>
