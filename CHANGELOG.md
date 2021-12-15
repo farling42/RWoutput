@@ -11,6 +11,8 @@ Fix formatting of links.
 
 Add additional "True-Name:" variable in frontmatter.
 
+Ensure that the links for connection graphs are placed into a comment block properly ("%%" on its own line before AND after the variable)
+
 # 4.2
 Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
 
