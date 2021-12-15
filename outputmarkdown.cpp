@@ -1180,7 +1180,6 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 // Check for line with only formatting and white space!
                 if (markup.match(result, startPara, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption).hasMatch())
                 {
-                    qDebug() << "P:" << result.mid(startPara) << " matches pattern";
                     // Nothing other than formatting, so remove all formatting and put in just a blank line
                     result.truncate(startPara);
                 }
