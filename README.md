@@ -7,9 +7,9 @@ Tool to convert a Realm Works Output file into other formats.
 
 1. Within Realm Works, from the "Share" tab of the ribbon select "Manage Exports" and enter some data, then do one of the following depending upon which output you want:
 
-- For Markdown, select "Full Export". This will generate a file in your "Realm Works\Export" folder whose name ends with ".rwexport".
+    - For Markdown, select "Full Export". This will generate a file in your "Realm Works\Export" folder whose name ends with ".rwexport".
 
-- For other formats, select "Compact Output". This will generate a file in your "Realm Works\Output" folder whose name ends with ".rwoutput".
+    - For other formats, select "Compact Output". This will generate a file in your "Realm Works\Output" folder whose name ends with ".rwoutput".
 
 2. Launch the RWoutput tool, press the "LOAD rwoutput FILE" button and select the file created in step 1.
 
@@ -19,12 +19,12 @@ Tool to convert a Realm Works Output file into other formats.
 
 5. Choose one of the output options:
 
-- Create HTML file(s) will create XHTML files containing lots of formatting. (Word does not support importing XHTML files, see HTML4 below).
+    - Create HTML file(s) will create XHTML files containing lots of formatting. (Word does not support importing XHTML files, see HTML4 below).
 
-- Create PDF file - experimental, and might not always work.
+    - Create PDF file - experimental, and might not always work.
 
-- Print - print the output to a printer, you could choose the "print to PDF" printer on windows 10 for a more reliable PDF output.
+    - Print - print the output to a printer, you could choose the "print to PDF" printer on windows 10 for a more reliable PDF output.
 
-- Create HTML4 file - this is the intermediate file for printing and PDF generation; so why not have it available. This format can also be imported into Word (and possibly other editors).
+    - Create HTML4 file - this is the intermediate file for printing and PDF generation; so why not have it available. This format can also be imported into Word (and possibly other editors).
 
-- Create Markdown - which will prompt you for a directory into which the markdown files will be placed.
+    - Create Markdown - which will prompt you for a directory into which the markdown files will be placed.
