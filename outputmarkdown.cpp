@@ -83,6 +83,7 @@ static QString assetsDir("zz_asset-files");
 static QString imported_date;
 static QString mainPageName;
 static const QString newline("\n");
+static const QString endsnippet("\n\n");  // blank line after every snippet
 static QMap<QString,QString> global_names;
 static QString frontmatterMarker("---\n");
 //static QString GMDIR_PATTERN("***GMDIR***: %1\n");
@@ -351,7 +352,8 @@ static QString doEscape(const QString &original)
     // Escape any [ characters
     // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
     // Occasionally there is a zero-width-space, which we'll assume should be no space at all.
-    // write_para_children is now putting internal links before this is called, so we need to handle [[ specially.
+
+    // get_content_text is now putting internal links before this is called, so we need to handle [[ specially.
     // &forall; = \u8704 (U+2200) - to get [[ passed the first replace
     return result.replace("\[","\\[").replace('*',"\\*").replace('~',"\\~").replace(QChar(8704),"[");
 }
@@ -649,7 +651,7 @@ private:
     };
 };
 typedef QHash<QString,TextStyle> GumboStyles;
-static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString());
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString(), bool allowWhitespace=false);
 static const GumboNode *find_named_child(const GumboNode *parent, const QString &name);
 
 
@@ -726,8 +728,16 @@ static const QString textContent(const QString &source)
     return result;
 }
 
+static QString patch_gumbo(const QString &input)
+{
+    // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
+    // but we should ignore <bbr> at the end of a line.
+    QString result = input;
+    return result.replace("<bbr>\n","\n").replace("<bbr>","\n").trimmed();
+}
 
-static const QString write_para_children(XmlElement *parent, const ExportLinks &links)
+
+static const QString get_content_text(XmlElement *parent, const ExportLinks &links)
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children";
@@ -745,22 +755,30 @@ static const QString write_para_children(XmlElement *parent, const ExportLinks &
         QString label = textContent(text.mid(link.start,link.length));
         text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
     }
-    // Now remove double links - TODO
-    text.replace("\n\n", "\n");
+    // Now remove double links - TODO - do we still need this?
+    //text.replace("\n\n", "\n");
 
-    GumboOutput *output = gumbo_parse(text.toUtf8());
-    if (output) {
-        if (output->root)
-        {
-            if (auto body = find_named_child(output->root, "body"))
+    if (text.startsWith("<"))
+    {
+        GumboOutput *output = gumbo_parse(text.toUtf8());
+        if (output) {
+            if (output->root)
             {
-                GumboStyles styles;
-                TextStyle currentStyle;
-                result += output_gumbo_children(body, styles, currentStyle).trimmed();
+                if (auto body = find_named_child(output->root, "body"))
+                {
+                    GumboStyles styles;
+                    TextStyle currentStyle;
+                    result += patch_gumbo(output_gumbo_children(body, styles, currentStyle));
+                }
             }
+            // Get GUMBO to release all the memory
+            gumbo_destroy_output(&kGumboDefaultOptions, output);
         }
-        // Get GUMBO to release all the memory
-        gumbo_destroy_output(&kGumboDefaultOptions, output);
+    }
+    else
+    {
+        // No embedded HTML
+        result = text;
     }
     return result.trimmed();
 }
@@ -905,7 +923,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
             }
             result += newline;
         }
-        result += "```\n";
+        result += "```";
     }
     else
     {
@@ -963,21 +981,21 @@ static QString tag_label(const XmlElement *tag_assign)
     return QString();
 }
 
-static const QString getTags(const XmlElement *node, bool wrapped=true)
+static const QString getTags(const XmlElement *node, bool prefixnl=true)
 {
     auto tag_nodes = node->xmlChildren("tag_assign");
-    if (tag_nodes.length() == 0) return "";
+    if (tag_nodes.length() == 0) return QString();
 
     QStringList tags;
-    for (auto tag_assign : tag_nodes)
+    for (auto &tag_assign : tag_nodes)
     {
         QString tag = tag_label(tag_assign);
         if (!tag.isEmpty()) tags.append("#" + tag);
     }
     if (tags.length() == 0)
-        return "";
-    else if (wrapped)
-        return tags.join(" ") + newline;
+        return QString();
+    else if (prefixnl)
+        return newline + tags.join(" ");
     else
         return tags.join(" ");
 }
@@ -1011,7 +1029,7 @@ static void finishGumboStyle(QString &result, const GumboNode *node, const Gumbo
  * @param node
  */
 
-static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top, int nestedTableCount, const QString &orig_listtype)
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top, int nestedTableCount, const QString &orig_listtype, bool allowWhitespace)
 {
     QString listtype = orig_listtype;
     QString result;
@@ -1019,7 +1037,6 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
     QString captured;
     bool addEndLine=false;
     bool isHeader=false;
-    bool allowWhitespace=true;
     int startPara;
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
@@ -1058,19 +1075,19 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             // See what to put before the text
             if (tag == "p")
             {                
-                //result += newline;
+                allowWhitespace=true;
                 startPara = result.length();
                 currentStyle = TextStyle();
                 startGumboStyle(result, node, styles, currentStyle);
             }
             else if (tag == "br")
-                result += "\n";  // Using <br> breaks formatting in portfolio files
+                result += "<bbr>";  // Replaced in write_html by calling patch_gumbo
             else if (tag == "b")
                 result += "**";
             else if (tag == "i")
                 result += "*";
             else if (tag == "hr")
-                result += "\n---\n\n";
+                result += "\n\n---\n";
             else if (tag == "a") {
                 href.clear();
                 GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
@@ -1166,9 +1183,9 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             // Now process the children
             //
             if (capture)
-                captured = output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype);
+                captured = output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
             else
-                result += output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype);
+                result += output_gumbo_children(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
 
             //
             // Now, see if we need to terminate this node
@@ -1184,6 +1201,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                     result.truncate(startPara);
                 }
                 result += newline;
+                allowWhitespace=false;
             }
             else if (tag == "sup" || tag == "sub")
                 currentStyle.finishStyleElement(result, tag);
@@ -1209,7 +1227,9 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
 
             else if (nestedTableCount==1 && tag == "td")
             {
-                result += "| " + captured.trimmed().replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
+                // TODO - do we need to detect double \n
+                //result += "| " + captured.trimmed().replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
+                result += "| " + captured.trimmed().replace("<bbr>","<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
             }
             else if (nestedTableCount==1 && tag == "tr")
             {
@@ -1234,7 +1254,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                         QString header = "|";
                         while (--count) header += " |";
                         break1 = header.length();    // set to index of the line break we are about to add.
-                        table = header + newline + table;
+                        table.prepend(header + newline);
                     }
                     // Create the line of columns
                     QString columns = "|";
@@ -1341,19 +1361,21 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     const GumboNode *style = head ? find_named_child(head, "style") : nullptr;
     GumboStyles styles = getStyles(style);
 
-    result += "\n---\n\n# " + sntype;
-    if (use_fixed_title)
+    result += "\n---\n# " + sntype;
+    if (!use_fixed_title)
     {
-        // Nothing else in the header
-        result += newline;
+        const GumboNode *titlenode = head ? find_named_child(head, "title") : nullptr;
+        if (titlenode)
+        {
+            TextStyle currentStyle;
+            QString title = patch_gumbo(output_gumbo_children(titlenode, styles, currentStyle));
+            // Strip HL from name
+            int pos = title.lastIndexOf(" - created with Hero Lab");
+            if (pos >= 0) title.truncate(pos);
+            result += ": " + title;
+        }
     }
-    else
-    {
-        const GumboNode *title = head ? find_named_child(head, "title") : nullptr;
-        // title should only be text
-        TextStyle currentStyle;
-        if (title) result += ": " + output_gumbo_children(title, styles, currentStyle) + newline;
-    }
+    result += newline;
 
     // Maybe we have a CSS that we can put inline.
 #ifdef HANDLE_POOR_RTF
@@ -1361,14 +1383,11 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     if (!style) style = get_gumbo_child(body, "style");
 #endif
 
-    //if (body)
-    {
 #ifdef DUMP_CHILDREN
-        dump_children("BODY", body);
+    dump_children("BODY", body);
 #endif
-        TextStyle currentStyle;
-        result += output_gumbo_children(body ? body : output->root, styles, currentStyle);
-    }
+    TextStyle currentStyle;
+    result += patch_gumbo(output_gumbo_children(body ? body : output->root, styles, currentStyle)) + newline;
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
@@ -1384,7 +1403,7 @@ static inline const QString annotationText(const XmlElement *snippet, bool wrapp
 
     // Remove newline from either end of paragraph
     ExportLinks nolinks;
-    QString result = write_para_children(annotation, nolinks);
+    QString result = get_content_text(annotation, nolinks);
     result.replace("&#xd;\n","\n");
     if (!wrapped)
         return result;
@@ -1432,34 +1451,32 @@ static const QString write_snippet(XmlElement *snippet)
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        QString gmdir = write_para_children(gm_directions, gmlinks);
+        QString gmdir = get_content_text(gm_directions, gmlinks);
         if (prefix_gmdir)
             result += GMDIR_PATTERN.arg(gmdir.replace("\n","\n> "));
         else
-            result += gmdir + "\n";
+            result += gmdir + newline;
         // The following nice style prevents links from working
-        //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + write_para_children(gm_directions, links) + "</p>";
+        //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + get_content_text(gm_directions, links) + "</p>\n";
     }
 
     if (sn_type == "Multi_Line")
     {
         // child is either <contents> or <gm_directions> or both
         if (auto contents = snippet->xmlChild("contents"))
-            result += write_para_children(contents, links);
+            result += get_content_text(contents, links);
 
         // Multi_Line has no annotation
-        result += newline + getTags(snippet) + newline;
+        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Labeled_Text")
     {
         if (auto contents = snippet->xmlChild("contents"))
         {
-            // TODO: BOLD label needs to be put inside <p class="RWDefault"> not in front of it
-            // Remove newline from either end of paragraph
-            result += hlabel(snippetName(snippet)) + write_para_children(contents, links);  // has its own 'p'
+            result += hlabel(snippetName(snippet)) + get_content_text(contents, links);  // has its own 'p'
         }
         // Labeled_Text has no annotation
-        result += newline + getTags(snippet) + newline;
+        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Portfolio")
     {
@@ -1471,8 +1488,7 @@ static const QString write_snippet(XmlElement *snippet)
                 QString filename = asset->attribute("filename");
                 if (auto contents = asset->xmlChild("contents"))
                 {
-                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotationText(snippet, false));
-                    result += getTags(snippet) + newline;
+                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotationText(snippet, false)) + getTags(snippet);
 
                     // Put in markers for statblock
                     QByteArray store = contents->byteData();
@@ -1541,7 +1557,7 @@ static const QString write_snippet(XmlElement *snippet)
 #endif
                         }
                     }
-                    result += getTags(snippet) + newline;
+                    result += getTags(snippet) + endsnippet;
                 }
             }
         }
@@ -1565,22 +1581,27 @@ static const QString write_snippet(XmlElement *snippet)
 
             result += write_image(smart_image->attribute("name"), contents->byteData(), mask, filename, annotationText(snippet, false), usemap, pins);
         }
-        result += newline + getTags(snippet) + newline;
+        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Date_Game")
     {
         if (auto date = snippet->xmlChild("game_date"))
         {
-            result += "**" + snippetName(snippet) + "**: " + date->attribute("display");
-            result += annotationText(snippet) + newline + getTags(snippet) + newline;
+            QString datestr = date->attribute("gregorian");
+            if (datestr.isEmpty()) datestr = date->attribute("canonical");
+            result += "**" + snippetName(snippet) + "**: " + datestr + annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
     else if (sn_type == "Date_Range")
     {
         if (auto date = snippet->xmlChild("date_range"))
         {
-            result += hlabel(snippetName(snippet)) + "From: " + date->attribute("display_start") + " To: " + date->attribute("display_end");
-            result += annotationText(snippet) + newline + getTags(snippet) + newline;
+            QString start,finish;
+            start  = date->attribute("gregorian_start");
+            finish = date->attribute("gregorian_end");
+            if (start.isEmpty())  start  = date->attribute("canonical_start");
+            if (finish.isEmpty()) finish = date->attribute("canonical_end");
+            result += hlabel(snippetName(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
     else if (sn_type == "Tag_Standard")
@@ -1592,7 +1613,7 @@ static const QString write_snippet(XmlElement *snippet)
         {
             // In non-tag text before showing all connected tags
             result += hlabel(snippetName(snippet)) + tags.join(", ");
-            result += annotationText(snippet) + newline + getTags(snippet) + newline;
+            result += annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
     else if (sn_type == "Numeric")
@@ -1600,7 +1621,7 @@ static const QString write_snippet(XmlElement *snippet)
         if (auto contents = snippet->xmlChild("contents"))
         {
             result += hlabel(snippetName(snippet)) + contents->childString();
-            result += annotationText(snippet) + newline + getTags(snippet) + newline;
+            result += annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
     else if (sn_type == "Tag_Multi_Domain")
@@ -1608,8 +1629,7 @@ static const QString write_snippet(XmlElement *snippet)
         QString tags = getTags(snippet, /*wrapped*/false);   // tags will be on the same line as this snippet
         if (!tags.isEmpty())
         {
-            result += hlabel(snippetName(snippet)) + tags;
-            result += annotationText(snippet) + newline + newline;
+            result += hlabel(snippetName(snippet)) + tags + annotationText(snippet) + endsnippet;
         }
     }
     // Hybrid_Tag
@@ -1628,7 +1648,7 @@ static const QString write_section(XmlElement *section, int level)
     // Start with HEADER for the section (H1 used for topic title)
     QString sname = section->attribute("name");
     if (sname.isEmpty()) sname = global_names.value(section->attribute("partition_id"));
-    result += newline + QString(level+1,'#') + ' ' + sname + newline;
+    result += QString(level+1,'#') + ' ' + sname + newline;
 
     // Write snippets
     for (auto snippet: section->xmlChildren("snippet"))
@@ -1892,9 +1912,12 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         QString text = write_section(section, /*level*/ 1);
         if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
         if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
+#if 0
+        // TODO - do we still need this?
         static const QRegularExpression reduce_newlines("\n\n[\n]+", QRegularExpression::UseUnicodePropertiesOption);
         if (!reduce_newlines.isValid()) qWarning() << "Invalid regexp in write_topic_file";
         text.replace(reduce_newlines, "\n\n");
+#endif
         stream << text;
     }
 
@@ -1902,7 +1925,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     auto child_topics = topic->xmlChildren("topic");
     if (!child_topics.isEmpty())
     {
-        stream << "\n\n---\n## Governed Content\n";
+        stream << "\n---\n## Governed Content\n";
 
         std::sort(child_topics.begin(), child_topics.end(), sort_topics);
         for (auto child: child_topics)
@@ -1914,16 +1937,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     auto connections = topic->xmlChildren("connection");
     if (connections.length() > 0)
     {
-        stream << "\n\n---\n## Connections\n";
+        stream << "\n---\n## Connections\n";
         if (!connections_as_graph)
         {
             for (auto connection : connections)
             {
                 // Remove spaces from tag
-                stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id"));
-                XmlElement *annot = connection->xmlChild("annotation");
-                if (annot) stream << " ; " << doEscape(annot->xmlChild()->fixedText());
-                stream << newline;
+                stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id")) << annotationText(connection) << newline;
             }
         } else {
             // Now create a MERMAID flowchart
@@ -1981,7 +2001,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     QString topic_tags = getTags(topic, /*wrapped*/ false);
     if (topic_tags.length() > 0)
     {
-        stream << "\n\n---\n## Tags\n" << topic_tags << newline;
+        stream << "\n---\n## Tags\n" << topic_tags << newline;
     }
 
     if (show_nav_panel && !nav_at_start)

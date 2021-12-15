@@ -1,3 +1,10 @@
+# 4.3
+Fix formatting of embedded tables.
+
+Reduce number of double blank lines being produced.
+
+Reduce amount of whitespace produced when decoding embedded HTML (e.g. portfolios or statblocks).
+
 # 4.2
 Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
 
