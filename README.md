@@ -3,7 +3,7 @@ Tool to convert a Realm Works Output file into other formats.
 
 ** NOTE: This tool will NEVER be able to export "protected" content, such as material sold on the Content Market. **
 
-Instructions for Use
+### Instructions for Use
 
 1. Within Realm Works, from the "Share" tab of the ribbon select "Manage Exports" and enter some data, then do one of the following depending upon which output you want:
 
