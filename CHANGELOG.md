@@ -1,3 +1,10 @@
+# 4.2
+Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
+
+Remove additional blank lines appearing before paragraphs; since markdown keeps line breaks in paragraphs.
+
+Fix issue with formatting appearing on otherwise empty paragraph lines.
+
 # 4.1
 Add Tag of Storyboard to each of the created plots.
 

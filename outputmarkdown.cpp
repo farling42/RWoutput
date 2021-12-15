@@ -589,6 +589,11 @@ struct TextStyle {
         if (current.italic)        remove(result, "*",      "*", false);
         if (space) result += ' ';
     };
+    void finishAndClear(QString &result)
+    {
+        finish(result);
+        current.clear();
+    }
     const QString toString() const
     {
         return current.toString();
@@ -1015,6 +1020,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
     bool addEndLine=false;
     bool isHeader=false;
     bool allowWhitespace=true;
+    int startPara;
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
@@ -1051,8 +1057,9 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
 
             // See what to put before the text
             if (tag == "p")
-            {
-                result += newline;
+            {                
+                //result += newline;
+                startPara = result.length();
                 currentStyle = TextStyle();
                 startGumboStyle(result, node, styles, currentStyle);
             }
@@ -1168,7 +1175,15 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             //
             if (tag == "p")
             {
-                currentStyle.finish(result);
+                currentStyle.finishAndClear(result);
+                static const QRegularExpression markup("[\\*~ ]+$", QRegularExpression::UseUnicodePropertiesOption);
+                // Check for line with only formatting and white space!
+                if (markup.match(result, startPara, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption).hasMatch())
+                {
+                    qDebug() << "P:" << result.mid(startPara) << " matches pattern";
+                    // Nothing other than formatting, so remove all formatting and put in just a blank line
+                    result.truncate(startPara);
+                }
                 result += newline;
             }
             else if (tag == "sup" || tag == "sub")
@@ -1244,7 +1259,7 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             break;
         }
     }
-    if (top) currentStyle.finish(result);
+    if (top) currentStyle.finishAndClear(result);
     return result.replace("\u00a0"," ").replace("\u200b","");
 }
 
@@ -1420,7 +1435,7 @@ static const QString write_snippet(XmlElement *snippet)
     {
         QString gmdir = write_para_children(gm_directions, gmlinks);
         if (prefix_gmdir)
-            result += GMDIR_PATTERN.arg(gmdir);
+            result += GMDIR_PATTERN.arg(gmdir.replace("\n","\n> "));
         else
             result += gmdir + "\n";
         // The following nice style prevents links from working
