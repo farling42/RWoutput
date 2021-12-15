@@ -5,7 +5,7 @@ Reduce number of double blank lines being produced.
 
 Reduce amount of whitespace produced when decoding embedded HTML (e.g. portfolios or statblocks).
 
-Fix extraction of date information from RWexport files.
+Fix extraction of date information from RWexport files, and convert them into the user's locale time-date format.
 
 Fix formatting of links.
 
