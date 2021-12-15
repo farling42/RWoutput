@@ -5,7 +5,11 @@ Tool to convert a Realm Works Output file into other formats.
 
 Instructions for Use
 
-1. Within Realm Works, from the "Share" tab of the ribbon, select "Manage Exports", enter some data and then select "Compact Output". This will generate a file in your "Realm Works\Output" folder whose name ends with ".rwoutput".
+1. Within Realm Works, from the "Share" tab of the ribbon select "Manage Exports" and enter some data, then do one of the following depending upon which output you want:
+
+- For Markdown, select "Full Export". This will generate a file in your "Realm Works\Export" folder whose name ends with ".rwexport".
+
+- For other formats, select "Compact Output". This will generate a file in your "Realm Works\Output" folder whose name ends with ".rwoutput".
 
 2. Launch the RWoutput tool, press the "LOAD rwoutput FILE" button and select the file created in step 1.
 
@@ -22,3 +26,5 @@ Instructions for Use
 5.3 Print - print the output to a printer, you could choose the "print to PDF" printer on windows 10 for a more reliable PDF output.
 
 5.4 Create HTML4 file - this is the intermediate file for printing and PDF generation; so why not have it available. This format can also be imported into Word (and possibly other editors).
+
+5.5 Create Markdown - which will prompt you for a directory into which the markdown files will be placed.
