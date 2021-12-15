@@ -1821,11 +1821,15 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     auto aliases = topic->xmlChildren("alias");
     if (!aliases.isEmpty())
     {
+        QString true_name;
         stream << "Aliases:\n";
         for (auto alias : aliases)
         {
-            stream << "  - " << alias->attribute("name") << newline;
+            QString name = alias->attribute("name");
+            if (alias->attribute("is_true_name") == "true") true_name = name;
+            stream << "  - " << name << newline;
         }
+        if (!true_name.isEmpty()) stream << "True-Name: " << true_name << newline;
     }
     QStringList tags;
     tags.append(tag_string("Category", category_name));
@@ -2005,7 +2009,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 stream << relationships.values().join(newline) << newline;
                 stream << "```\n";
 
-                stream << "%%links: [ " << QStringList(targets.toList()).join(", ") << " ]";
+                stream << "%%\nlinks: [ " << QStringList(targets.toList()).join(", ") << " ]\n%%\n";
             }
         }
     }

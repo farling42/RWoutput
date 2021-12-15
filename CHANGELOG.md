@@ -5,6 +5,12 @@ Reduce number of double blank lines being produced.
 
 Reduce amount of whitespace produced when decoding embedded HTML (e.g. portfolios or statblocks).
 
+Fix extraction of date information from RWexport files.
+
+Fix formatting of links.
+
+Add additional "True-Name:" variable in frontmatter.
+
 # 4.2
 Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
 
