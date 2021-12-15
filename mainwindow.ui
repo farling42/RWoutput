@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>548</width>
+    <width>522</width>
     <height>551</height>
    </rect>
   </property>
@@ -228,7 +228,7 @@ FILE</string>
                <string>When converting GM directions, prefix each with &quot;GMDIR:&quot; in bold italic</string>
               </property>
               <property name="text">
-               <string>Add &quot;GMDIR:&quot; prefix to GM Directions</string>
+               <string>Put GM Directions in indented box</string>
               </property>
               <property name="checked">
                <bool>true</bool>
@@ -370,7 +370,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>548</width>
+     <width>522</width>
      <height>21</height>
     </rect>
    </property>

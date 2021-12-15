@@ -85,6 +85,8 @@ static QString mainPageName;
 static const QString newline("\n");
 static QMap<QString,QString> global_names;
 static QString frontmatterMarker("---\n");
+//static QString GMDIR_PATTERN("***GMDIR***: %1\n");
+static QString GMDIR_PATTERN("> %1\n\n");  // The ">" needs a blank line after to terminate it.
 #define DUMP_LEVEL 0
 
 
@@ -1416,8 +1418,11 @@ static const QString write_snippet(XmlElement *snippet)
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        if (prefix_gmdir) result += "***GMDIR***: ";
-        result += write_para_children(gm_directions, gmlinks) + "\n";
+        QString gmdir = write_para_children(gm_directions, gmlinks);
+        if (prefix_gmdir)
+            result += GMDIR_PATTERN.arg(gmdir);
+        else
+            result += gmdir + "\n";
         // The following nice style prevents links from working
         //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + write_para_children(gm_directions, links) + "</p>";
     }

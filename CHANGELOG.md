@@ -3,6 +3,8 @@ Add Tag of Storyboard to each of the created plots.
 
 Add a %%links variable to each Storyboard identifying the topics linked to from the graph.
 
+Change presentation of GM Directions so that they now appear in an indented box instead of with a GMDIR: prefix.
+
 # 4.0
 Convert to using RWexport file for Markdown creation. All processing should work as before. 
 
