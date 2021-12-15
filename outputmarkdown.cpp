@@ -1425,6 +1425,65 @@ static inline const QString annotationText(const XmlElement *snippet, bool wrapp
 }
 
 
+static inline QString canonicalTime(const QString &source)
+{
+    return source;
+    // canonical="000000001:50:66:+002018:50:28:0028:000:000:000" gregorian="2018-04-29 00:00:00"
+    // canonical="000000001:50:33: 980000:50:07:0000:000:000:000" gregorian="20000-01-01 00:00:00 BCE
+    // canonical="000000002:50:66:+002029:50:07:0025:004:002:005" (for Absolom calendar:  "26/01/2029 AR 04:02:05"
+    // canonical="00000000b:50:33: 602012:00:00:0018:004:002:005" (for Imperial calendar: "019-397988 IY 04:02:05")
+    // canonical="000000001:50:66:+002021:50:76:0013:020:032:055" gregorian="2021-10-14 20:32:55"
+    //                               YYYY    ww DDDD:HHH:MMM:SSS
+    // Add 1 to DDDD to get real data
+    // For BCE, year = 1,000,000 - year
+    // month (mm) = 7 x month
+
+    // canonical syntax = "0[0-9a-fA-F]{8}:[0-9]{2}:[0-9]{2}:[ +][0-9]{6}:[0-9]{2}:[0-9]{2}:[0-9]{4}:[0-9]{3}:[0-9]{3}:[0-9]{3}"
+
+    // <calendar_map calendar_uuid="1B00287B-91C6-5D3A-00D0-6A935C3C6BA9">
+    //     <calendar_map>
+    //         <version>1</version>
+    //         <map_type>Overlay</map_type>
+    //         <ref_calendar>2</ref_calendar>
+    //         <anchor_calendar>1</anchor_calendar>
+    //         <ref_date>000000002:50:33: 980000:50:07:0000:000:000:000</ref_date>
+    //         <anchor_date>000000001:50:33: 980000:50:07:0000:000:000:000</anchor_date>
+    //     </calendar_map>
+    // </calendar_map>
+    // <calendar_map calendar_uuid="1C00287B-91C6-5D3A-00D0-6A935C3C6BA9">
+    //     <calendar_map>
+    //         <version>1</version>
+    //         <map_type>Overlay</map_type>
+    //         <ref_calendar>11</ref_calendar>
+    //         <anchor_calendar>1</anchor_calendar>
+    //         <ref_date>00000000b:50:33: 600000:00:00:0000:000:000:000</ref_date>
+    //         <anchor_date>000000001:50:66:+000011:50:14:0000:000:000:000</anchor_date>
+    //     </calendar_map>
+    // </calendar_map>
+}
+
+static inline QString gregorian(const QString &source)
+{
+    if (source.isEmpty()) return source;
+
+    // 20000-01-01 00:00:00 BCE
+    // 0956-03-18 04:02:05
+    // 2018-04-29 00:00:00
+    int yearmark = source.indexOf('-')+1;
+    int year   = source.mid(0,yearmark-1).toInt();
+    int length = source.length() - yearmark;
+    if (source.endsWith(" BCE"))
+    {
+        year   = -year+1;
+        length -= 4;
+    }
+    QDateTime datetime = QDateTime::fromString(source.mid(yearmark, length), "MM-dd hh:mm:ss").addYears(year-1900);
+
+    //result.setDate(QDate(year, result.month(),))
+    return datetime.toString(QLocale::system().dateTimeFormat());    //QLocale::system().toString(datetime);
+}
+
+
 static const QString write_snippet(XmlElement *snippet)
 {
     QString result;
@@ -1600,8 +1659,8 @@ static const QString write_snippet(XmlElement *snippet)
     {
         if (auto date = snippet->xmlChild("game_date"))
         {
-            QString datestr = date->attribute("gregorian");
-            if (datestr.isEmpty()) datestr = date->attribute("canonical");
+            QString datestr = gregorian(date->attribute("gregorian"));
+            if (datestr.isEmpty()) datestr = canonicalTime(date->attribute("canonical"));
             result += "**" + snippetName(snippet) + "**: " + datestr + annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
@@ -1610,10 +1669,10 @@ static const QString write_snippet(XmlElement *snippet)
         if (auto date = snippet->xmlChild("date_range"))
         {
             QString start,finish;
-            start  = date->attribute("gregorian_start");
-            finish = date->attribute("gregorian_end");
-            if (start.isEmpty())  start  = date->attribute("canonical_start");
-            if (finish.isEmpty()) finish = date->attribute("canonical_end");
+            start  = gregorian(date->attribute("gregorian_start"));
+            finish = gregorian(date->attribute("gregorian_end"));
+            if (start.isEmpty())  start  = canonicalTime(date->attribute("canonical_start"));
+            if (finish.isEmpty()) finish = canonicalTime(date->attribute("canonical_end"));
             result += hlabel(snippetName(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + getTags(snippet) + endsnippet;
         }
     }
