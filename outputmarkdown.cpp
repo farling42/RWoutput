@@ -355,7 +355,7 @@ static QString doEscape(const QString &original)
 
     // get_content_text is now putting internal links before this is called, so we need to handle [[ specially.
     // &forall; = \u8704 (U+2200) - to get [[ passed the first replace
-    return result.replace("\[","\\[").replace('*',"\\*").replace('~',"\\~").replace(QChar(8704),"[");
+    return result.replace("\[","\\[").replace('*',"\\*").replace('~',"\\~").replace(QChar(8704),"[").replace(QChar(8705),"]");
 }
 
 
@@ -541,6 +541,11 @@ struct TextStyle {
     {
         swap(result, other.current);
     }
+    void unmodify(QString &result, const TextStyle &other)
+    {
+        other.finish(result);
+        current.clear();
+    }
     void inline remove(QString &result, const QString &addition, const QString &endswith, bool optimise=true) const
     {
         // Doesn't cancel bold+italic properly
@@ -700,7 +705,7 @@ static const QString hlabel(const QString &label)
 static const QString escape_bracket(const QString &input)
 {
     QString result = input;
-    result.replace('[', QChar(8704));
+    result.replace('[', QChar(8704)).replace(']', QChar(8705));
     return result;
 }
 
@@ -751,9 +756,17 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
     // Now substitute any required links
     for (auto &link: links)
     {
-        // Replace text[start..start+finish] with the link text.
-        QString label = textContent(text.mid(link.start,link.length));
-        text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
+        // Replace ONLY the text of the link, keeping the surrounding spans to handle formatting.
+        QString source = text.mid(link.start,link.length);
+        QString label  = textContent(source);
+        int pos = source.indexOf(label);
+        if (pos >= 0) {
+            text.replace(link.start+pos, label.length(), escape_bracket(internal_link(link.target_id, label)));
+            qDebug() << "PATCHED: " << text.mid(link.start,link.length+20);
+        }
+        else
+            // Failed to find the label, so replace everything (and just suffer the problems with formatting)
+            text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
     }
     // Now remove double links - TODO - do we still need this?
     //text.replace("\n\n", "\n");
