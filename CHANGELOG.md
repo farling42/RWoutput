@@ -15,6 +15,8 @@ Ensure that the links for connection graphs are placed into a comment block prop
 
 Add SPAN in front of GM-Directions and add SPAN for snippets with RW-STYLE or RW-VERACITY. Add a realmworks CSS file (which must be manually enabled).
 
+Put numbering in front of section headers, which should match the numbering in Realm Works
+
 # 4.2
 Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
 
