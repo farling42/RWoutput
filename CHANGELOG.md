@@ -13,6 +13,8 @@ Add additional "True-Name:" variable in frontmatter.
 
 Ensure that the links for connection graphs are placed into a comment block properly ("%%" on its own line before AND after the variable)
 
+Add SPAN in front of GM-Directions and add SPAN for snippets with RW-STYLE or RW-VERACITY. Add a realmworks CSS file (which must be manually enabled).
+
 # 4.2
 Mark multiple paragraphs inside a GM Direction correctly so that they appear in a single box.
 

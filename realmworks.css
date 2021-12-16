@@ -1,0 +1,92 @@
+/* Auto-numbering of sections within topics (H1 = title, H2 = first section) */
+body, h1 {
+    counter-reset: rwh2counter;
+}
+h2:before {
+    content:  counter(rwh2counter) ".\0000a0\0000a0";
+    counter-increment: rwh2counter;
+    counter-reset: rwh3counter;
+}
+h3:before {
+    content:  counter(rwh2counter) "." counter(rwh3counter) ".\0000a0\0000a0";
+    counter-increment: rwh3counter;
+    counter-reset: rwh4counter;
+}
+h4:before {
+    content:  counter(rwh2counter) "." counter(rwh3counter) "." counter(rwh4counter) ".\0000a0\0000a0";
+    counter-increment: rwh4counter;
+}
+
+/* Snippet Style */
+.RWCallout, .RWHandout, .RWFlavor, .RWRead_Aloud {
+        padding: 3px;
+        margin: 2px 0px;
+        padding-right: 30px;
+}
+/* GM Directions */
+.RWgmDirAndContents {
+        border:  3px solid #b4b4b4;
+        padding: 3px;
+}
+.RWgmDirections {
+        border: 2px solid #d2c5b5;
+        padding: 0px 3px;
+        padding-right: 30px;
+}
+
+/* Snippet Veracity */
+.RWveracity-Partial, .RWveracity-Lie {
+        border-width: 3px;
+        padding: 0px 3px;
+}
+.RWveracity-Partial {
+        border-style: dashed;
+}
+.RWveracity-Lie {
+        border-style: solid;
+}
+
+/* LIGHT THEME */
+body.theme-light .RWveracity-Partial {
+        border-color: #e4b5e4;
+}
+body.theme-light .RWveracity-Lie {
+        border-color: #e7c2e8;
+}
+body.theme-light .RWgmDirections {
+        background:   #fffbed60;
+        border-color: #d2c5b5;
+}
+body.theme-light .RWCallout {
+        background: #bebebe80;
+}
+body.theme-light .RWHandout {
+        background: #e8e1d980;
+}
+body.theme-light .RWFlavor {
+        background: #efd4d280;
+}
+body.theme-light .RWRead_Aloud {
+        background: #d1dff280;
+}
+
+/* DARK THEME */
+body.theme-dark .RWveracity-Partial, body.theme-dark .RWveracity-Lie {
+        border-color: #e4b5e460;
+}
+body.theme-dark .RWgmDirections {
+        background:   #20206060;
+        border-color: #601010;
+}
+body.theme-dark .RWCallout {
+        background: #20206080;
+}
+body.theme-dark .RWHandout {
+        background: #00383880;
+}
+body.theme-dark .RWFlavor {
+        background: #30003080;
+}
+body.theme-dark .RWRead_Aloud {
+        background: #28280080;
+}

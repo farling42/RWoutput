@@ -61,7 +61,6 @@ static bool create_prefix_tag = false;
 static bool create_suffix_tag = false;
 static int  image_max_width   = -1;
 static int  gumbofilenumber = 0;
-static bool prefix_gmdir=true;
 static bool connections_as_graph=true;
 
 #undef DUMP_CHILDREN
@@ -86,8 +85,6 @@ static const QString newline("\n");
 static const QString endsnippet("\n\n");  // blank line after every snippet
 static QMap<QString,QString> global_names;
 static QString frontmatterMarker("---\n");
-//static QString GMDIR_PATTERN("***GMDIR***: %1\n");
-static QString GMDIR_PATTERN("> %1\n\n");  // The ">" needs a blank line after to terminate it.
 #define DUMP_LEVEL 0
 
 
@@ -289,26 +286,31 @@ static bool sort_topics(const XmlElement *left, const XmlElement *right)
 static void write_support_files()
 {
     // Use the files that are stored in the resource file
-    QStringList files{"obsidian.css"};
+    QStringList files{"realmworks.css"};
+
+    const QString dirname(".obsidian/snippets/");
 
     for (auto filename : files)
     {
-        QFile destfile(filename);
+        QFile destfile(dirname + filename);
         if (destfile.exists()) destfile.remove();
         QFile::copy(":/" + filename, destfile.fileName());
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
     }
 
-    QFile styles("obsidian.css");
-    if (styles.open(QFile::WriteOnly|QFile::Text|QFile::Append))
+    if (!class_of_style.isEmpty())
     {
-        QTextStream ts(&styles);
-        for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
+        QFile styles(dirname + "realmworks.css");
+        if (styles.open(QFile::WriteOnly|QFile::Text|QFile::Append))
         {
-            if (!predefined_styles.contains(iter.value()))
+            QTextStream ts(&styles);
+            for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
             {
-                ts << "." + iter.value() + " {\n" + iter.key() + "\n}\n";
+                if (!predefined_styles.contains(iter.value()))
+                {
+                    ts << "." + iter.value() + " {\n" + iter.key() + "\n}\n";
+                }
             }
         }
     }
@@ -1523,14 +1525,28 @@ static const QString write_snippet(XmlElement *snippet)
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        QString gmdir = get_content_text(gm_directions, gmlinks);
-        if (prefix_gmdir)
-            result += GMDIR_PATTERN.arg(gmdir.replace("\n","\n> "));
-        else
-            result += gmdir + newline;
-        // The following nice style prevents links from working
-        //result += "<p style=\"background: #fffbed80; border: 2px solid #d2c5b5; padding: 0px 3px;\">" + get_content_text(gm_directions, links) + "</p>\n";
+        result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + get_content_text(gm_directions, gmlinks) + "</span>" + newline;
     }
+
+    // Possibly set a SPAN on the main snippet, for style and veracity
+    QStringList classes;
+    QStringList titles;
+    QString attrvalue = snippet->attribute("style");
+    if (!attrvalue.isEmpty())
+    {
+        classes.append(QString("RW%1").arg(attrvalue));
+        titles.append(QString("Style: %1").arg(attrvalue));
+    }
+    attrvalue = snippet->attribute("veracity");
+    if (!attrvalue.isEmpty())
+    {
+        classes.append(QString("RWveracity-%1").arg(attrvalue));
+        titles.append(QString("Veracity: %1").arg(attrvalue));
+    }
+    QString title;
+    if (!titles.isEmpty()) title = QString(" title=\"%1\"").arg(titles.join(", "));
+    if (!classes.isEmpty()) result += "<span class=\"" + classes.join(" ") + '"' + title + '>';
+
 
     if (sn_type == "Multi_Line")
     {
@@ -2513,7 +2529,6 @@ void toMarkdown(const XmlElement *root_elem,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
                 bool tag_for_each_suffix,
-                bool prefix_gm_directions,
                 bool graph_connections)
 {
 #ifdef TIME_CONVERSION
@@ -2529,7 +2544,6 @@ void toMarkdown(const XmlElement *root_elem,
     create_prefix_tag = tag_for_each_prefix,
     create_suffix_tag = tag_for_each_suffix;
     image_max_width   = max_image_width;
-    prefix_gmdir      = prefix_gm_directions;
     connections_as_graph = graph_connections;
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
