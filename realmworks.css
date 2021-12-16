@@ -19,19 +19,21 @@ h4:before {
 
 /* Snippet Style */
 .RWCallout, .RWHandout, .RWFlavor, .RWRead_Aloud {
-        padding: 3px;
-        margin: 2px 0px;
-        padding-right: 30px;
+    padding: 3px;
+    margin: 2px 0px;
+    padding-right: 30px;
+    display: inline-block;
 }
 /* GM Directions */
 .RWgmDirAndContents {
-        border:  3px solid #b4b4b4;
-        padding: 3px;
+    border:  3px solid #b4b4b4;
+    padding: 3px;
 }
 .RWgmDirections {
-        border: 2px solid #d2c5b5;
-        padding: 0px 3px;
-        padding-right: 30px;
+    border: 2px solid #423d00;
+    padding: 0px 3px;
+    padding-right: 30px;
+    display: inline-block;
 }
 
 /* Snippet Veracity */
@@ -75,7 +77,7 @@ body.theme-dark .RWveracity-Partial, body.theme-dark .RWveracity-Lie {
         border-color: #e4b5e460;
 }
 body.theme-dark .RWgmDirections {
-        background:   #20206060;
+        background:   #1a1700;
         border-color: #601010;
 }
 body.theme-dark .RWCallout {

@@ -288,11 +288,12 @@ static void write_support_files()
     // Use the files that are stored in the resource file
     QStringList files{"realmworks.css"};
 
-    const QString dirname(".obsidian/snippets/");
+    const QDir directory(".obsidian/snippets/");
+    if (!directory.exists()) QDir::current().mkdir(directory.path());
 
     for (auto filename : files)
     {
-        QFile destfile(dirname + filename);
+        QFile destfile(directory.filePath(filename));
         if (destfile.exists()) destfile.remove();
         QFile::copy(":/" + filename, destfile.fileName());
         // Qt copies the file and makes it read-only!
@@ -301,7 +302,7 @@ static void write_support_files()
 
     if (!class_of_style.isEmpty())
     {
-        QFile styles(dirname + "realmworks.css");
+        QFile styles(directory.filePath("realmworks.css"));
         if (styles.open(QFile::WriteOnly|QFile::Text|QFile::Append))
         {
             QTextStream ts(&styles);
@@ -762,10 +763,8 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         QString source = text.mid(link.start,link.length);
         QString label  = textContent(source);
         int pos = source.indexOf(label);
-        if (pos >= 0) {
+        if (pos >= 0)
             text.replace(link.start+pos, label.length(), escape_bracket(internal_link(link.target_id, label)));
-            qDebug() << "PATCHED: " << text.mid(link.start,link.length+20);
-        }
         else
             // Failed to find the label, so replace everything (and just suffer the problems with formatting)
             text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
@@ -1525,7 +1524,9 @@ static const QString write_snippet(XmlElement *snippet)
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + get_content_text(gm_directions, gmlinks) + "</span>" + newline;
+        QString gmtext = get_content_text(gm_directions, gmlinks);
+        gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
+        result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>" + newline;
     }
 
     // Possibly set a SPAN on the main snippet, for style and veracity
