@@ -1,7 +1,11 @@
 # 4.4
-Fix indentation of nested lists.
+Fix indentation of nested lists. Numbered lists should have "1. " as a prefix not "+ "
 
-Numbered lists should have "1. " as a prefix not "+ "
+Standardise the processing to never put line break before the entered text.
+
+Replace "sections" marked by --- in HL portfolio files with proper markdown section header.
+
+Simplify output_gumbo_children (now called decode_gumbo) so that each element is processed entirely in its own little section of code.
 
 # 4.3.1
 Ensure that the directory .obsidian is created if it doesn't already exist (rather than only trying to create the snippets sub-folder)

@@ -6,11 +6,11 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 4.3.1
+VERSION = 4.4
 
 QT       += core gui printsupport network
 
-CONFIG  += c++11
+CONFIG  += c++17
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
