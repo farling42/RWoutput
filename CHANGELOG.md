@@ -1,3 +1,8 @@
+# 4.4
+Fix indentation of nested lists.
+
+Numbered lists should have "1. " as a prefix not "+ "
+
 # 4.3.1
 Ensure that the directory .obsidian is created if it doesn't already exist (rather than only trying to create the snippets sub-folder)
 

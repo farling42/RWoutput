@@ -1043,15 +1043,16 @@ static void finishGumboStyle(QString &result, const GumboNode *node, const Gumbo
  * @param node
  */
 
-static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top, int nestedTableCount, const QString &orig_listtype, bool allowWhitespace)
+static const QString output_gumbo_children(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top, int nestedTableCount, const QString &orig_listtype, bool orig_allowWhitespace)
 {
+    bool allowWhitespace = orig_allowWhitespace;
     QString listtype = orig_listtype;
     QString result;
     bool capture=false;
     QString captured;
-    bool addEndLine=false;
     bool isHeader=false;
     int startPara;
+    QString nestedlisttype;
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
@@ -1164,21 +1165,43 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             else if (nestedTableCount==1 && tag == "tbody")
                 ; // Ignore tbody when converting tables to markdown
             else if (tag == "span")
+            {
                 startGumboStyle(result, node, styles, currentStyle);
+                // some span are inside lists rather than paragraphs!
+                allowWhitespace=true;
+            }
             else if (tag == "sup" || tag == "sub")
                 currentStyle.startStyleElement(result, tag);
             else if (tag == "ul")
             {
-                listtype = "\n- ";
-                addEndLine = true;
+                nestedlisttype = listtype;
+                if (listtype.isEmpty())
+                    listtype = "- ";
+                else
+                {
+                    result += newline;   // presumably we are still inside another ol/ul, so terminate the text of the <li>
+                    listtype.prepend("  ");
+                    // Ensure this sublist is a BULLET list
+                    listtype.replace("1.", "-");
+                }
             }
             else if (tag == "ol")
             {
-                listtype = "\n+ ";
-                addEndLine = true;
+                nestedlisttype = listtype;
+                if (listtype.isEmpty())
+                    listtype = "1. ";
+                else
+                {
+                    result += newline;   // presumably we are still inside another ol/ul, so terminate the text of the <li>
+                    listtype.prepend("  ");
+                    // Ensure this sublist is a NUMBERED list
+                    listtype.replace("-", "1.");
+                }
             }
             else if (tag == "li")
+            {
                 result += listtype;
+            }
             else if (tag.length() == 2 && tag[0] == 'h' && tag[1].isDigit())
             {
                 isHeader = true;
@@ -1211,11 +1234,13 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 // Check for line with only formatting and white space!
                 if (markup.match(result, startPara, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption).hasMatch())
                 {
-                    // Nothing other than formatting, so remove all formatting and put in just a blank line
+                    // Nothing other than formatting, so remove all formatting and put in just a blank line,
+                    // but blank lines don't do anything in markdown, so not work even doing that.
                     result.truncate(startPara);
                 }
-                result += newline;
-                allowWhitespace=false;
+                else
+                    result += newline + newline;  // Blank line after each paragraph
+                allowWhitespace=orig_allowWhitespace;
             }
             else if (tag == "sup" || tag == "sub")
                 currentStyle.finishStyleElement(result, tag);
@@ -1223,6 +1248,17 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
                 swapSpace(result, "**");
             else if (tag == "i")
                 swapSpace(result, "*");
+            else if (tag == "ul" || tag == "ol")
+            {
+                // Maybe only removing a level of indentation
+                listtype = nestedlisttype;
+                if (listtype.isEmpty()) result += newline;  // blank line required after list
+            }
+            else if (tag == "li")
+            {
+                // If this is the <li> after a nested list, then we might end up with too many \n.
+                if (!result.endsWith(newline)) result += newline;
+            }
             else if (tag == "a")
             {
                 result += createMarkdownLink(/*filename*/ href, /*label*/ captured);
@@ -1231,14 +1267,12 @@ static const QString output_gumbo_children(const GumboNode *parent, const GumboS
             else if (tag == "span")
             {
                 finishGumboStyle(result, node, styles, currentStyle);
+                allowWhitespace=orig_allowWhitespace;
             }
             else if (isHeader)
             {
                 result += QString(tag.midRef(1).toInt(),'#') + ' ' + captured.trimmed();
             }
-            else if (addEndLine)
-                result += newline;    // normally the end of a row/list
-
             else if (nestedTableCount==1 && tag == "td")
             {
                 // TODO - do we need to detect double \n
