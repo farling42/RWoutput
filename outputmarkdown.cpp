@@ -289,7 +289,7 @@ static void write_support_files()
     QStringList files{"realmworks.css"};
 
     const QDir directory(".obsidian/snippets/");
-    if (!directory.exists()) QDir::current().mkdir(directory.path());
+    if (!directory.exists()) QDir::current().mkpath(directory.path());
 
     for (auto filename : files)
     {

@@ -1,3 +1,6 @@
+# 4.3.1
+Ensure that the directory .obsidian is created if it doesn't already exist (rather than only trying to create the snippets sub-folder)
+
 # 4.3
 Fix formatting of embedded tables.
 
