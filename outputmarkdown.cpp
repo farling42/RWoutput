@@ -92,6 +92,13 @@ static QString RW_LINE_BREAK("<rwbr>");
 static QChar   RW_LEFT_BRACKET  = QChar(8704);
 static QChar   RW_RIGHT_BRACKET = QChar(8705);
 
+
+template<class T>const QString setJoin(QSet<T> &value, const QString &joiner) {
+    const QStringList list = value.values();
+    return list.join(joiner);
+}
+
+
 struct ExportLink;
 struct ExportLink
 {
@@ -122,8 +129,10 @@ static const QString snippetName(XmlElement *elem)
     QString result;
     result = elem->attribute("label");   // For Labeled_Text with manual label
     if (!result.isEmpty()) return result;
+
     result = elem->attribute("facet_name");
     if (!result.isEmpty()) return result;
+
     return global_names.value(elem->attribute("facet_id"));
 }
 
@@ -199,19 +208,6 @@ static const QString topicDirFile(const XmlElement *topic)
 }
 
 
-static bool isInlineFile(const QString &filename)
-{
-    static const QSet<QString> validExtensions{
-        /*markd*/ ".md",
-        /*image*/ ".png",".jpg",".jpeg",".gif",".bmp",".svg",
-        /*audio*/ ".mp3",".webm",".wav",".m4a",".ogg",".3gp",".flac",
-        /*video*/ ".mp4",".ogv",
-        /*pdf  */ ".pdf"};
-    foreach (const auto ext, validExtensions)
-        if (filename.endsWith(ext)) return true;
-    return false;
-}
-
 /**
  * @brief xmlChildren
  * Find all descendents WITHIN THIS TOPIC with the matching name.
@@ -223,7 +219,7 @@ inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, cons
     QList<const XmlElement*>result;
     if (parent->objectName() == name) result.append(parent);
 
-    for (const auto child: parent->xmlChildren())
+    foreach (const auto &child, parent->xmlChildren())
     {
         if (child->objectName() != "topic") result.append(topicDescendents(child, name));
     }
@@ -295,7 +291,7 @@ static void write_support_files()
     const QDir directory(".obsidian/snippets/");
     if (!directory.exists()) QDir::current().mkpath(directory.path());
 
-    for (auto filename : files)
+    foreach (const auto &filename, files)
     {
         QFile destfile(directory.filePath(filename));
         if (destfile.exists()) destfile.remove();
@@ -324,7 +320,6 @@ static void write_support_files()
 
 static const QString write_meta_child(const QString &meta_name, const XmlElement *details, const QString &child_name)
 {
-    QString result;
     XmlElement *child = details->xmlChild(child_name);
     if (!child) return "";
     return "**" + meta_name + ":** " + child->childString() + "\n\n";
@@ -333,6 +328,8 @@ static const QString write_meta_child(const QString &meta_name, const XmlElement
 static const QString write_head_meta(const XmlElement *root_elem)
 {
     QString result;
+    result.reserve(1000);
+
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     if (details == nullptr) return result;
@@ -356,6 +353,8 @@ static const QString write_head_meta(const XmlElement *root_elem)
 static QString doEscape(const QString &original)
 {
     QString result = original;
+    result.reserve(result.length() + 100);
+
     // Escape any [ characters
     // Replace non-break-spaces with normal spaces (RW puts nbsp whenever more than one space is required in some text)
     // Occasionally there is a zero-width-space, which we'll assume should be no space at all.
@@ -365,7 +364,7 @@ static QString doEscape(const QString &original)
     return result.replace("\[","\\[").replace('*',"\\*").replace('~',"\\~").replace(RW_LEFT_BRACKET, '[').replace(RW_RIGHT_BRACKET, ']');
 }
 
-
+#ifdef TOOLTIP
 /**
  * @brief build_tooltip
  * Builds the complete string for a popup tooltip.
@@ -378,6 +377,7 @@ static QString doEscape(const QString &original)
 static inline QString build_tooltip(const QString &title, const QString &description, const QString &gm_directions)
 {
     QString result;
+    result.reserve(1000);
 
     if (!title.isEmpty())
     {
@@ -398,7 +398,7 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
     }
     return result;
 }
-
+#endif
 
 static inline QString createMarkdownLink(const QString &filename, const QString &label, int max_width=-1)
 {
@@ -612,7 +612,7 @@ private:
     bool is_empty=true;
     void decode(const QString &style)
     {
-        for (auto part : style.split(";"))
+        foreach (const auto &part, style.split(";"))
         {
             const auto bits = part.split(":");
             if (bits.length() != 2) continue;
@@ -620,7 +620,7 @@ private:
             const auto attr = bits.first();
             if (attr == "font-weight")
             {
-                for (auto value : values)
+                foreach (const auto &value, values)
                 {
                     if (value == "bold") current.bold = true;
                     //else qWarning() << "Unknown element in font-weight: " << value;
@@ -629,7 +629,7 @@ private:
             else if (attr == "font-style")
             {
                 // normal|italic|oblique|initial|inherit
-                for (auto value : values)
+                foreach (const auto &value, values)
                 {
                     if (value == "italic") current.italic = true;
                     //else qWarning() << "Unknown element in font-style: " << value;
@@ -638,7 +638,7 @@ private:
             else if (attr == "text-decoration" || attr == "text-decoration-style")
             {
                 // solid|double|dotted|dashed|wavy|initial|inherit
-                for (auto value : values)
+                foreach (const auto &value, values)
                 {
                     if      (value == "line-through") current.strikethrough = true;
                     else if (value == "underline")    current.underline = true;
@@ -669,7 +669,6 @@ GumboStyles getStyles(const GumboNode *node)
     // Check the attribute type="text/css"
     if (getGumboAttribute(node, "type") != "text/css") return result;
 
-    QString string;
     GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
     for (unsigned count = node->v.element.children.length; count > 0; --count)
     {
@@ -679,10 +678,10 @@ GumboStyles getStyles(const GumboNode *node)
             // each line is of the form:
             // .cs1157FFE2{text-align:right;text-indent:0pt;margin:0pt 0pt 0pt 0pt}
             QString body(node->v.text.text);
-            for (const QString &oneline : body.trimmed().split("\n", QString::SkipEmptyParts))
+            foreach (const auto &oneline, body.trimmed().split("\n", QString::SkipEmptyParts))
             {
                 // Some files have more than one style on a single line
-                for (const QString &line : oneline.trimmed().split("}", QString::SkipEmptyParts))
+                foreach (const auto &line, oneline.trimmed().split("}", QString::SkipEmptyParts))
                 {
                     // remove trailing "}"
                     QStringList parts = line.split("{");
@@ -726,6 +725,7 @@ static const QString textContent(const QString &source)
     // Get all the text that is between >...<
     const QRegularExpression plaintext(">([^<]+)<");
     QString result;
+    result.reserve(1000);
     QRegularExpressionMatchIterator i = plaintext.globalMatch(source);
     while (i.hasNext())
     {
@@ -750,13 +750,14 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
     qDebug() << "...write para-children";
 #endif
     QString result;
+    result.reserve(1000);
     if (!parent->xmlChild()) return "";
 
     QString text = parent->xmlChild()->fixedText();
     text.replace("&#xd;", "\n");    // Get to correct length for fixing links
 
     // Now substitute any required links
-    for (auto &link: links)
+    foreach (const auto &link, links)
     {
         // Replace ONLY the text of the link, keeping the surrounding spans to handle formatting.
         QString source = text.mid(link.start,link.length);
@@ -893,6 +894,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     file.close();
 
     QString result;
+    result.reserve(1000);
     if (!image_name.isEmpty()) result += "### " + image_name + newline;
 
     if (show_leaflet_pins && !pins.isEmpty())
@@ -911,18 +913,19 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         result += "    - [" + mapCoord(height) + ", " + mapCoord(image_size.width()) + "]\n";
 
         // Create the clickable MAP on top of the map
-        for (auto pin : pins)
+        foreach (const auto &pin, pins)
         {
             int x = pin->attribute("x").toInt() / divisor;
             int y = pin->attribute("y").toInt() / divisor - pin_size;
 
             // Build up a tooltip from the text configured on the pin
+            QString link = pin->attribute("topic_id");
+#ifdef TOOLTIP
             QString pin_name = pin->attribute("pin_name");
             QString description = get_elem_string(pin->xmlChild("description"));
             QString gm_directions = get_elem_string(pin->xmlChild("gm_directions"));
-            QString link = pin->attribute("topic_id");
             QString tooltip = build_tooltip(pin_name, description, gm_directions);
-
+#endif
             result += "marker: default, " + mapCoord(height-y) + ", " + mapCoord(x) + ",";
             if (link.isEmpty())
             {
@@ -954,6 +957,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     Q_UNUSED(obj_name)
 
     QString result;
+    result.reserve(1000);
     // Write the asset data to an external file
     QFile file(dirFile(assetsDir, filename));
     if (!file.open(QFile::WriteOnly))
@@ -996,16 +1000,17 @@ static QString tag_label(const XmlElement *tag_assign)
 
 static const QString getTags(const XmlElement *node, bool withnl=true)
 {
-    auto tag_nodes = node->xmlChildren("tag_assign");
+    const auto tag_nodes = node->xmlChildren("tag_assign");
     if (tag_nodes.length() == 0) return QString();
 
     QStringList tags;
-    for (auto &tag_assign : tag_nodes)
+    foreach (const auto &tag_assign, tag_nodes)
     {
         QString tag = tag_label(tag_assign);
         if (!tag.isEmpty()) tags.append("#" + tag);
     }
     QString result;
+    result.reserve(100);
     if (tags.length() > 0)
     {
         result += tags.join(" ");
@@ -1047,6 +1052,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
 {
     QString tag;
     QString result;
+    result.reserve(1000);
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
@@ -1178,13 +1184,14 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             }
             else if (nestedTableCount==1 && tag == "tr")
             {
-                QString row = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ false);
+                QString row = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 // end of line for table row
                 result += row.trimmed() + " |\n";
             }
             else if (nestedTableCount==1 && tag == "td")
             {
-                QString cell = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ false);
+                // TD contains text directly, so allow whitespace within it
+                QString cell = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
                 // TODO - do we need to detect double \n
                 result += "| " + cell.trimmed().replace(RW_LINE_BREAK,"<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
             }
@@ -1253,8 +1260,24 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
                 qDebug() << "GUMBO_NODE_ELEMENT(start): not converting " << QString("<%1>").arg(tag);
 
                 if (tag == "table") nestedTableCount++;
-                result += "<" + tag + ">";
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+
+                bool local_allowWhitespace = allowWhitespace;
+                // Don't take whitespace immediately after a nested table.
+                if (tag == "table" || tag == "thead" || tag == "tbody" || tag == "tr")
+                    local_allowWhitespace = false;
+                else if (tag == "td")
+                    local_allowWhitespace = true;
+
+                // Put back the original tag, includes all its attributes.
+                QStringList parts{tag};
+                GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
+                for (unsigned count = node->v.element.attributes.length; count > 0; --count)
+                {
+                    const GumboAttribute *attr = *attributes++;
+                    parts.append(QString("%1=\"%2\"").arg(attr->name).arg(attr->value));
+                }
+                result += "<" + parts.join(' ') + ">";
+                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, local_allowWhitespace);
                 result += "</" + tag + ">";
             }
             // end of GUMBO_NODE_ELEMENT
@@ -1328,17 +1351,18 @@ static void dump_children(const QString &from, const GumboNode *parent)
 static const QString write_html(bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
     // Put the children of the BODY into this frame.
-    QString result;
     GumboOutput *output = gumbo_parse(data);
     if (output == nullptr)
     {
         qWarning() << "Failed to parse HTML data";
-        return result;
+        return QString();
     }
 
 #ifdef DUMP_CHILDREN
     dump_children("ROOT", output->root);
 #endif
+    QString result;
+    result.reserve(1000);
 
     const GumboNode *head = getGumboChild(output->root, "head");
     const GumboNode *body = getGumboChild(output->root, "body");
@@ -1386,7 +1410,7 @@ static inline const QString annotationText(const XmlElement *snippet, bool wrapp
     if (!annotation) return "";
 
     // Remove newline from either end of paragraph
-    ExportLinks nolinks;
+    static const ExportLinks nolinks;
     QString result = get_content_text(annotation, nolinks);
     result.replace("&#xd;\n","\n");
     if (!wrapped)
@@ -1441,7 +1465,7 @@ static inline QString gregorian(const QString &source)
     // 0956-03-18 04:02:05
     // 2018-04-29 00:00:00
     int yearmark = source.indexOf('-')+1;
-    int year   = source.mid(0,yearmark-1).toInt();
+    int year   = source.midRef(0,yearmark-1).toInt();
     int length = source.length() - yearmark;
     if (source.endsWith(" BCE"))
     {
@@ -1457,7 +1481,6 @@ static inline QString gregorian(const QString &source)
 
 static const QString write_snippet(XmlElement *snippet)
 {
-    QString result;
     QString sn_type     = snippet->attribute("type");
     QString sn_style    = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout
     QString sn_veracity = snippet->attribute("veracity");
@@ -1468,15 +1491,18 @@ static const QString write_snippet(XmlElement *snippet)
     ExportLinks links;
     ExportLinks gmlinks;
 
+    QString result;
+    result.reserve(1000);
+
     // Get whatever links might be on this snippet
-    for (auto link : snippet->xmlChildren("link"))
+    foreach (const auto &link, snippet->xmlChildren("link"))
     {
         const QString target_id = link->attribute("target_id");
-        for (auto span_info : link->xmlChildren("span_info"))
+        foreach (const auto &span_info, link->xmlChildren("span_info"))
         {
-            for (auto span_list : span_info->xmlChildren("span_list"))
+            foreach (const auto &span_list, span_info->xmlChildren("span_list"))
             {
-                for (auto span : span_list->xmlChildren("span"))
+                foreach (const auto &span, span_list->xmlChildren("span"))
                 {
                     const int start  = span->attribute("start").toInt();
                     const int length = span->attribute("length").toInt();
@@ -1669,7 +1695,7 @@ static const QString write_snippet(XmlElement *snippet)
     else if (sn_type == "Tag_Standard")
     {
         QStringList tags;
-        for (auto tag: snippet->xmlChildren("tag_assign"))
+        foreach (const auto &tag, snippet->xmlChildren("tag_assign"))
             tags.append(global_names.value(tag->attribute("tag_id")));
         if (tags.length() > 0)
         {
@@ -1700,10 +1726,12 @@ static const QString write_snippet(XmlElement *snippet)
 
 static const QString write_section(XmlElement *section, int level)
 {
-    QString result;
 #if DUMP_LEVEL > 2
     qDebug() << "..section" << section->attribute("name");
 #endif
+
+    QString result;
+    result.reserve(1000);
 
     // Start with HEADER for the section (H1 used for topic title)
     QString sname = section->attribute("name");
@@ -1711,13 +1739,13 @@ static const QString write_section(XmlElement *section, int level)
     result += QString(level+1,'#') + ' ' + sname + newline;
 
     // Write snippets
-    for (auto snippet: section->xmlChildren("snippet"))
+    foreach (const auto &snippet, section->xmlChildren("snippet"))
     {
         result += write_snippet(snippet);
     }
 
     // Write following sections
-    for (auto subsection: section->xmlChildren("section"))
+    foreach (const auto &subsection, section->xmlChildren("section"))
     {
         result += write_section(subsection, level+1);
     }
@@ -1871,7 +1899,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     {
         QString true_name;
         stream << "Aliases:\n";
-        for (auto alias : aliases)
+        foreach (const auto &alias, aliases)
         {
             QString name = alias->attribute("name");
             if (alias->attribute("is_true_name") == "true") true_name = name;
@@ -1897,7 +1925,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     // For each field with a tag_assign, create the field name in the frontmatter, e.g.
     // Class: name
     // School: name
-    for (const auto snippet: topicDescendents(topic, "snippet"))
+    foreach (const auto &snippet, topicDescendents(topic, "snippet"))
     {
         auto sntype = snippet->attribute("type");
         if (sntype == "Tag_Standard")
@@ -1908,7 +1936,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         else if (sntype == "Tag_Multi_Domain")
         {
             QStringList tags;
-            for (const auto tag : snippet->xmlChildren("tag_assign"))
+            foreach (const auto &tag, snippet->xmlChildren("tag_assign"))
                 tags.append('"' + global_names.value(tag->attribute("tag_id")) + '"');
             if (tags.length() == 1)
                 stream << validTag(snippet->attribute("label")) << ": " << tags.first() << newline;
@@ -1937,7 +1965,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     if (children.length() > 0)
     {
         stream << "down:\n";
-        for (auto child: topic->xmlChildren("topic"))
+        foreach (const auto &child, topic->xmlChildren("topic"))
         {
             stream << "  - " << topic_files.value(child->attribute("topic_id")) << newline;
         }
@@ -1945,7 +1973,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     stream << "RWtopicId: " << topic->attribute("topic_id") << newline;
 
     // Connections
-    for (auto child : topic->xmlChildren("connection"))
+    foreach (const auto &child, topic->xmlChildren("connection"))
     {
         // Remove spaces from tag
         stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id")) << newline;
@@ -1970,7 +1998,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     stream << "# " << topic_full_name.value(topic) << newline;
 
     // Process all <sections>, applying the linkage for this topic
-    for (auto section: topic->xmlChildren("section"))
+    foreach (const auto &section, topic->xmlChildren("section"))
     {
         // Remove leading and trailing white space (including blank lines)
         // Replace two or more blank lines with just one blank line
@@ -1988,7 +2016,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "---\n## Governed Content\n";
 
         std::sort(child_topics.begin(), child_topics.end(), sort_topics);
-        for (auto child: child_topics)
+        foreach (const auto &child, child_topics)
         {
             stream << "- " << topic_link(child) << newline;
         }
@@ -2001,7 +2029,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "---\n## Connections\n";
         if (!connections_as_graph)
         {
-            for (auto connection : connections)
+            foreach (const auto &connection, connections)
             {
                 // Remove spaces from tag
                 stream << relationship(connection) << ": " << internal_link(connection->attribute("target_id")) << annotationText(connection) << newline;
@@ -2009,13 +2037,12 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         } else {
             // Now create a MERMAID flowchart
             const QString topic_id    = topic->attribute("topic_id");
-            const QString topic_name  = topic->attribute("public_name");
 
             QSet<QString> nodes;
             QSet<QString> relationships;
             QSet<QString> targets;
 
-            for (auto connection : connections)
+            foreach (const auto &connection, connections)
             {
                 QString source_id         = topic_id;
                 QString target_id         = connection->attribute("target_id");
@@ -2049,11 +2076,11 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 // graph doesn't allow two-headed arrows
                 // TD = topdown, rather than LR = left-to-right
                 stream << "flowchart TD" << newline;
-                stream << nodes.values().join(newline) << newline;
-                stream << relationships.values().join(newline) << newline;
+                stream << setJoin(nodes, newline) << newline;
+                stream << setJoin(relationships, newline) << newline;
                 stream << "```\n";
 
-                stream << "%%\nlinks: [ " << targets.values().join(", ") << " ]\n%%\n";
+                stream << "%%\nlinks: [ " << setJoin(targets, ", ") << " ]\n%%\n";
             }
         }
         stream << newline;  // blank line separator
@@ -2087,14 +2114,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int level)
 {
     stream << QString(level * 2, ' ') << "- " << topic_link(topic) << newline;
-
-    auto child_topics = topic->xmlChildren("topic");
-    if (!child_topics.isEmpty())
+    if (level < max_index_level)
     {
-        std::sort(child_topics.begin(), child_topics.end(), sort_topics);
-        if (level < max_index_level)
+        auto child_topics = topic->xmlChildren("topic");
+        if (!child_topics.isEmpty())
         {
-            for (auto child_topic: child_topics)
+            std::sort(child_topics.begin(), child_topics.end(), sort_topics);
+            foreach (const auto &child_topic, child_topics)
             {
                 write_topic_to_index(stream, child_topic, level+1);
             }
@@ -2130,14 +2156,14 @@ static void write_separate_index(const XmlElement *root_elem)
     // end of FRONTMATTER
     //
 
-    for (auto child: root_elem->xmlChildren())
+    foreach (const auto &child, root_elem->xmlChildren())
     {
 #if DUMP_LEVEL > 0
         qDebug() << "TOP:" << child->objectName();
 #endif
         if (child->objectName() == "definition")
         {
-            for (auto header: child->xmlChildren())
+            foreach (const auto &header, child->xmlChildren())
             {
 #if DUMP_LEVEL > 0
                 qDebug() << "DEFINITION:" << header->objectName();
@@ -2151,22 +2177,17 @@ static void write_separate_index(const XmlElement *root_elem)
         }
         else if (child->objectName() == "contents")
         {
-            // A top-level button to collapse/expand the entire list
-            const QString expand_all   = "Expand All";
-            const QString collapse_all = "Collapse All";
-
             // Root level of topics
             QMultiMap<QString,XmlElement*> categories;
-            for (auto topic: child->xmlChildren("topic"))
+            foreach (const auto &topic, child->xmlChildren("topic"))
             {
                 categories.insert(global_names.value(topic->attribute("category_id")), topic);
             }
 
-            QStringList unique_keys(categories.keys());
-            unique_keys.removeDuplicates();
+            QStringList unique_keys(categories.uniqueKeys());
             unique_keys.sort();
 
-            for (auto cat : unique_keys)
+            foreach (const auto &cat, unique_keys)
             {
                 stream << "# " << internal_link(cat) << newline;
 
@@ -2174,7 +2195,7 @@ static void write_separate_index(const XmlElement *root_elem)
                 auto topics = categories.values(cat);
                 std::sort(topics.begin(), topics.end(), sort_topics);
 
-                for (auto topic: topics)
+                foreach (const auto &topic, topics)
                 {
                     write_topic_to_index(stream, topic, 0);
                 }
@@ -2210,15 +2231,14 @@ static void write_category_files(const XmlElement *tree)
     }
 
     QMultiMap<QString,XmlElement*> categories;
-    for (auto topic: contents->xmlChildren("topic"))
+    foreach (const auto &topic, contents->xmlChildren("topic"))
     {
         categories.insert(global_names.value(topic->attribute("category_id")), topic);
     }
-    QStringList category_names(categories.keys());
-    category_names.removeDuplicates();
+    QStringList category_names(categories.uniqueKeys());
     category_names.sort();
 
-    foreach (const auto catname, category_names)
+    foreach (const auto &catname, category_names)
     {
         QString filename = dirFile(validFilename(catname), validFilename(catname)) + ".md";
         QFile file(filename);
@@ -2241,7 +2261,7 @@ static void write_category_files(const XmlElement *tree)
         stream << "down:\n";
         auto topics = categories.values(catname);
         std::sort(topics.begin(), topics.end(), sort_topics);
-        for (auto topic: topics)
+        foreach (const auto &topic, topics)
         {
             if (global_names.value(topic->attribute("category_id")) == catname)
             {
@@ -2249,7 +2269,7 @@ static void write_category_files(const XmlElement *tree)
             }
         }
         stream << "same:\n";
-        foreach (const QString other_cat, category_names)
+        foreach (const QString &other_cat, category_names)
         {
             if (other_cat != catname) stream << "  - " << validFilename(other_cat) << newline;
         }
@@ -2272,10 +2292,9 @@ static const XmlElement *findTopicParent(const XmlElement *elem)
 static void write_relationships(const XmlElement *root_elem)
 {
     const QString folderName("Relationships");
-    static const ExportLinks nolinks;
 
     QMultiMap<QString, const XmlElement*> connections;
-    for (const auto connection: root_elem->findChildren<XmlElement*>("connection"))
+    foreach (const auto &connection, root_elem->findChildren<XmlElement*>("connection"))
     {
         QString nature = connection->attribute("nature");
         // Don't include child nodes
@@ -2285,7 +2304,7 @@ static void write_relationships(const XmlElement *root_elem)
         connections.insert(nature, connection);
     }
 
-    for (auto nature : connections.keys())
+    foreach (const auto &nature, connections.keys())
     {
         QSet<QString> nodes;
         QSet<QString> relationships;
@@ -2293,7 +2312,7 @@ static void write_relationships(const XmlElement *root_elem)
         bool directional = nature_directional.value(nature);
         const QString arrow = directional ? "-->" : "<-->";
 
-        for (auto connection: connections.values(nature))
+        foreach (const auto &connection, connections.values(nature))
         {
             const XmlElement *topic = findTopicParent(connection);
             if (!topic)
@@ -2303,7 +2322,7 @@ static void write_relationships(const XmlElement *root_elem)
             }
 
             const QString topic_id   = topic->attribute("topic_id");
-            const QString topic_name = topic->attribute("public_name");
+            //const QString topic_name = topic->attribute("public_name");
             const QString target_id  = connection->attribute("target_id");
             const QString annotation = annotationText(connection, false);  // not const so we can do annotation.replace later
 
@@ -2341,8 +2360,8 @@ static void write_relationships(const XmlElement *root_elem)
             // graph doesn't allow two-headed arrows
             // TD = topdown, rather than LR = left-to-right
             stream << "flowchart TD" << newline;
-            stream << nodes.values().join(newline) << newline;
-            stream << relationships.values().join(newline) << newline;
+            stream << setJoin(nodes, newline) << newline;
+            stream << setJoin(relationships, newline) << newline;
             stream << "```\n";
             file.close();
         }
@@ -2356,9 +2375,10 @@ static void write_storyboard(const XmlElement *root_elem)
     if (!contents) return;
 
     // Collect all the plot ids before we start
-    for (auto plot_group : contents->xmlChildren("plot_group"))
+    const auto plot_groups = contents->xmlChildren("plot_group");
+    foreach (const auto &plot_group, plot_groups)
     {
-        for (auto plot : plot_group->xmlChildren("plot"))
+        foreach (const auto &plot, plot_group->xmlChildren("plot"))
         {
             const QString plot_id   = plot->attribute("plot_id");
             const QString plot_name = plot->attribute("public_name");
@@ -2370,13 +2390,13 @@ static void write_storyboard(const XmlElement *root_elem)
     }
 
     // Now do the normal work
-    for (auto plot_group : contents->xmlChildren("plot_group"))
+    foreach (const auto &plot_group, plot_groups)
     {
         const QString group_name = plot_group->attribute("name");
 
-        for (auto plot : plot_group->xmlChildren("plot"))
+        foreach (const auto &plot, plot_group->xmlChildren("plot"))
         {
-            const QString plot_id     = plot->attribute("plot_id");
+            //const QString plot_id     = plot->attribute("plot_id");
             const QString plot_name   = plot->attribute("public_name");
             const QString description = get_elem_string(plot->xmlChild("description"));
 
@@ -2384,14 +2404,14 @@ static void write_storyboard(const XmlElement *root_elem)
             QStringList links;
             QSet<QString> otherlinks;
 
-            for (auto node : plot->xmlChildren("node"))
+            foreach (const auto &node, plot->xmlChildren("node"))
             {
                 const QString node_id       = "Node_" + node->attribute("node_id");  // number of node_X
-                const QString description   = get_elem_string(node->xmlChild("description"));
-                const QString gm_directions = get_elem_string(node->xmlChild("gm_directions"));
+                //const QString description   = get_elem_string(node->xmlChild("description"));
+                //const QString gm_directions = get_elem_string(node->xmlChild("gm_directions"));
                 QString node_name           = node->attribute("node_name");
 
-                for (auto edge : node->xmlChildren("edge"))
+                foreach (const auto &edge, node->xmlChildren("edge"))
                 {
                     const QString target_node_id = edge->attribute("target_node_id");
                     links.append(node_id + " --> " + "Node_" + target_node_id);
@@ -2452,7 +2472,7 @@ static void write_storyboard(const XmlElement *root_elem)
             stream << "```" << newline;
 
             if (!otherlinks.isEmpty())
-                stream << "%%links: [ " << otherlinks.values().join(", ") << " ]" << newline;
+                stream << "%%links: [ " << setJoin(otherlinks, ", ") << " ]" << newline;
             file.close();
         }
     }
@@ -2461,24 +2481,24 @@ static void write_storyboard(const XmlElement *root_elem)
 static void read_structure(XmlElement *structure)
 {
     global_names.clear();
-    for (auto tag : structure->findChildren<XmlElement*>("tag_global"))
+    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag_global"))
         global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
-    for (auto tag : structure->findChildren<XmlElement*>("tag"))
+    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag"))
         global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
 
-    for (auto cat : structure->findChildren<XmlElement*>("category_global"))
+    foreach (const auto &cat, structure->findChildren<XmlElement*>("category_global"))
         global_names.insert(cat->attribute("category_id"), cat->attribute("name"));
-    for (auto cat : structure->findChildren<XmlElement*>("category"))
+    foreach (const auto &cat, structure->findChildren<XmlElement*>("category"))
         global_names.insert(cat->attribute("category_id"), cat->attribute("name"));
 
-    for (auto facet : structure->findChildren<XmlElement*>("facet_global"))
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("facet_global"))
         global_names.insert(facet->attribute("facet_id"), facet->attribute("name"));
-    for (auto facet : structure->findChildren<XmlElement*>("facet"))
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("facet"))
         global_names.insert(facet->attribute("facet_id"), facet->attribute("name"));
 
-    for (auto facet : structure->findChildren<XmlElement*>("partition_global"))
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("partition_global"))
         global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
-    for (auto facet : structure->findChildren<XmlElement*>("partition"))
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("partition"))
         global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
 }
 
@@ -2530,7 +2550,7 @@ void toMarkdown(const XmlElement *root_elem,
     // Get a full list of the individual STYLE attributes of every single topic,
     // with a view to putting them into the CSS instead.
     QSet<QString> styles_set;
-    for (auto child : root_elem->findChildren<XmlElement*>())
+    foreach (const auto &child, root_elem->findChildren<XmlElement*>())
     {
         if (child->hasAttribute("style"))
         {
@@ -2538,7 +2558,7 @@ void toMarkdown(const XmlElement *root_elem,
         }
     }
     int stylenumber=1;
-    for (auto style: styles_set)
+    foreach (const auto &style, styles_set)
     {
         if (predefined_styles.contains(style))
             class_of_style.insert(style, style);
@@ -2548,7 +2568,7 @@ void toMarkdown(const XmlElement *root_elem,
 
     // To help get category for pins on each individual topic,
     // get the topic_id of every single topic in the file.
-    for (auto topic: root_elem->findChildren<XmlElement*>("topic"))
+    foreach (const auto &topic, root_elem->findChildren<XmlElement*>("topic"))
     {
         // Filename contains the FULL topic name including prefix and suffix
         QString fullname;
