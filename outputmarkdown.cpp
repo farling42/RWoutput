@@ -66,7 +66,6 @@ static bool connections_as_graph=true;
 #undef DUMP_CHILDREN
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
-static QHash<QString /*style string*/ ,QString /*replacement class name*/> class_of_style;
 static QHash<QString,QString> topic_files;   // key=topic_id, value=public_name
 static QHash<const XmlElement*,QString> topic_full_name;
 
@@ -298,22 +297,6 @@ static void write_support_files()
         QFile::copy(":/" + filename, destfile.fileName());
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
-    }
-
-    if (!class_of_style.isEmpty())
-    {
-        QFile styles(directory.filePath("realmworks.css"));
-        if (styles.open(QFile::WriteOnly|QFile::Text|QFile::Append))
-        {
-            QTextStream ts(&styles);
-            for (auto iter = class_of_style.begin(); iter != class_of_style.end(); iter++)
-            {
-                if (!predefined_styles.contains(iter.value()))
-                {
-                    ts << "." + iter.value() + " {\n" + iter.key() + "\n}\n";
-                }
-            }
-        }
     }
 }
 
@@ -2547,25 +2530,6 @@ void toMarkdown(const XmlElement *root_elem,
     if (QDir(oldAssetsDir).exists() && !QDir(assetsDir).exists())
         QDir::current().rename(oldAssetsDir, assetsDir);
 
-    // Get a full list of the individual STYLE attributes of every single topic,
-    // with a view to putting them into the CSS instead.
-    QSet<QString> styles_set;
-    foreach (const auto &child, root_elem->findChildren<XmlElement*>())
-    {
-        if (child->hasAttribute("style"))
-        {
-            styles_set.insert(child->attribute("style"));
-        }
-    }
-    int stylenumber=1;
-    foreach (const auto &style, styles_set)
-    {
-        if (predefined_styles.contains(style))
-            class_of_style.insert(style, style);
-        else
-            class_of_style.insert(style, QString("rwStyle%1").arg(stylenumber++));
-    }
-
     // To help get category for pins on each individual topic,
     // get the topic_id of every single topic in the file.
     foreach (const auto &topic, root_elem->findChildren<XmlElement*>("topic"))
@@ -2606,7 +2570,6 @@ void toMarkdown(const XmlElement *root_elem,
 #endif
 
     // Tidy up memory
-    class_of_style.clear();
     topic_full_name.clear();
     topic_files.clear();
 }

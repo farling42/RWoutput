@@ -1,3 +1,10 @@
+# 4.5
+Change all loops to use foreach so that memory allocation isn't performed.
+
+When putting in unsupported tags, include all the attributes on each tag.
+
+When handling nested tables, ensure white space is only collected from TD elements.
+
 # 4.4
 Fix indentation of nested lists. Numbered lists should have "1. " as a prefix not "+ "
 
