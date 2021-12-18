@@ -7,6 +7,12 @@ When handling nested tables, ensure white space is only collected from TD elemen
 
 Change TextStyle handling in decode_gumbo to work properly.
 
+Single spaces wrapped in formatting should now be handled properly.
+
+Put a copy of obsidian.css into the base directory, for those who want to get the file easily.
+
+Reinstate the creation of the main launch page (which hasn't been getting (re)created since 4.0).
+
 # 4.4
 Fix indentation of nested lists. Numbered lists should have "1. " as a prefix not "+ "
 

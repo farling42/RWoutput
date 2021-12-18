@@ -289,16 +289,25 @@ static void write_support_files()
     // Use the files that are stored in the resource file
     QStringList files{"realmworks.css"};
 
-    const QDir directory(".obsidian/snippets/");
-    if (!directory.exists()) QDir::current().mkpath(directory.path());
+    const QDir snippetsDir(".obsidian/snippets/");
+    if (!snippetsDir.exists()) QDir::current().mkpath(snippetsDir.path());
 
     foreach (const auto &filename, files)
     {
-        QFile destfile(directory.filePath(filename));
+        // Put file into snippets directory
+        QFile destfile(snippetsDir.filePath(filename));
         if (destfile.exists()) destfile.remove();
         QFile::copy(":/" + filename, destfile.fileName());
         // Qt copies the file and makes it read-only!
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
+
+        // Put a copy into the base directory too, for convenience.
+        QFile basefile(QDir::current().filePath(filename));
+        if (basefile.exists()) basefile.remove();
+        QFile::copy(":/" + filename, basefile.fileName());
+        // Qt copies the file and makes it read-only!
+        basefile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
+
     }
 }
 
@@ -1555,12 +1564,6 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
             // Get GUMBO to release all the memory
             gumbo_destroy_output(&kGumboDefaultOptions, output);
         }
-
-        if (text.contains(QStringLiteral("recent difficulties")))
-        {
-            qDebug() << "\n\nSOURCE:" << text;
-            qDebug() << "\nRESULT: " << result;
-        }
     }
     else
     {
@@ -2303,7 +2306,7 @@ static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int lev
 
 static void write_separate_index(const XmlElement *root_elem)
 {
-    if (root_elem->objectName() != "output") return;
+    if (root_elem->objectName() != "export") return;
 
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
