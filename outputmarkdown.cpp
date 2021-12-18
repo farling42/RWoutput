@@ -50,7 +50,7 @@
 
 static bool apply_reveal_mask = true;
 static bool sort_by_prefix = true;
-static QCollator collator;
+static QCollator collator;              // allow alphanumeric sorting to do proper number comparisons
 static bool category_folders = true;
 static bool use_wikilinks = false;
 static bool show_leaflet_pins = true;
@@ -66,8 +66,8 @@ static bool connections_as_graph=true;
 #undef DUMP_CHILDREN
 
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
-static QHash<QString,QString> topic_files;   // key=topic_id, value=public_name
-static QHash<const XmlElement*,QString> topic_full_name;
+static QHash<QString,QString> topic_filename;               // key=topic_id/plot_id, value=<valid filename for this topic/plot>
+static QHash<const XmlElement*,QString> topic_full_name;    // key=topic_id, value=<prefix+public_name+suffix>
 
 extern QString map_pin_title;
 extern QString map_pin_description;
@@ -76,14 +76,15 @@ extern QString map_pin_gm_directions;
 extern bool show_full_link_tooltip;
 extern bool show_full_map_pin_tooltip;
 
-static QString oldAssetsDir("asset-files");
-static QString assetsDir("zz_asset-files");
-static QString imported_date;
-static QString mainPageName;
+static const QString oldAssetsDir("asset-files");
+static const QString assetsDir("zz_asset-files");
 static const QString newline("\n");
 static const QString endsnippet("\n");  // blank line after every snippet
-static QMap<QString,QString> global_names;
-static QString frontmatterMarker("---\n");
+static const QString frontmatterMarker("---\n");
+
+static QString mainPageName;
+static QString imported_date;
+static QMap<QString,QString> global_names;      // key=<any *_id>, value=<"name of key_id">  - tag, facet, category, partition, topic, plot
 #define DUMP_LEVEL 0
 
 
@@ -181,7 +182,7 @@ static const QString parentDirName(const XmlElement *topic)
 {
     XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
     if (parent && parent->objectName() == "topic")
-        return parentDirName(parent) + QDir::separator() + topic_files.value(parent->attribute("topic_id"));
+        return parentDirName(parent) + QDir::separator() + topic_filename.value(parent->attribute("topic_id"));
     else
         return validFilename(global_names.value(topic->attribute("category_id")));
 }
@@ -192,7 +193,7 @@ static const QString topicDirFile(const XmlElement *topic)
     // If the topic has children, then create a folder named after this note,
     // and put the note in it.
     // This is a parent topic, so create a folder to hold it.
-    const QString filename = topic_files.value(topic->attribute("topic_id"));
+    const QString filename = topic_filename.value(topic->attribute("topic_id"));
     if (category_folders)
     {
         return dirFile(validFilename(global_names.value(topic->attribute("category_id"))), filename) + ".md";
@@ -235,7 +236,7 @@ static inline const QString mermaid_node_raw(const QString &name, const QString 
 
 static inline const QString mermaid_node(const QString &topic_id)
 {
-    return mermaid_node_raw(topic_id, topic_files.value(topic_id));
+    return mermaid_node_raw(topic_id, topic_filename.value(topic_id));
 }
 
 
@@ -410,19 +411,19 @@ static inline QString createLink(const QString &filename, const QString &label, 
 }
 
 
-static QString internal_link(const QString &topic_id, const QString &label = QString(), int max_width=-1)
+static inline QString internal_link(const QString &topic_id, const QString &label = QString(), int max_width=-1)
 {
-    QString filename = topic_files.value(topic_id);
+    QString filename = topic_filename.value(topic_id);
     if (filename.isEmpty()) filename = validFilename(topic_id);
     return createLink(filename, label, max_width);
 }
 
-static QString topic_link(const XmlElement *topic)
+static inline QString topic_link(const XmlElement *topic)
 {
     return internal_link(topic->attribute("topic_id"), topic_full_name.value(topic));
 }
 
-static const QString getGumboAttribute(const GumboNode *node, const QString &name)
+static inline const QString getGumboAttribute(const GumboNode *node, const QString &name)
 {
     GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
     for (unsigned count = node->v.element.attributes.length; count > 0; --count)
@@ -456,6 +457,7 @@ static inline void swapSpace(QString &result, const QString &append)
  * Text enhancements
  */
 struct TextStyle {
+private:
     struct Values {
         bool bold=false;
         bool italic=false;
@@ -484,23 +486,24 @@ struct TextStyle {
         const QString toString() const
         {
             QStringList result;
-            if (bold) result.append("bold");
-            if (italic) result.append("italic");
+            if (bold)          result.append("bold");
+            if (italic)        result.append("italic");
             if (strikethrough) result.append("strikethrough");
-            if (underline) result.append("underline");
-            if (superscript) result.append("superscript");
-            if (subscript) result.append("subscript");
+            if (underline)     result.append("underline");
+            if (superscript)   result.append("superscript");
+            if (subscript)     result.append("subscript");
             return result.join(",");
         };
     };
     Values current;
+    bool is_empty=true;
 
+public:
+    TextStyle() {};
     TextStyle(const QString &details)
     {
         decode(details);
-    };
-    TextStyle() {};
-
+    }
     void startStyleElement(QString &result, const QString &name)
     {
         Values other = current;
@@ -515,7 +518,6 @@ struct TextStyle {
         else if (name == "sub") other.subscript   = false;
         swap(result, other);
     }
-
     void start(QString &result) const
     {
         QString starttext;
@@ -536,6 +538,28 @@ struct TextStyle {
         other.finish(result);
         current.clear();
     }
+    void finish(QString &result) const
+    {
+        // reverse order of startStyle
+        // Ensure space (if any) is AFTER the close
+        bool space = result.endsWith(' ');
+        if (space) result.truncate(result.length()-1);
+
+        if (current.subscript)     remove(result, "</sub>", "<sub>");
+        if (current.superscript)   remove(result, "</sup>", "<sup>");
+        if (current.underline)     remove(result, "</u>",   "<u>");
+        if (current.strikethrough) remove(result, "~~",     "~~");
+        if (current.bold)          remove(result, "**",     "**", false);
+        if (current.italic)        remove(result, "*",      "*", false);
+        if (space) result += ' ';
+    };
+    const QString toString() const
+    {
+        return current.toString();
+    };
+    bool isEmpty() const { return is_empty; };
+
+private:
     void inline remove(QString &result, const QString &addition, const QString &endswith, bool optimise=true) const
     {
         // Doesn't cancel bold+italic properly
@@ -570,29 +594,12 @@ struct TextStyle {
         result += starttext;
 
         current = other;
+        setEmpty();
     }
-    void finish(QString &result) const
+    void setEmpty()
     {
-        // reverse order of startStyle
-        // Ensure space (if any) is AFTER the close
-        bool space = result.endsWith(' ');
-        if (space) result.truncate(result.length()-1);
-
-        if (current.subscript)     remove(result, "</sub>", "<sub>");
-        if (current.superscript)   remove(result, "</sup>", "<sup>");
-        if (current.underline)     remove(result, "</u>",   "<u>");
-        if (current.strikethrough) remove(result, "~~",     "~~");
-        if (current.bold)          remove(result, "**",     "**", false);
-        if (current.italic)        remove(result, "*",      "*", false);
-        if (space) result += ' ';
-    };
-    const QString toString() const
-    {
-        return current.toString();
-    };
-    bool isEmpty() const { return is_empty; };
-private:
-    bool is_empty=true;
+        is_empty = !(current.bold || current.italic || current.strikethrough || current.underline || current.superscript || current.subscript);
+    }
     void decode(const QString &style)
     {
         foreach (const auto &part, style.split(";"))
@@ -637,7 +644,7 @@ private:
                 ; //qWarning() << "Unknown element of style: " << bits.first();
             }
         }
-        is_empty = !(current.bold || current.italic || current.strikethrough || current.underline || current.superscript || current.subscript);
+        setEmpty();
     };
 };
 typedef QHash<QString,TextStyle> GumboStyles;
@@ -1005,22 +1012,36 @@ static const QString getTags(const XmlElement *node, bool withnl=true)
 
 static void startGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
 {
-    const QString cls = getGumboAttribute(node, "class");
-    const QString style = getGumboAttribute(node, "style");
-    if (!style.isEmpty()) currentStyle.modify(result, TextStyle(style));
-    else if (!cls.isEmpty() && styles.contains(cls)) styles[cls].start(result);
-    else currentStyle.modify(result, TextStyle());  // probably new span, so cancel old span
+    const QString nodestyle = getGumboAttribute(node, "style");
+    if (!nodestyle.isEmpty())
+    {
+        currentStyle.modify(result, TextStyle(nodestyle));
+        return;
+    }
+
+    const QString nodeclass = getGumboAttribute(node, "class");
+    if (!nodeclass.isEmpty() && styles.contains(nodeclass))
+    {
+        styles[nodeclass].start(result);
+        return;
+    }
+
+    // probably new span, so cancel old span
+    currentStyle.modify(result, TextStyle());
 }
+
 
 static void finishGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
 {
-    const QString cls = getGumboAttribute(node, "class");
-    const QString style = getGumboAttribute(node, "style");
-    if (!style.isEmpty())
+    const QString nodestyle = getGumboAttribute(node, "style");
+    if (!nodestyle.isEmpty())
     {
-        ; //TextStyle style(style);
+        return; //TextStyle style(style);
     }
-    else if (!cls.isEmpty()) styles[cls].finish(result);
+
+    const QString nodeclass = getGumboAttribute(node, "class");
+    if (!nodeclass.isEmpty() && styles.contains(nodeclass))
+        styles[nodeclass].finish(result);
 }
 
 
@@ -1930,17 +1951,17 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 
     if (parent) {
         // Don't tell Breadcrumbs about the main page!
-        QString link = (parent->objectName() == "topic") ? topic_files.value(parent->attribute("topic_id")) : validFilename(category_name);
+        QString link = (parent->objectName() == "topic") ? topic_filename.value(parent->attribute("topic_id")) : validFilename(category_name);
         stream << "parent:\n  - " << link << "\nup:\n  - " << link << newline;
     }
     if (prev)
     {
-        QString link = topic_files.value(prev->attribute("topic_id"));
+        QString link = topic_filename.value(prev->attribute("topic_id"));
         stream << "prev:\n  - " << link << newline;
     }
     if (next)
     {
-        QString link = topic_files.value(next->attribute("topic_id"));
+        QString link = topic_filename.value(next->attribute("topic_id"));
         stream << "next:\n  - " << link << newline;
         //stream << "same:\n  - " << link << newline;
     }
@@ -1950,7 +1971,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "down:\n";
         foreach (const auto &child, topic->xmlChildren("topic"))
         {
-            stream << "  - " << topic_files.value(child->attribute("topic_id")) << newline;
+            stream << "  - " << topic_filename.value(child->attribute("topic_id")) << newline;
         }
     }
     stream << "RWtopicId: " << topic->attribute("topic_id") << newline;
@@ -2032,7 +2053,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 const QString nature      = connection->attribute("nature");
                 const QString annotation  = annotationText(connection, false);  // not const so we can do annotation.replace later
 
-                targets.insert("[[ " + topic_files.value(target_id) + "]]");
+                targets.insert("[[ " + topic_filename.value(target_id) + "]]");
 
                 // Need to be incoming links
                 if (nature_incoming.value(nature)) source_id.swap(target_id);
@@ -2119,7 +2140,7 @@ static void write_separate_index(const XmlElement *root_elem)
     XmlElement *definition = root_elem->xmlChild("definition");
     XmlElement *details    = definition ? definition->xmlChild("details") : nullptr;
     mainPageName           = details    ? details->attribute("name") : "Table of Contents";
-    topic_files.insert(mainPageName, validFilename(mainPageName));
+    topic_filename.insert(mainPageName, validFilename(mainPageName));
 
     QFile out_file(mainPageName + ".md");
     if (!out_file.open(QFile::WriteOnly|QFile::Text))
@@ -2248,7 +2269,7 @@ static void write_category_files(const XmlElement *tree)
         {
             if (global_names.value(topic->attribute("category_id")) == catname)
             {
-                stream << "  - " << topic_files.value(topic->attribute("topic_id")) << newline;
+                stream << "  - " << topic_filename.value(topic->attribute("topic_id")) << newline;
             }
         }
         stream << "same:\n";
@@ -2368,7 +2389,7 @@ static void write_storyboard(const XmlElement *root_elem)
 
             //qDebug() << "PLOT: " << plot_id << " := " << plot_name;
             global_names.insert(plot_id, plot_name);
-            topic_files.insert(plot_id, validFilename(plot_name));
+            topic_filename.insert(plot_id, validFilename(plot_name));
         }
     }
 
@@ -2379,7 +2400,6 @@ static void write_storyboard(const XmlElement *root_elem)
 
         foreach (const auto &plot, plot_group->xmlChildren("plot"))
         {
-            //const QString plot_id     = plot->attribute("plot_id");
             const QString plot_name   = plot->attribute("public_name");
             const QString description = get_elem_string(plot->xmlChild("description"));
 
@@ -2409,7 +2429,7 @@ static void write_storyboard(const XmlElement *root_elem)
                         //qDebug() << "\nNODE: name  = " << node_name;
                         //qDebug() <<   "target_id   = " << global_names.value(target_id);
                         //qDebug() <<   "target_name = " << global_names.value(target_id);
-                        QString node_link = topic_files.value(target_id);
+                        QString node_link = topic_filename.value(target_id);
                         if (node_link == node_name)
                             real_link = true;
                         else if (node_name.isEmpty() || node_name.toLower() == global_names.value(target_id).toLower())
@@ -2549,7 +2569,7 @@ void toMarkdown(const XmlElement *root_elem,
 
         QString vfn = validFilename(fullname);
         if (vfn != fullname) qWarning() << "Filename (" << vfn << ") different for " << fullname;
-        topic_files.insert(topic->attribute("topic_id"), validFilename(fullname));
+        topic_filename.insert(topic->attribute("topic_id"), validFilename(fullname));
     }
 
     // Write out the individual TOPIC files now:
@@ -2571,5 +2591,5 @@ void toMarkdown(const XmlElement *root_elem,
 
     // Tidy up memory
     topic_full_name.clear();
-    topic_files.clear();
+    topic_filename.clear();
 }
