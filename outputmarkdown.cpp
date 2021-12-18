@@ -435,173 +435,151 @@ static inline const QString getGumboAttribute(const GumboNode *node, const QStri
 }
 
 
-/**
- * @brief swapSpace
- * If result ends with a space, then put append before that space and put the space after it.
- * This is used to ensure that the closure of a style is appended onto the previous text rather
- * than merged with the next text.
- * @param result The string to be checked and possibly modified
- * @param append The text to appear before the final space
- */
-static inline void swapSpace(QString &result, const QString &append)
-{
-    if (append.isEmpty()) return;
-    if (!result.isEmpty() && result.back() == ' ')
-        result.insert(result.length()-1, append);
-    else
-        result += append;
-}
-
-
 /*
  * Text enhancements
  */
 struct TextStyle {
 private:
-    struct Values {
-        bool bold=false;
-        bool italic=false;
-        bool strikethrough=false;
-        bool underline=false;
-        bool superscript=false;
-        bool subscript=false;
-        void clear()
-        {
-            bold=false;
-            italic=false;
-            strikethrough=false;
-            underline=false;
-            superscript=false;
-            subscript=false;
-        }
-        bool operator==(const Values &other)
-        {
-            return bold==other.bold &&
-                    italic==other.italic &&
-                    subscript==other.subscript &&
-                    superscript==other.superscript &&
-                    underline==other.underline &&
-                    strikethrough==other.strikethrough;
-        }
-        const QString toString() const
-        {
-            QStringList result;
-            if (bold)          result.append("bold");
-            if (italic)        result.append("italic");
-            if (strikethrough) result.append("strikethrough");
-            if (underline)     result.append("underline");
-            if (superscript)   result.append("superscript");
-            if (subscript)     result.append("subscript");
-            return result.join(",");
-        };
-    };
-    Values current;
     bool is_empty=true;
+    bool bold=false;
+    bool italic=false;
+    bool strikethru=false;
+    bool underline=false;
+    bool superscript=false;
+    bool subscript=false;
+
+    void clear()
+    {
+        bold=false;
+        italic=false;
+        strikethru=false;
+        underline=false;
+        superscript=false;
+        subscript=false;
+        is_empty=true;
+    }
 
 public:
     TextStyle() {};
-    TextStyle(const QString &details)
-    {
-        decode(details);
-    }
-    void startStyleElement(QString &result, const QString &name)
-    {
-        Values other = current;
-        if      (name == "sup") other.superscript = true;
-        else if (name == "sub") other.subscript   = true;
-        swap(result, other);
-    }
-    void finishStyleElement(QString &result, const QString &name)
-    {
-        Values other = current;
-        if      (name == "sup") other.superscript = false;
-        else if (name == "sub") other.subscript   = false;
-        swap(result, other);
-    }
-    void start(QString &result) const
-    {
-        QString starttext;
-        if (current.italic)        starttext += "*";
-        if (current.bold)          starttext += "**";
-        if (current.strikethrough) starttext += "~~";
-        if (current.underline)     starttext += "<u>";
-        if (current.superscript)   starttext += "<sup>";
-        if (current.subscript)     starttext += "<sub>";
-        result += starttext;
-    }
-    void modify(QString &result, const TextStyle &other)
-    {
-        swap(result, other.current);
-    }
-    void unmodify(QString &result, const TextStyle &other)
-    {
-        other.finish(result);
-        current.clear();
-    }
-    void finish(QString &result) const
-    {
-        // reverse order of startStyle
-        // Ensure space (if any) is AFTER the close
-        bool space = result.endsWith(' ');
-        if (space) result.truncate(result.length()-1);
+    static const TextStyle NULL_STYLE;
 
-        if (current.subscript)     remove(result, "</sub>", "<sub>");
-        if (current.superscript)   remove(result, "</sup>", "<sup>");
-        if (current.underline)     remove(result, "</u>",   "<u>");
-        if (current.strikethrough) remove(result, "~~",     "~~");
-        if (current.bold)          remove(result, "**",     "**", false);
-        if (current.italic)        remove(result, "*",      "*", false);
-        if (space) result += ' ';
-    };
+    static TextStyle fromStyle(const QString &details)
+    {
+        TextStyle result;
+        result.decodeStyle(details);
+        return result;
+    }
+    static TextStyle fromNode(const QString &nodename)
+    {
+        TextStyle result;
+        if (nodename == "sup")
+        {
+            result.superscript = true;
+            result.is_empty    = false;
+        }
+        else if (nodename == "sub")
+        {
+            result.subscript = true;
+            result.is_empty  = false;
+        }
+        else if (nodename == "b")
+        {
+            result.bold     = true;
+            result.is_empty = false;
+        }
+        else if (nodename == "i")
+        {
+            result.italic   = true;
+            result.is_empty = false;
+        }
+        return result;
+    }
+    bool operator==(const TextStyle &other)
+    {
+        return bold==other.bold &&
+                italic==other.italic &&
+                subscript==other.subscript &&
+                superscript==other.superscript &&
+                underline==other.underline &&
+                strikethru==other.strikethru;
+    }
+    TextStyle operator+(const TextStyle &other) const
+    {
+        TextStyle result = *this;
+        if (other.bold)        result.bold        = true;
+        if (other.italic)      result.italic      = true;
+        if (other.subscript)   result.subscript   = true;
+        if (other.superscript) result.superscript = true;
+        if (other.underline)   result.underline   = true;
+        if (other.strikethru)  result.strikethru  = true;
+        result.setIsEmpty();
+        return result;
+    }
+    TextStyle &operator+=(const TextStyle &other)
+    {
+        if (other.bold)        bold        = true;
+        if (other.italic)      italic      = true;
+        if (other.subscript)   subscript   = true;
+        if (other.superscript) superscript = true;
+        if (other.underline)   underline   = true;
+        if (other.strikethru)  strikethru  = true;
+        setIsEmpty();
+        return *this;
+    }
+    TextStyle operator-(const TextStyle &other) const
+    {
+        TextStyle result = *this;
+        if (other.bold)        result.bold        = false;
+        if (other.italic)      result.italic      = false;
+        if (other.subscript)   result.subscript   = false;
+        if (other.superscript) result.superscript = false;
+        if (other.underline)   result.underline   = false;
+        if (other.strikethru)  result.strikethru  = false;
+        result.setIsEmpty();
+        return result;
+    }
+    TextStyle &operator-=(const TextStyle &other)
+    {
+        if (other.bold)        bold        = false;
+        if (other.italic)      italic      = false;
+        if (other.subscript)   subscript   = false;
+        if (other.superscript) superscript = false;
+        if (other.underline)   underline   = false;
+        if (other.strikethru)  strikethru  = false;
+        setIsEmpty();
+        return *this;
+    }
     const QString toString() const
     {
-        return current.toString();
+        QStringList result;
+        if (bold)        result.append("bold");
+        if (italic)      result.append("italic");
+        if (strikethru)  result.append("strikethrough");
+        if (underline)   result.append("underline");
+        if (superscript) result.append("superscript");
+        if (subscript)   result.append("subscript");
+        return result.join(",");
     };
     bool isEmpty() const { return is_empty; };
 
 private:
-    void inline remove(QString &result, const QString &addition, const QString &endswith, bool optimise=true) const
+    void setIsEmpty()
     {
-        // Doesn't cancel bold+italic properly
-        if (optimise && result.endsWith(endswith))
-            // There is no text between the start and end of this formatting, so remove the START indicator
-            result.truncate(result.length() - endswith.length());
-        else
-            result.append(addition);
+        is_empty = !(bold || italic || strikethru || underline || superscript || subscript);
     }
-    void swap(QString &result, const Values &other)
+    void decodeStyle(const QString &style)
     {
-        // Which things to switch off
-        // Ensure space (if any) is AFTER the close
-        bool space = result.endsWith(' ');
-        if (space) result.truncate(result.length()-1);
-        if (current.subscript     && !other.subscript)     remove(result, "</sub>", "<sub>");
-        if (current.superscript   && !other.superscript)   remove(result, "</sup>", "<sup>");
-        if (current.underline     && !other.underline)     remove(result, "</u>",   "<u>");
-        if (current.strikethrough && !other.strikethrough) remove(result, "~~",     "~~");
-        if (current.bold          && !other.bold)          remove(result, "**",     "**", false);
-        if (current.italic        && !other.italic)        remove(result, "*",      "*", false);
-        if (space) result += ' ';
-
-        // Which things to switch on (opposite order to OFF)
-        QString starttext;
-        if (!current.italic        && other.italic)        starttext += "*";
-        if (!current.bold          && other.bold)          starttext += "**";
-        if (!current.strikethrough && other.strikethrough) starttext += "~~";
-        if (!current.underline     && other.underline)     starttext += "<u>";
-        if (!current.superscript   && other.superscript)   starttext += "<sup>";
-        if (!current.subscript     && other.subscript)     starttext += "<sub>";
-        result += starttext;
-
-        current = other;
-        setEmpty();
-    }
-    void setEmpty()
-    {
-        is_empty = !(current.bold || current.italic || current.strikethrough || current.underline || current.superscript || current.subscript);
-    }
-    void decode(const QString &style)
-    {
+        // It could be a NODE name rather than a style
+        if (style == "sup")
+        {
+            superscript = true;
+            return;
+        }
+        else if (style == "sub")
+        {
+            subscript = true;
+            return;
+        }
         foreach (const auto &part, style.split(";"))
         {
             const auto bits = part.split(":");
@@ -612,7 +590,7 @@ private:
             {
                 foreach (const auto &value, values)
                 {
-                    if (value == "bold") current.bold = true;
+                    if (value == "bold") bold = true;
                     //else qWarning() << "Unknown element in font-weight: " << value;
                 }
             }
@@ -621,7 +599,7 @@ private:
                 // normal|italic|oblique|initial|inherit
                 foreach (const auto &value, values)
                 {
-                    if (value == "italic") current.italic = true;
+                    if (value == "italic") italic = true;
                     //else qWarning() << "Unknown element in font-style: " << value;
                 }
             }
@@ -630,8 +608,8 @@ private:
                 // solid|double|dotted|dashed|wavy|initial|inherit
                 foreach (const auto &value, values)
                 {
-                    if      (value == "line-through") current.strikethrough = true;
-                    else if (value == "underline")    current.underline = true;
+                    if      (value == "line-through") strikethru = true;
+                    else if (value == "underline")    underline = true;
                     //else if (value == "none") ;
                     //else qWarning() << "Unknown element in text-decoration: " << value;
                 }
@@ -644,11 +622,110 @@ private:
                 ; //qWarning() << "Unknown element of style: " << bits.first();
             }
         }
-        setEmpty();
+        setIsEmpty();
     };
+    friend class TextStyleManager;
 };
+const TextStyle TextStyle::NULL_STYLE;
+
 typedef QHash<QString,TextStyle> GumboStyles;
-static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cssStyles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString(), bool allowWhitespace=false);
+
+
+class TextStyleManager
+{
+public:
+    TextStyle currentStyle() const
+    {
+        return this->current;
+    }
+    /**
+     * @brief start
+     * Put into @result all the markers required to define the styles given in @style
+     * @param result
+     * @param style
+     */
+    void start(QString &result, TextStyle style)
+    {
+        current = TextStyle::NULL_STYLE;
+        change(result, style);
+    }
+    /**
+     * @brief finish
+     * Put into @result all the markers required to unset all the currently active styles.
+     * @param result
+     */
+    void finish(QString &result)
+    {
+        change(result, TextStyle::NULL_STYLE);
+    };
+    /**
+     * @brief change
+     * Add flags to @result to change the current styling to match @style.
+     * @param result
+     * @param style
+     */
+    void change(QString &result, const TextStyle &tostyle)
+    {
+        if (current==tostyle) return;
+
+        // Remove any elements no longer required
+        if (!current.is_empty)
+        {
+            // Which things to switch off
+            // Ensure space (if any) is AFTER the close
+            bool space = result.endsWith(' ');
+            if (space) result.truncate(result.length()-1);
+            removeFlag(result, current.subscript,   tostyle.subscript,   "</sub>", "<sub>");
+            removeFlag(result, current.superscript, tostyle.superscript, "</sup>", "<sup>");
+            removeFlag(result, current.underline,   tostyle.underline,   "</u>",   "<u>");
+            removeFlag(result, current.strikethru,  tostyle.strikethru,  "~~",     "~~");
+            removeFlag(result, current.bold,        tostyle.bold,        "**",     "**",   false);
+            removeFlag(result, current.italic,      tostyle.italic,      "*",      "*",    false);
+            if (space) result += ' ';
+        }
+        // Add any elements not currently present
+        if (!tostyle.is_empty)
+        {
+            // Which things to switch on (opposite order to OFF)
+            // Only set flag in current if switching on
+            addFlag(result, current.italic,      tostyle.italic,      "*");
+            addFlag(result, current.bold,        tostyle.bold,        "**");
+            addFlag(result, current.strikethru,  tostyle.strikethru,  "~~");
+            addFlag(result, current.underline,   tostyle.underline,   "<u>");
+            addFlag(result, current.superscript, tostyle.superscript, "<sup>");
+            addFlag(result, current.subscript,   tostyle.subscript,   "<sub>");
+        }
+
+        // Remember the current style
+        current = tostyle;
+    }
+
+private:
+    TextStyle current;
+
+    inline void addFlag(QString &result, const bool &from, const bool &to, const QString &starttag)
+    {
+        if (!from && to)
+        {
+            result += starttag;
+        }
+    }
+    inline void removeFlag(QString &result, const bool &from, const bool &to, const QString &endtag, const QString &starttag, const bool optimise=true) const
+    {
+        if (from && !to)
+        {
+            // Doesn't cancel bold+italic properly
+            if (optimise && result.endsWith(starttag))
+                // There is no text between the start and end of this formatting, so remove the START indicator
+                result.truncate(result.length() - starttag.length());
+            else
+                result.append(endtag);
+        }
+    }
+};
+
+
+static const QString read_gumbo(const GumboNode *node, const GumboStyles &cssStyles);
 static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name);
 
 
@@ -678,8 +755,7 @@ GumboStyles getStyles(const GumboNode *node)
                     if (parts.length() != 2) {
                         qWarning() << "Invalid syntax in GUMBO style: " << line;
                     }
-                    TextStyle style(parts.last());
-                    result.insert(parts.first().mid(1), style);
+                    result.insert(parts.first().mid(1), TextStyle::fromStyle(parts.last()));
                 }
             }
         }
@@ -725,15 +801,6 @@ static const QString textContent(const QString &source)
     return result;
 }
 
-static QString unpatch_gumbo(const QString &input)
-{
-    // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
-    // but we should ignore RW_LINE_BREAK at the end of a line.
-    QString result = input;
-    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline).trimmed();
-}
-
-
 static const QString get_content_text(XmlElement *parent, const ExportLinks &links)
 {
 #if DEBUG_LEVEL > 4
@@ -771,8 +838,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
                 if (auto body = getGumboChild(output->root, "body"))
                 {
                     GumboStyles cssStyles;
-                    TextStyle currentStyle;
-                    result += unpatch_gumbo(decode_gumbo(body, cssStyles, currentStyle));
+                    result += read_gumbo(body, cssStyles);
                 }
             }
             // Get GUMBO to release all the memory
@@ -1010,38 +1076,24 @@ static const QString getTags(const XmlElement *node, bool withnl=true)
 }
 
 
-static void startGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
+static TextStyle inlineStyle(const GumboNode *node, const GumboStyles &cssStyles)
 {
+    TextStyle result;
+
+    // if node has class="..." use it if it is in the decoded cssStyles
+    const QString nodeclass = getGumboAttribute(node, "class");
+    if (!nodeclass.isEmpty() && cssStyles.contains(nodeclass))
+    {
+        result = result + cssStyles[nodeclass];
+    }
+    // If node has style="..." use it
     const QString nodestyle = getGumboAttribute(node, "style");
     if (!nodestyle.isEmpty())
     {
-        currentStyle.modify(result, TextStyle(nodestyle));
-        return;
+        result = result + TextStyle::fromStyle(nodestyle);
     }
-
-    const QString nodeclass = getGumboAttribute(node, "class");
-    if (!nodeclass.isEmpty() && styles.contains(nodeclass))
-    {
-        styles[nodeclass].start(result);
-        return;
-    }
-
     // probably new span, so cancel old span
-    currentStyle.modify(result, TextStyle());
-}
-
-
-static void finishGumboStyle(QString &result, const GumboNode *node, const GumboStyles &styles, TextStyle &currentStyle)
-{
-    const QString nodestyle = getGumboAttribute(node, "style");
-    if (!nodestyle.isEmpty())
-    {
-        return; //TextStyle style(style);
-    }
-
-    const QString nodeclass = getGumboAttribute(node, "class");
-    if (!nodeclass.isEmpty() && styles.contains(nodeclass))
-        styles[nodeclass].finish(result);
+    return result;
 }
 
 
@@ -1052,70 +1104,116 @@ static void finishGumboStyle(QString &result, const GumboNode *node, const Gumbo
  * @param node
  */
 
-static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cssStyles, TextStyle &currentStyle, const bool top, int nestedTableCount, const QString &listtype, const bool allowWhitespace)
+static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cssStyles, TextStyleManager &styleManager, int nestedTableCount=0, const QString &listtype=QString(), const bool allowWhitespace=false)
 {
-    QString tag;
     QString result;
     result.reserve(1000);
+
+    // The current style, if any, that is in effect at this node level.
+    // (child levels might change it independently of this style)
+    TextStyle original_style;
+    bool original_set  = false;
+    bool style_changed = false;
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
     {
         const GumboNode *node = *children++;
+
         switch (node->type)
         {
         case GUMBO_NODE_TEXT:
         case GUMBO_NODE_CDATA:
         {
+            if (style_changed)
+            {
+                styleManager.change(result, original_style);
+                style_changed=false;
+            }
             QString text(node->v.text.text);
-            //if (top) qDebug() << "GUMBO_NODE_TEXT:" << text;
             int pos = text.lastIndexOf(" - created with Hero Lab");
             if (pos >= 0) text = text.left(pos);
             // Escape any text in square brackets
             result += doEscape(text);
         }
             break;
+
         case GUMBO_NODE_WHITESPACE:
-            //if (top) qDebug() << "GUMBO_NODE_WHITESPACE";
-            if (allowWhitespace) result += QString(node->v.text.text);
+            if (allowWhitespace)
+            {
+                if (style_changed)
+                {
+                    styleManager.change(result, original_style);
+                    style_changed=false;
+                }
+                result += QString(node->v.text.text);
+            }
             break;
 
         case GUMBO_NODE_COMMENT:
-            //if (top) qDebug() << "GUMBO_NODE_COMMENT:" << node->v.text.text;
             break;
 
         case GUMBO_NODE_ELEMENT:
-            tag = gumbo_normalized_tagname(node->v.element.tag);
+        {
+            const QString tag = gumbo_normalized_tagname(node->v.element.tag);
 
-            // See what to put before the text
+            // Paragraphs are handled as having stand-alone formatting.
             if (tag == "p")
             {
-                TextStyle top_style;  // each paragraph should have its own style information
+                TextStyleManager para_style;  // each paragraph should have its own style information, starting from NO STYLING
                 QString paragraph;
-                startGumboStyle(paragraph, node, cssStyles, top_style);
-                paragraph += decode_gumbo(node, cssStyles, top_style, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
-                top_style.finish(paragraph);
+                para_style.start(paragraph, inlineStyle(node, cssStyles));
+                paragraph += decode_gumbo(node, cssStyles, para_style, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                para_style.finish(paragraph);
 
                 // Check for line with only formatting and white space!
                 static const QRegularExpression markup("[\\*~ ]+$", QRegularExpression::UseUnicodePropertiesOption);
                 if (!markup.match(paragraph, 0, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption).hasMatch())
                     result += paragraph + newline + newline;  // Blank line after each paragraph
+
+                // Skip the rest of the GUMBO_NODE_ELEMENT processing
+                break;
+            }
+
+            // Not relevant to <p>, we can cancel any previous styling.
+            // class and style attributes are "Global Attributes" which can be used on any HTML element.
+            TextStyle tag_style = inlineStyle(node, cssStyles);
+            if (!tag_style.isEmpty())
+            {
+                if (!original_set)
+                {
+                    original_style = styleManager.currentStyle();
+                    original_set   = true;
+                }
+                styleManager.change(result, original_style + tag_style);
+                style_changed=true;
+            }
+            else if (style_changed)
+            {
+                styleManager.change(result, original_style);
+                style_changed=false;
+            }
+
+            if (tag == "span")
+            {
+                // some span are inside lists rather than paragraphs!
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, /*allowWhitespace*/ true);
             }
             else if (tag == "br")
             {
                 result += RW_LINE_BREAK;  // Replaced in write_html by calling patch_gumbo
             }
-            else if (tag == "b")
+            else if (tag == "sup" || tag == "sub" || tag == "b" || tag == "i")
             {
-                result += "**";
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
-                swapSpace(result, "**");
-            }
-            else if (tag == "i")
-            {
-                result += "*";
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
-                swapSpace(result, "*");
+                if (!original_set)
+                {
+                    original_style = styleManager.currentStyle();
+                    original_set   = true;
+                }
+                styleManager.change(result, original_style + TextStyle::fromNode(tag));
+                style_changed=true;
+
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
             }
             else if (tag == "hr")
             {
@@ -1124,9 +1222,8 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             }
             else if (tag == "a")
             {
-                QString href  = getGumboAttribute(node, "href");
-                QString label = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
-                result += createMarkdownLink(/*filename*/ href, /*label*/ label);
+                QString label = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
+                result += createMarkdownLink(/*filename*/ getGumboAttribute(node, "href"), /*label*/ label);
             }
             else if (tag == "img")
             {
@@ -1157,7 +1254,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             else if (nestedTableCount==0 && tag == "table")
             {
                 // remove line break from last line
-                QString table = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount+1, listtype, /*allowWhitespace*/ false).trimmed();
+                QString table = decode_gumbo(node, cssStyles, styleManager, nestedTableCount+1, listtype, /*allowWhitespace*/ false).trimmed();
 
                 // Need to add |---|---| line to tell markdown that it is a table
                 int break1 = table.indexOf('\n');
@@ -1188,33 +1285,20 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             }
             else if (nestedTableCount==1 && tag == "tr")
             {
-                QString row = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                QString row = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
                 // end of line for table row
                 result += row.trimmed() + " |\n";
             }
             else if (nestedTableCount==1 && tag == "td")
             {
                 // TD contains text directly, so allow whitespace within it
-                QString cell = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                QString cell = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, /*allowWhitespace*/ true);
                 // TODO - do we need to detect double \n
                 result += "| " + cell.trimmed().replace(RW_LINE_BREAK,"<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
             }
             else if (nestedTableCount==1 && tag == "tbody")
             {
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
-            }
-            else if (tag == "span")
-            {
-                startGumboStyle(result, node, cssStyles, currentStyle);
-                // some span are inside lists rather than paragraphs!
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
-                finishGumboStyle(result, node, cssStyles, currentStyle);
-            }
-            else if (tag == "sup" || tag == "sub")
-            {
-                currentStyle.startStyleElement(result, tag);
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
-                currentStyle.finishStyleElement(result, tag);
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
             }
             else if (tag == "ul")
             {
@@ -1228,7 +1312,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
                     // Ensure this sublist is a BULLET list
                     newlisttype.replace("1.", "-");
                 }
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, newlisttype, allowWhitespace);
                 // Blank line after last line of nested list only
                 if (listtype.isEmpty()) result += newline;
             }
@@ -1244,20 +1328,20 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
                     // Ensure this sublist is a NUMBERED list
                     newlisttype.replace("-", "1.");
                 }
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, newlisttype, allowWhitespace);
                 // Blank line after last line of nested list only
                 if (listtype.isEmpty()) result += newline;
             }
             else if (tag == "li")
             {
-                result += listtype + decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += listtype + decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
                 // If this is the <li> after a nested list, then we might end up with too many \n.
                 if (!result.endsWith(newline)) result += newline;
             }
             else if (tag.length() == 2 && tag[0] == 'h' && tag[1].isDigit())
             {
                 result += QString(tag.midRef(1).toInt(),'#') + ' ';
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace).trimmed();
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace).trimmed();
             }
             else
             {
@@ -1278,25 +1362,45 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
                 for (unsigned count = node->v.element.attributes.length; count > 0; --count)
                 {
                     const GumboAttribute *attr = *attributes++;
-                    parts.append(QString("%1=\"%2\"").arg(attr->name).arg(attr->value));
+                    parts.append(QString("%1=\"%2\"").arg(attr->name, attr->value));
                 }
                 result += "<" + parts.join(' ') + ">";
-                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, local_allowWhitespace);
+                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, local_allowWhitespace);
                 result += "</" + tag + ">";
             }
             // end of GUMBO_NODE_ELEMENT
+        }
             break;
 
         case GUMBO_NODE_DOCUMENT:
-            //if (top) qDebug() << "GUMBO_NODE_DOCUMENT";
             break;
+
         case GUMBO_NODE_TEMPLATE:
-            //if (top) qDebug() << "GUMBO_NODE_TEMPLATE:" << gumbo_normalized_tagname(node->v.element.tag);
             break;
         }
     }
-    if (top) currentStyle.finish(result);
+    // Cancel any final style if one is currently being processed.
+    if (style_changed) styleManager.change(result, original_style);
+
     return result.replace("\u00a0"," ").replace("\u200b","");
+}
+
+
+static inline QString unpatch_gumbo(const QString &input)
+{
+    // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
+    // but we should ignore RW_LINE_BREAK at the end of a line.
+    QString result = input;
+    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline).trimmed();
+}
+
+
+static inline const QString read_gumbo(const GumboNode *node, const GumboStyles &cssStyles)
+{
+    TextStyleManager styleManager;
+    QString result = unpatch_gumbo(decode_gumbo(node, cssStyles, styleManager));
+    styleManager.finish(result);
+    return result;
 }
 
 static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name)
@@ -1385,8 +1489,8 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
         const GumboNode *titlenode = head ? getGumboChild(head, "title") : nullptr;
         if (titlenode)
         {
-            TextStyle currentStyle;
-            QString title = unpatch_gumbo(decode_gumbo(titlenode, cssStyles, currentStyle));
+            QString title = read_gumbo(titlenode, cssStyles);
+
             // Strip HL from name
             int pos = title.lastIndexOf(" - created with Hero Lab");
             if (pos >= 0) title.truncate(pos);
@@ -1398,8 +1502,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 #ifdef DUMP_CHILDREN
     dump_children("BODY", body);
 #endif
-    TextStyle currentStyle;
-    result += unpatch_gumbo(decode_gumbo(body ? body : output->root, cssStyles, currentStyle)) + newline;
+    result += read_gumbo(body ? body : output->root, cssStyles) + newline;
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
@@ -1679,7 +1782,7 @@ static const QString write_snippet(XmlElement *snippet)
         {
             QString datestr = gregorian(date->attribute("gregorian"));
             if (datestr.isEmpty()) datestr = canonicalTime(date->attribute("canonical"));
-            result += "**" + snippetName(snippet) + "**: " + datestr + annotationText(snippet) + newline;
+            result += hlabel(snippetName(snippet)) + datestr + annotationText(snippet) + newline;
             result += getTags(snippet) + endsnippet;
         }
     }
