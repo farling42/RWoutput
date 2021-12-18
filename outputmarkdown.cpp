@@ -30,6 +30,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QApplication>
+#include <QStack>
 #include <QStyle>
 #include <QStaticText>
 #include <QTextStream>
@@ -62,6 +63,8 @@ static bool create_suffix_tag = false;
 static int  image_max_width   = -1;
 static int  gumbofilenumber = 0;
 static bool connections_as_graph=true;
+static bool detect_dice_rolls=false;
+static bool detect_html_dice_rolls=false;
 
 #undef DUMP_CHILDREN
 
@@ -775,6 +778,7 @@ GumboStyles getStyles(const GumboNode *node)
     return result;
 }
 
+
 static const QString hlabel(const QString &label)
 {
     return "**" + label + "**: ";
@@ -786,6 +790,47 @@ static const QString escape_bracket(const QString &input)
     QString result = input;
     result.replace('[', RW_LEFT_BRACKET).replace(']', RW_RIGHT_BRACKET);
     return result;
+}
+
+/**
+ * @brief replace_dice
+ * Examine @string for any patterns that might be dice rolls, and replace with `dice: <expr>`
+ * @param string
+ */
+static void replace_dice(QString &string)
+{
+    // regex101.com says the following is correct:   ([^\w]|^)(\d*[dD]\d+(\s*[+-]\s*(\d*[dD]\d+|\d+))*)($|[^\w])
+    // the REGEXP has to check that letters don't immediately precede or follow the match
+    // but we have to escape each backslash
+    static const QRegularExpression dice_regexp("(^|[^\\w])(\\d*[dD]\\d+(\\s*[+-]\\s*(\\d*[dD]\\d+|\\d+))*)($|[^\\w])", QRegularExpression::UseUnicodePropertiesOption);
+  //  static const QRegularExpression dice_regexp("(^|[^\\w])\\d*[dD]\\d+(\\s*[+-]\\s*(\\d*[dD]\\d+|\\d+))*($|[^\\w])", QRegularExpression::UseUnicodePropertiesOption|QRegularExpression::DontCaptureOption);
+    if (!dice_regexp.isValid()) qDebug() << "dice_regexp is invalid:" << dice_regexp.errorString();
+    QRegularExpressionMatchIterator it = dice_regexp.globalMatch(string);
+    if (!it.hasNext()) return;
+
+    // The iterator only runs forward, so get the pairs into reverse order
+    struct Pair { int start, last; };
+    QStack<Pair> pairs;
+    pairs.reserve(10);
+    while (it.hasNext())
+    {
+        // Match #2 contains the actual expression, rather than the check markers either side
+        // which avoid letters touching the front or back of the suspected dice string.
+        QRegularExpressionMatch match = it.next();
+        if (match.lastCapturedIndex() < 2)
+        {
+            qWarning() << "replace_dice didn't find two matching expressions: which it always should!";
+            continue;
+        }
+        pairs.append(Pair{match.capturedStart(2), match.capturedEnd(2) });
+    }
+    // Update the string starting at the end and working backwards
+    while (!pairs.isEmpty())
+    {
+        Pair set = pairs.pop();
+        string.insert(set.last, '`');       // do this FIRST, before the string is shifted right
+        string.insert(set.start, "`dice: ");
+    }
 }
 
 
@@ -862,6 +907,7 @@ static const QString textContent(const QString &source)
         // Get GUMBO to release all the memory
         gumbo_destroy_output(&kGumboDefaultOptions, output);
     }
+    if (detect_dice_rolls) replace_dice(result);
     return result;
 }
 
@@ -1515,6 +1561,13 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
+
+    // We can't automatically detect dice rolls, it will mess up embedded tables,
+    // and will make HL portfolio files NOT display the basic damage dice (since it
+    // replaces each one with the result of the dice roll).
+
+    if (detect_html_dice_rolls) replace_dice(result);
+
     return result;
 }
 
@@ -1570,6 +1623,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         // No embedded HTML
         result = text;
     }
+    if (detect_dice_rolls) replace_dice(result);
     return result.trimmed();
 }
 
@@ -2695,7 +2749,9 @@ void toMarkdown(const XmlElement *root_elem,
                 bool create_nav_panel,
                 bool tag_for_each_prefix,
                 bool tag_for_each_suffix,
-                bool graph_connections)
+                bool graph_connections,
+                bool mark_dice_rolls,
+                bool mark_html_dice_rolls)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -2711,6 +2767,8 @@ void toMarkdown(const XmlElement *root_elem,
     create_suffix_tag = tag_for_each_suffix;
     image_max_width   = max_image_width;
     connections_as_graph = graph_connections;
+    detect_dice_rolls    = mark_dice_rolls;
+    detect_html_dice_rolls = mark_html_dice_rolls;
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
 

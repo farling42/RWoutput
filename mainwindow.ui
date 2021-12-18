@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>522</width>
-    <height>528</height>
+    <height>574</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -232,6 +232,29 @@ FILE</string>
               </property>
               <property name="checked">
                <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="diceRoller">
+              <property name="toolTip">
+               <string>Detect dice rolls in RW snippet text</string>
+              </property>
+              <property name="text">
+               <string>Mark Dice Rolls in snippets</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="diceRollerHtml">
+              <property name="toolTip">
+               <string>Detect dice rolls in Portfolio files and Embedded HTML files</string>
+              </property>
+              <property name="text">
+               <string>Mark Dice Rolls in HTML (por)</string>
               </property>
              </widget>
             </item>

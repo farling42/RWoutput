@@ -232,7 +232,9 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->createNavPanel->isChecked(),
                ui->tagForEachPrefix->isChecked(),
                ui->tagForEachSuffix->isChecked(),
-               ui->graphConnections->isChecked());
+               ui->graphConnections->isChecked(),
+               ui->diceRoller->isChecked(),
+               ui->diceRollerHtml->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

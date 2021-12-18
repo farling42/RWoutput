@@ -1,3 +1,11 @@
+# 4.6
+Add option to mark dice rolls with `dice: <expr>` (for Obsidian "Dice Roller" plug-in).
+
+There is a separate option for HTML files - this will do this work for HL portfolio and other embedded HTML files (such as statblocks).
+
+Note that Dice Roller replaces the dice expression with the result of a dice roll, so not so easy to read a creature's stat block.
+
+
 # 4.5
 Change all loops to use foreach so that memory allocation isn't performed.
 
