@@ -5,6 +5,8 @@ When putting in unsupported tags, include all the attributes on each tag.
 
 When handling nested tables, ensure white space is only collected from TD elements.
 
+Change TextStyle handling in decode_gumbo to work properly.
+
 # 4.4
 Fix indentation of nested lists. Numbered lists should have "1. " as a prefix not "+ "
 

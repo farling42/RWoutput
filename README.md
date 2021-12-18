@@ -1,5 +1,5 @@
 # RWoutput
-Tool to convert a Realm Works Output file into other formats.
+Tool to convert a Realm Works Output or Export file into other formats.
 
 ** NOTE: This tool will NEVER be able to export "protected" content, such as material sold on the Content Market. **
 
