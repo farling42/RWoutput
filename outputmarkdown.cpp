@@ -648,7 +648,7 @@ private:
     };
 };
 typedef QHash<QString,TextStyle> GumboStyles;
-static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString(), bool allowWhitespace=false);
+static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cssStyles, TextStyle &currentStyle, bool top=true, int nestedTableCount=0, const QString &listtype=QString(), bool allowWhitespace=false);
 static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name);
 
 
@@ -770,9 +770,9 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
             {
                 if (auto body = getGumboChild(output->root, "body"))
                 {
-                    GumboStyles styles;
+                    GumboStyles cssStyles;
                     TextStyle currentStyle;
-                    result += unpatch_gumbo(decode_gumbo(body, styles, currentStyle));
+                    result += unpatch_gumbo(decode_gumbo(body, cssStyles, currentStyle));
                 }
             }
             // Get GUMBO to release all the memory
@@ -1052,7 +1052,7 @@ static void finishGumboStyle(QString &result, const GumboNode *node, const Gumbo
  * @param node
  */
 
-static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &styles, TextStyle &currentStyle, const bool top, int nestedTableCount, const QString &listtype, const bool allowWhitespace)
+static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cssStyles, TextStyle &currentStyle, const bool top, int nestedTableCount, const QString &listtype, const bool allowWhitespace)
 {
     QString tag;
     QString result;
@@ -1090,11 +1090,11 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             // See what to put before the text
             if (tag == "p")
             {
-                TextStyle paraStyle;  // each paragraph should have its own style information
+                TextStyle top_style;  // each paragraph should have its own style information
                 QString paragraph;
-                startGumboStyle(paragraph, node, styles, paraStyle);
-                paragraph += decode_gumbo(node, styles, paraStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
-                paraStyle.finish(paragraph);
+                startGumboStyle(paragraph, node, cssStyles, top_style);
+                paragraph += decode_gumbo(node, cssStyles, top_style, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                top_style.finish(paragraph);
 
                 // Check for line with only formatting and white space!
                 static const QRegularExpression markup("[\\*~ ]+$", QRegularExpression::UseUnicodePropertiesOption);
@@ -1108,13 +1108,13 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             else if (tag == "b")
             {
                 result += "**";
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 swapSpace(result, "**");
             }
             else if (tag == "i")
             {
                 result += "*";
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 swapSpace(result, "*");
             }
             else if (tag == "hr")
@@ -1125,7 +1125,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             else if (tag == "a")
             {
                 QString href  = getGumboAttribute(node, "href");
-                QString label = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                QString label = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 result += createMarkdownLink(/*filename*/ href, /*label*/ label);
             }
             else if (tag == "img")
@@ -1157,7 +1157,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             else if (nestedTableCount==0 && tag == "table")
             {
                 // remove line break from last line
-                QString table = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount+1, listtype, /*allowWhitespace*/ false).trimmed();
+                QString table = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount+1, listtype, /*allowWhitespace*/ false).trimmed();
 
                 // Need to add |---|---| line to tell markdown that it is a table
                 int break1 = table.indexOf('\n');
@@ -1188,32 +1188,32 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
             }
             else if (nestedTableCount==1 && tag == "tr")
             {
-                QString row = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                QString row = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 // end of line for table row
                 result += row.trimmed() + " |\n";
             }
             else if (nestedTableCount==1 && tag == "td")
             {
                 // TD contains text directly, so allow whitespace within it
-                QString cell = decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                QString cell = decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
                 // TODO - do we need to detect double \n
                 result += "| " + cell.trimmed().replace(RW_LINE_BREAK,"<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
             }
             else if (nestedTableCount==1 && tag == "tbody")
             {
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
             }
             else if (tag == "span")
             {
-                startGumboStyle(result, node, styles, currentStyle);
+                startGumboStyle(result, node, cssStyles, currentStyle);
                 // some span are inside lists rather than paragraphs!
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
-                finishGumboStyle(result, node, styles, currentStyle);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                finishGumboStyle(result, node, cssStyles, currentStyle);
             }
             else if (tag == "sup" || tag == "sub")
             {
                 currentStyle.startStyleElement(result, tag);
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 currentStyle.finishStyleElement(result, tag);
             }
             else if (tag == "ul")
@@ -1228,7 +1228,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
                     // Ensure this sublist is a BULLET list
                     newlisttype.replace("1.", "-");
                 }
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
                 // Blank line after last line of nested list only
                 if (listtype.isEmpty()) result += newline;
             }
@@ -1244,20 +1244,20 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
                     // Ensure this sublist is a NUMBERED list
                     newlisttype.replace("-", "1.");
                 }
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, newlisttype, allowWhitespace);
                 // Blank line after last line of nested list only
                 if (listtype.isEmpty()) result += newline;
             }
             else if (tag == "li")
             {
-                result += listtype + decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
+                result += listtype + decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace);
                 // If this is the <li> after a nested list, then we might end up with too many \n.
                 if (!result.endsWith(newline)) result += newline;
             }
             else if (tag.length() == 2 && tag[0] == 'h' && tag[1].isDigit())
             {
                 result += QString(tag.midRef(1).toInt(),'#') + ' ';
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace).trimmed();
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, allowWhitespace).trimmed();
             }
             else
             {
@@ -1281,7 +1281,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &st
                     parts.append(QString("%1=\"%2\"").arg(attr->name).arg(attr->value));
                 }
                 result += "<" + parts.join(' ') + ">";
-                result += decode_gumbo(node, styles, currentStyle, /*top*/false, nestedTableCount, listtype, local_allowWhitespace);
+                result += decode_gumbo(node, cssStyles, currentStyle, /*top*/false, nestedTableCount, listtype, local_allowWhitespace);
                 result += "</" + tag + ">";
             }
             // end of GUMBO_NODE_ELEMENT
@@ -1377,7 +1377,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 
     // Read styles which are used in the statblock
     const GumboNode *style = head ? getGumboChild(head, "style") : nullptr;
-    GumboStyles styles = getStyles(style);
+    GumboStyles cssStyles = getStyles(style);
 
     result += "\n---\n## " + sntype;
     if (!use_fixed_title)
@@ -1386,7 +1386,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
         if (titlenode)
         {
             TextStyle currentStyle;
-            QString title = unpatch_gumbo(decode_gumbo(titlenode, styles, currentStyle));
+            QString title = unpatch_gumbo(decode_gumbo(titlenode, cssStyles, currentStyle));
             // Strip HL from name
             int pos = title.lastIndexOf(" - created with Hero Lab");
             if (pos >= 0) title.truncate(pos);
@@ -1399,7 +1399,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     dump_children("BODY", body);
 #endif
     TextStyle currentStyle;
-    result += unpatch_gumbo(decode_gumbo(body ? body : output->root, styles, currentStyle)) + newline;
+    result += unpatch_gumbo(decode_gumbo(body ? body : output->root, cssStyles, currentStyle)) + newline;
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
