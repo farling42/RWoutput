@@ -226,6 +226,7 @@ inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, cons
     return result;
 }
 
+
 static inline const QString mermaid_node_raw(const QString &name, const QString &label, bool internal_link=true)
 {
     QString result = name + "([\"" + label + "\"])";
@@ -309,6 +310,7 @@ static const QString write_meta_child(const QString &meta_name, const XmlElement
     return "**" + meta_name + ":** " + child->childString() + "\n\n";
 }
 
+
 static const QString write_head_meta(const XmlElement *root_elem)
 {
     QString result;
@@ -384,6 +386,7 @@ static inline QString build_tooltip(const QString &title, const QString &descrip
 }
 #endif
 
+
 static inline QString createMarkdownLink(const QString &filename, const QString &label, int max_width=-1)
 {
     Q_UNUSED(max_width)
@@ -391,6 +394,7 @@ static inline QString createMarkdownLink(const QString &filename, const QString 
     // The filename needs spaces replaced by URL syntax.
     return QString("[%1](%2)").arg(label.isEmpty() ? filename : label, QString(filename).replace(" ", "%20"));
 }
+
 
 static inline QString createWikilink(const QString &filename, const QString &label, int max_width=-1)
 {
@@ -401,6 +405,7 @@ static inline QString createWikilink(const QString &filename, const QString &lab
     else
         return QString("[[%1|%2%3]]").arg(filename, label, extra);
 }
+
 
 static inline QString createLink(const QString &filename, const QString &label, int max_width=-1)
 {
@@ -418,10 +423,12 @@ static inline QString internal_link(const QString &topic_id, const QString &labe
     return createLink(filename, label, max_width);
 }
 
+
 static inline QString topic_link(const XmlElement *topic)
 {
     return internal_link(topic->attribute("topic_id"), topic_full_name.value(topic));
 }
+
 
 static inline const QString getGumboAttribute(const GumboNode *node, const QString &name)
 {
@@ -725,10 +732,6 @@ private:
 };
 
 
-static const QString read_gumbo(const GumboNode *node, const GumboStyles &cssStyles);
-static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name);
-
-
 GumboStyles getStyles(const GumboNode *node)
 {
     GumboStyles result;
@@ -777,6 +780,54 @@ static const QString escape_bracket(const QString &input)
 }
 
 
+static const QString getTextChildren(const GumboNode *node, bool allowWhitespace)
+{
+    QString result;
+
+    switch (node->type)
+    {
+    case GUMBO_NODE_WHITESPACE:
+        if (!allowWhitespace) break;
+    case GUMBO_NODE_TEXT:
+    case GUMBO_NODE_CDATA:
+        result += QString(node->v.text.text);
+        break;
+
+    case GUMBO_NODE_ELEMENT:
+    {
+        const QString tag = gumbo_normalized_tagname(node->v.element.tag);
+        allowWhitespace = (tag=="p" || tag=="span");
+        GumboNode **children = reinterpret_cast<GumboNode**>(node->v.element.children.data);
+        for (unsigned count = node->v.element.children.length; count > 0; --count)
+        {
+            result += getTextChildren(*children++, allowWhitespace);
+        }
+    }
+        break;
+
+    default:
+        break;
+    }
+
+    return result;
+}
+
+
+static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name)
+{
+    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
+    for (unsigned count = parent->v.element.children.length; count > 0; --count)
+    {
+        const GumboNode *child = *children++;
+        if (child->type == GUMBO_NODE_ELEMENT &&
+                gumbo_normalized_tagname(child->v.element.tag) == name)
+        {
+            return child;
+        }
+    }
+    return nullptr;
+}
+
 /**
  * @brief textContent
  * Extract only the text elements from the given node tree (just like in JS Node::textContent)
@@ -786,71 +837,23 @@ static const QString escape_bracket(const QString &input)
 static const QString textContent(const QString &source)
 {
     // If no HTML, then simply return the original text.
-    if (source.indexOf(">") == -1) return source;
+    if (source.indexOf(">") < 0) return source;
 
-    // Get all the text that is between >...<
-    const QRegularExpression plaintext(">([^<]+)<");
     QString result;
-    result.reserve(1000);
-    QRegularExpressionMatchIterator i = plaintext.globalMatch(source);
-    while (i.hasNext())
-    {
-        QRegularExpressionMatch match = i.next();
-        result += match.captured(1);
+    GumboOutput *output = gumbo_parse(source.toUtf8());
+    if (output) {
+        if (output->root)
+        {
+            auto body = getGumboChild(output->root, "body");
+            if (body)
+                result = getTextChildren(body, false);
+            else
+                qWarning() << "textContent: No body found in" << source;
+        }
+        // Get GUMBO to release all the memory
+        gumbo_destroy_output(&kGumboDefaultOptions, output);
     }
     return result;
-}
-
-static const QString get_content_text(XmlElement *parent, const ExportLinks &links)
-{
-#if DEBUG_LEVEL > 4
-    qDebug() << "...write para-children";
-#endif
-    QString result;
-    result.reserve(1000);
-    if (!parent->xmlChild()) return "";
-
-    QString text = parent->xmlChild()->fixedText();
-    text.replace("&#xd;", "\n");    // Get to correct length for fixing links
-
-    // Now substitute any required links
-    foreach (const auto &link, links)
-    {
-        // Replace ONLY the text of the link, keeping the surrounding spans to handle formatting.
-        QString source = text.mid(link.start,link.length);
-        QString label  = textContent(source);
-        int pos = source.indexOf(label);
-        if (pos >= 0)
-            text.replace(link.start+pos, label.length(), escape_bracket(internal_link(link.target_id, label)));
-        else
-            // Failed to find the label, so replace everything (and just suffer the problems with formatting)
-            text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
-    }
-    // Now remove double links - TODO - do we still need this?
-    //text.replace("\n\n", "\n");
-
-    if (text.startsWith("<"))
-    {
-        GumboOutput *output = gumbo_parse(text.toUtf8());
-        if (output) {
-            if (output->root)
-            {
-                if (auto body = getGumboChild(output->root, "body"))
-                {
-                    GumboStyles cssStyles;
-                    result += read_gumbo(body, cssStyles);
-                }
-            }
-            // Get GUMBO to release all the memory
-            gumbo_destroy_output(&kGumboDefaultOptions, output);
-        }
-    }
-    else
-    {
-        // No embedded HTML
-        result = text;
-    }
-    return result.trimmed();
 }
 
 
@@ -1032,6 +1035,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     return result;
 }
 
+
 static inline QString tag_string(const QString &domain, const QString &label)
 {
     return validTag(domain) + '/' + validTag(label);
@@ -1053,6 +1057,7 @@ static QString tag_label(const XmlElement *tag_assign)
     }
     return QString();
 }
+
 
 static const QString getTags(const XmlElement *node, bool withnl=true)
 {
@@ -1114,6 +1119,8 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
     TextStyle original_style;
     bool original_set  = false;
     bool style_changed = false;
+    bool new_style_change=false;
+    int start_length;
 
     GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
     for (unsigned count = parent->v.element.children.length; count > 0; --count)
@@ -1180,24 +1187,38 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             TextStyle tag_style = inlineStyle(node, cssStyles);
             if (!tag_style.isEmpty())
             {
+                start_length = result.length();
                 if (!original_set)
                 {
                     original_style = styleManager.currentStyle();
                     original_set   = true;
                 }
                 styleManager.change(result, original_style + tag_style);
+                new_style_change=!style_changed;
                 style_changed=true;
             }
             else if (style_changed)
             {
                 styleManager.change(result, original_style);
                 style_changed=false;
+                new_style_change=false;
             }
 
             if (tag == "span")
             {
-                // some span are inside lists rather than paragraphs!
-                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                // Some span are inside lists rather than paragraphs!
+                // RW sometimes puts additional styling around individual spaces.
+                QString span = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, /*allowWhitespace*/ true);
+                if (new_style_change && span == QStringLiteral(" "))
+                {
+                    // new_style_change is so that we don't "cancel" a style change that is continuing from a previous span/element.
+                    // Get the style manager in sync for removing the formatting.
+                    styleManager.change(result, original_style);
+                    style_changed = false;
+                    // Remove the start/end styling from the result string.
+                    result.truncate(start_length);
+                }
+                result += span;
             }
             else if (tag == "br")
             {
@@ -1386,37 +1407,16 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
 }
 
 
-static inline QString unpatch_gumbo(const QString &input)
-{
-    // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
-    // but we should ignore RW_LINE_BREAK at the end of a line.
-    QString result = input;
-    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline).trimmed();
-}
-
-
 static inline const QString read_gumbo(const GumboNode *node, const GumboStyles &cssStyles)
 {
     TextStyleManager styleManager;
-    QString result = unpatch_gumbo(decode_gumbo(node, cssStyles, styleManager));
+    QString result = decode_gumbo(node, cssStyles, styleManager);
     styleManager.finish(result);
-    return result;
+    // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
+    // but we should ignore RW_LINE_BREAK at the end of a line.
+    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline).trimmed();
 }
 
-static const GumboNode *getGumboChild(const GumboNode *parent, const QString &name)
-{
-    GumboNode **children = reinterpret_cast<GumboNode**>(parent->v.element.children.data);
-    for (unsigned count = parent->v.element.children.length; count > 0; --count)
-    {
-        const GumboNode *child = *children++;
-        if (child->type == GUMBO_NODE_ELEMENT &&
-                gumbo_normalized_tagname(child->v.element.tag) == name)
-        {
-            return child;
-        }
-    }
-    return nullptr;
-}
 
 #ifdef DUMP_CHILDREN
 static void dump_children(const QString &from, const GumboNode *parent)
@@ -1510,6 +1510,67 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 }
 
 
+static const QString get_content_text(XmlElement *parent, const ExportLinks &links)
+{
+#if DEBUG_LEVEL > 4
+    qDebug() << "...write para-children";
+#endif
+    QString result;
+    result.reserve(1000);
+    if (!parent->xmlChild()) return "";
+
+    QString text = parent->xmlChild()->fixedText();
+    text.replace("&#xd;", "\n");    // Get to correct length for fixing links
+
+    // Now substitute any required links
+    foreach (const auto &link, links)
+    {
+        // Replace ONLY the text of the link, keeping the surrounding spans to handle formatting.
+        const QString source = text.mid(link.start,link.length);
+        const QString label  = textContent(source);
+        int pos = source.indexOf(label);
+        if (pos >= 0)
+            text.replace(link.start+pos, label.length(), escape_bracket(internal_link(link.target_id, label)));
+        else
+        {
+            //qDebug() << "textContent not found in" << source;
+            //qDebug() << "       - textContent =" << label;
+            // Failed to find the label, so replace everything (and just suffer the problems with formatting)
+            text.replace(link.start, link.length, escape_bracket(internal_link(link.target_id, label)));
+        }
+    }
+
+    if (text.startsWith("<"))
+    {
+        GumboOutput *output = gumbo_parse(text.toUtf8());
+        if (output) {
+            if (output->root)
+            {
+                if (auto body = getGumboChild(output->root, "body"))
+                {
+                    GumboStyles cssStyles;
+                    result += read_gumbo(body, cssStyles);
+                }
+            }
+            // Get GUMBO to release all the memory
+            gumbo_destroy_output(&kGumboDefaultOptions, output);
+        }
+
+        if (text.contains(QStringLiteral("recent difficulties")))
+        {
+            qDebug() << "\n\nSOURCE:" << text;
+            qDebug() << "\nRESULT: " << result;
+        }
+    }
+    else
+    {
+        // No embedded HTML
+        result = text;
+    }
+    return result.trimmed();
+}
+
+
 static inline const QString annotationText(const XmlElement *snippet, bool wrapped = true)
 {
     // No need to consider TextStyle, since this is called at the SNIPPET level, not the paragraph level
@@ -1563,6 +1624,7 @@ static inline QString canonicalTime(const QString &source)
     //     </calendar_map>
     // </calendar_map>
 }
+
 
 static inline QString gregorian(const QString &source)
 {
@@ -2214,10 +2276,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     }
 }
 
-/*
+/**
+ * @brief write_topic_to_index
  * Write entries into the INDEX file
+ * @param stream
+ * @param topic
+ * @param level
  */
-
 static void write_topic_to_index(QTextStream &stream, XmlElement *topic, int level)
 {
     stream << QString(level * 2, ' ') << "- " << topic_link(topic) << newline;
@@ -2584,6 +2649,7 @@ static void write_storyboard(const XmlElement *root_elem)
     }
 }
 
+
 static void read_structure(XmlElement *structure)
 {
     global_names.clear();
@@ -2695,4 +2761,5 @@ void toMarkdown(const XmlElement *root_elem,
     // Tidy up memory
     topic_full_name.clear();
     topic_filename.clear();
+    global_names.clear();
 }
