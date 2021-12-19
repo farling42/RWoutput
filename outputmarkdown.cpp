@@ -32,6 +32,7 @@
 #include <QApplication>
 #include <QStack>
 #include <QStyle>
+#include <QSettings>
 #include <QStaticText>
 #include <QTextStream>
 #include <future>
@@ -336,7 +337,7 @@ static const QString write_head_meta(const XmlElement *root_elem)
     QDateTime stamp = QDateTime::fromString(root_elem->attribute("export_date"), Qt::ISODate);
     result += "**Exported from Realm Works:** " + stamp.toString(QLocale::system().dateTimeFormat()) + "\n\n";
 
-    result += "**Created By:** RWOutput Tool v" + qApp->applicationVersion() + " on " + imported_date + "\n\n";
+    result += "**Created By:** " + qApp->applicationName() + " v" + qApp->applicationVersion() + " on " + imported_date + "\n\n";
 
     result += write_meta_child("Summary",      details, "summary");
     result += write_meta_child("Description",  details, "description");
