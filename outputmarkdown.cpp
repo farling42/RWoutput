@@ -2119,12 +2119,16 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     //
     startFile(stream);
 
+    QString basename = topic->attribute("public_name");
+    bool name_alias = (topic_filename.value(topic->attribute("topic_id")) != basename);
+
     // Aliases belong in the metadata at the start of the file
     auto aliases = topic->xmlChildren("alias");
-    if (!aliases.isEmpty())
+    if (!aliases.isEmpty() || name_alias)
     {
         QString true_name;
         stream << "Aliases:\n";
+        if (name_alias) stream << "  - " << basename << newline;
         foreach (const auto &alias, aliases)
         {
             QString name = alias->attribute("name");
@@ -2229,8 +2233,8 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         // Remove leading and trailing white space (including blank lines)
         // Replace two or more blank lines with just one blank line
         QString text = write_section(section, /*level*/ 1);
-        if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
-        if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
+        //if (text.contains("\u00a0")) qWarning() << "\nText contains non-break-space at pos "  << text.indexOf("\u00a0") << "\n" << text;
+        //if (text.contains("\u200b")) qWarning() << "\nText contains ZERO-width-space at pos " << text.indexOf("\u200b") << "\n" << text;
 
         stream << text;
     }
