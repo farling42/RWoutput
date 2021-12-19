@@ -1,6 +1,8 @@
 # 4.7
 If the note filename includes prefix and/or suffix, then add an alias into the note containing just the base name.
 
+Save the selected settings after an export/output, so that the same settings can be used when you next open the application.
+
 # 4.6
 Add option to mark dice rolls with `dice: <expr>` (for Obsidian "Dice Roller" plug-in).
 
