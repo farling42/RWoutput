@@ -1,4 +1,6 @@
 /* Auto-numbering of sections within topics (H1 = title, H2 = first section) */
+/*
+<--- Unreliable when scrolling down long pages, so don't do it by default
 body, h1 {
     counter-reset: rwh2counter;
 }
@@ -16,7 +18,7 @@ h4:before {
     content:  counter(rwh2counter) "." counter(rwh3counter) "." counter(rwh4counter) ".\0000a0\0000a0";
     counter-increment: rwh4counter;
 }
-
+*/
 /* Snippet Style */
 .RWCallout, .RWHandout, .RWFlavor, .RWRead_Aloud {
     padding: 3px;
