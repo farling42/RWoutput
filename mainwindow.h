@@ -54,6 +54,7 @@ private:
     QFile in_file;
     void setStatusText(const QString &text);
     int maxWidth();
+    void saveSettings();
 };
 
 #endif // MAINWINDOW_H

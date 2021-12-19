@@ -76,6 +76,15 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->separateTopicFiles, &QCheckBox::clicked, ui->indexOnEveryPage, &QCheckBox::setEnabled);
     ui->indexOnEveryPage->setEnabled(ui->separateTopicFiles->isChecked());
+
+    QSettings settings;
+    for (auto *widget : ui->centralWidget->findChildren<QCheckBox*>())
+    {
+        QVariant value = settings.value("checked/" + widget->objectName());
+        if (value.isValid()) widget->setChecked(value.toBool());
+    }
+    QVariant value = settings.value("image/maxWidth");
+    if (value.isValid()) ui->maxImageWidth->setText(value.toString());
 }
 
 MainWindow::~MainWindow()
@@ -83,6 +92,16 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+void MainWindow::saveSettings()
+{
+    QSettings settings;
+    for (auto *widget : ui->centralWidget->findChildren<QCheckBox*>())
+    {
+        settings.setValue("checked/" + widget->objectName(), widget->isChecked());
+    }
+    settings.setValue("image/maxWidth", ui->maxImageWidth->text());
+}
 
 int MainWindow::maxWidth()
 {
@@ -196,6 +215,7 @@ void MainWindow::on_saveHtml_clicked()
 
     setStatusText("XHTML file SAVE complete.");
     qApp->processEvents();
+    saveSettings();
 }
 
 void MainWindow::on_saveMarkdown_clicked()
@@ -238,6 +258,7 @@ void MainWindow::on_saveMarkdown_clicked()
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();
+    saveSettings();
 }
 
 void MainWindow::on_savePdf_clicked()
@@ -322,6 +343,7 @@ void MainWindow::on_print_clicked()
     doc.print(&printer);
 
     setStatusText("Print complete.");
+    saveSettings();
 }
 
 
@@ -354,19 +376,35 @@ void MainWindow::on_simpleHtml_clicked()
     outHtml4Subset(stream, root_element, maxWidth(), ui->revealMask->isChecked());
 
     setStatusText("Simple HTML4 SAVE complete.");
-
+    saveSettings();
 }
 
 void MainWindow::on_mapPins_clicked()
 {
+    QSettings settings;
+    QVariant value;
+
+    value = settings.value("pins/title");
+    if (value.isValid()) map_pin_title = value.toString();
+    value = settings.value("pins/description");
+    if (value.isValid()) map_pin_description = value.toString();
+    value = settings.value("pins/gmDirections");
+    if (value.isValid()) map_pin_gm_directions = value.toString();
+
     MapPinsDialog dialog(map_pin_title, map_pin_description, map_pin_gm_directions,
                          map_pin_title_default, map_pin_description_default, map_pin_gm_directions_default,
                          this);
     if (dialog.exec() == QDialog::Accepted)
     {
+        // Read values from the dialog
         map_pin_title = dialog.titleTemplate();
         map_pin_description = dialog.descriptionTemplate();
         map_pin_gm_directions = dialog.gmDirectionsTemplate();
+
+        // Save for next time
+        settings.setValue("pins/title",        map_pin_title);
+        settings.setValue("pins/description",  map_pin_description);
+        settings.setValue("pins/gmDirections", map_pin_gm_directions);
     }
 }
 
@@ -477,4 +515,5 @@ void MainWindow::on_saveFgMod_clicked()
 
     setStatusText("MOD file SAVE complete.");
     qApp->processEvents();
+    saveSettings();
 }
