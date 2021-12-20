@@ -2,6 +2,9 @@
     <qresource prefix="/">
         <file>theme.css</file>
         <file>scripts.js</file>
+    </qresource>
+    <qresource prefix="/markdown">
         <file>realmworks.css</file>
+        <file>realmworks-admonition.css</file>
     </qresource>
 </RCC>

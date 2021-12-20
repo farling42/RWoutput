@@ -295,27 +295,30 @@ static bool sort_topics(const XmlElement *left, const XmlElement *right)
 static void write_support_files()
 {
     // Use the files that are stored in the resource file
-    QStringList files{"realmworks.css"};
+    //QStringList files{"realmworks.css"};
 
     const QDir snippetsDir(".obsidian/snippets/");
     if (!snippetsDir.exists()) QDir::current().mkpath(snippetsDir.path());
 
-    foreach (const auto &filename, files)
+    foreach (const auto &fileinfo, QDir(":/markdown/").entryInfoList({"*.css"}))
     {
+        QString pathname = fileinfo.absoluteFilePath();
+        QString filename = fileinfo.fileName();
+
         // Put file into snippets directory
-        QFile destfile(snippetsDir.filePath(filename));
+        QFile destfile{snippetsDir.filePath(filename)};
         if (destfile.exists()) destfile.remove();
-        QFile::copy(":/" + filename, destfile.fileName());
+
         // Qt copies the file and makes it read-only!
+        QFile::copy(pathname, destfile.fileName());
         destfile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
 
         // Put a copy into the base directory too, for convenience.
-        QFile basefile(QDir::current().filePath(filename));
+        QFile basefile{QDir::current().filePath(filename)};
         if (basefile.exists()) basefile.remove();
-        QFile::copy(":/" + filename, basefile.fileName());
         // Qt copies the file and makes it read-only!
+        QFile::copy(pathname, basefile.fileName());
         basefile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
-
     }
 }
 
