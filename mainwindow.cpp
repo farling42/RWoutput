@@ -254,7 +254,9 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->tagForEachSuffix->isChecked(),
                ui->graphConnections->isChecked(),
                ui->diceRoller->isChecked(),
-               ui->diceRollerHtml->isChecked());
+               ui->diceRollerHtml->isChecked(),
+               ui->createStatblocks->isChecked(),
+               ui->addAdmonition->isChecked());
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

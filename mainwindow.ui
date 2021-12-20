@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>522</width>
-    <height>574</height>
+    <height>620</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -255,6 +255,26 @@ FILE</string>
               </property>
               <property name="text">
                <string>Mark Dice Rolls in HTML (por)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="createStatblocks">
+              <property name="toolTip">
+               <string>Creates ```statblock in the output</string>
+              </property>
+              <property name="text">
+               <string>Create Statblocks from Portfolios</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="addAdmonition">
+              <property name="toolTip">
+               <string>Create YAML blocks for Admonition blocks for GM Directions &amp; non-normal snippet styles</string>
+              </property>
+              <property name="text">
+               <string>Use Admonition for GM Dir &amp;&amp; Styles</string>
               </property>
              </widget>
             </item>

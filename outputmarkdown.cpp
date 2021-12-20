@@ -66,6 +66,8 @@ static int  gumbofilenumber = 0;
 static bool connections_as_graph=true;
 static bool detect_dice_rolls=false;
 static bool detect_html_dice_rolls=false;
+static bool create_statblocks=false;
+static bool use_admonition=false;
 
 #undef DUMP_CHILDREN
 
@@ -112,6 +114,8 @@ struct ExportLink
     int start, length;
 };
 typedef QList<ExportLink> ExportLinks;
+static ExportLinks NO_LINKS;
+
 void sortLinks(ExportLinks &list)
 {
     // Get entries in order starting with HIGHEST start, and proceeding to LOWEST start.
@@ -1512,6 +1516,314 @@ static void dump_children(const QString &from, const GumboNode *parent)
 #endif
 
 
+static inline QString stat(XmlElement *node, const QString &prefix, const QString &field, const QString &attribute=QString())
+{
+    if (!field.isEmpty())
+    {
+        const QStringList parts = field.split("/");
+        for (auto &part: parts)
+        {
+            const QStringList bits = part.split("+");
+            if (bits.length() < 3)
+                node = node->xmlChild(part);
+            else
+            {
+                // element+attribute+value
+                // find version of <element> with <attribute> set to <value>
+                const QString &elem = bits[0];
+                const QString &attr = bits[1];
+                const QString &aval = bits[2];
+                auto children = node->xmlChildren(elem);
+                node = nullptr;
+                foreach (auto choice, children)
+                {
+                    if (choice->attribute(attr) == aval)
+                    {
+                        node = choice;
+                        break;
+                    }
+                }
+            }
+            if (!node) return QString();
+        }
+    }
+
+    QString result = attribute.isEmpty() ? node->fixedText() : node->attribute(attribute);
+    if (!result.isEmpty()) result.prepend(prefix);
+    return result;
+}
+
+static const QString get_content_text(XmlElement *parent, const ExportLinks &links, bool dice=true);
+
+static inline QString quotes(const QString &value)
+{
+    return '"' + value + '"';
+}
+static inline QString stattext(XmlElement *node)
+{
+    QString value = get_content_text(node, NO_LINKS, false).trimmed();
+    value.replace(QRegExp("[\n]+"), "\\n");
+    return quotes(value);
+}
+
+
+static const QString write_5e_statblock(const QByteArray &constxml)
+{
+    qDebug() << "\nwrite_5e_statblock:\n" << QString::fromUtf8(constxml) << newline;
+    QString result;
+    QString temp;
+
+    QByteArray xml(constxml);   // convert from const to non-const
+    QBuffer buffer(&xml);
+    if (!buffer.open(QBuffer::ReadOnly))
+    {
+        qWarning() << "write_5e_statblock: failed to open XML string buffer";
+        return QString();
+    }
+    XmlElement *tree = XmlElement::readTree(&buffer);
+    if (!tree)
+    {
+        qWarning() << "write_5e_statblock: failed to parse XML in string buffer";
+        return QString();
+    }
+
+    XmlElement *character = tree->findChild<XmlElement*>("character");
+    if (!character)
+    {
+        qWarning() << "write_5e_statblock: failed to find <character> in XML string buffer";
+        return QString();
+    }
+
+    result += stat(character, "name: ", QString(), "name") + newline;
+    result += stat(character, "race: ", "race", "displayname") + newline;
+    result += stat(character, "type: ", "types/type", "name") + newline;
+    result += stat(character, "subtype: ", "subrace", "name") + newline;
+    result += stat(character, "alignment: ", "alignment", "name") + newline;
+    result += stat(character, "ac: ", "armorclass", "ac") + newline;
+    result += stat(character, "hp: ", "health", "hitpoints") + newline;
+    result += stat(character, "hit_dice: ", "health", "hitdice") + newline;
+    result += stat(character, "speed: \"", "movement/speed", "value") + '"' + newline;
+    //
+    if (character->xmlChild("abilityscores"))
+    {
+        // D&D 5E
+        result +=
+            stat(character, "stats: ", "abilityscores/abilityscore+name+Strength/abilvalue", "text") +
+            stat(character, " ", "abilityscores/abilityscore+name+Dexterity/abilvalue", "text") +
+            stat(character, " ", "abilityscores/abilityscore+name+Constitution/abilvalue", "text") +
+            stat(character, " ", "abilityscores/abilityscore+name+Intelligence/abilvalue", "text") +
+            stat(character, " ", "abilityscores/abilityscore+name+Wisdom/abilvalue", "text") +
+            stat(character, " ", "abilityscores/abilityscore+name+Charisma/abilvalue", "text") + newline;
+        result += "saves:" +
+            stat(character, "\n    - Str: ", "abilityscores/abilityscore+name+Strength/savingthrow", "text") +
+            stat(character, "\n    - Dex: ", "abilityscores/abilityscore+name+Dexterity/savingthrow", "text") +
+            stat(character, "\n    - Con: ", "abilityscores/abilityscore+name+Constitution/savingthrow", "text") +
+            stat(character, "\n    - Int: ", "abilityscores/abilityscore+name+Intelligence/savingthrow", "text") +
+            stat(character, "\n    - Wis: ", "abilityscores/abilityscore+name+Wisdom/savingthrow", "text") +
+            stat(character, "\n    - Cha: ", "abilityscores/abilityscore+name+Charisma/savingthrow", "text") + newline;
+    }
+    else
+    {
+        // Pathfinder
+        result +=
+            stat(character, "stats: ", "attributes/attribute+name+Strength/attrvalue", "modified") +
+            stat(character, " ", "attributes/attribute+name+Dexterity/attrvalue", "modified") +
+            stat(character, " ", "attributes/attribute+name+Constitution/attrvalue", "modified") +
+            stat(character, " ", "attributes/attribute+name+Intelligence/attrvalue", "modified") +
+            stat(character, " ", "attributes/attribute+name+Wisdom/attrvalue", "modified") +
+            stat(character, " ", "attributes/attribute+name+Charisma/attrvalue", "modified") + newline;
+        result += "saves:" +
+            stat(character, "\n    - Con: ", "saves/save+abbr+Fort", "save") +
+            stat(character, "\n    - Dex: ",  "saves/save+abbr+Ref", "save") +
+            stat(character, "\n    - Wis: ", "saves/save+abbr+Will", "save") + newline;
+    }
+
+    if (auto parent = character->xmlChild("skills"))
+    {
+        result += "skillsaves:" + newline;
+        for (auto skill : parent->xmlChildren("skill"))
+        {
+            QString value = skill->attribute("value");
+            if (value.front() != '-') value.prepend('+');
+            result += "    - " + skill->attribute("name") + ": " + value + newline;
+        }
+    }
+
+    temp = stat(character, "", "damagevulnerabilities", "text");
+    if (!temp.isEmpty()) result += "damage_vulnerabilities:" + temp + newline;
+
+    temp = stat(character, "", "damageresistances", "text");
+    if (!temp.isEmpty()) result += "damage_resistances:" + temp + newline;
+
+    temp = stat(character, "", "damageimmunities", "text");
+    if (!temp.isEmpty()) result += "damage_immunities:" + temp + newline;
+
+    temp = stat(character, "", "conditionimmunities", "text");
+    if (!temp.isEmpty()) result += "condition_immunities:" + temp + newline;
+
+    QStringList senses;
+    if (auto parent = character->xmlChild("senses"))
+        foreach (auto sense, parent->xmlChildren())
+        {
+            senses.append(sense->attribute("name"));
+        }
+    if (senses.length() > 0) result += "senses: " + quotes(senses.join(", ")) + newline;
+
+    QStringList languages;
+    if (auto parent = character->xmlChild("languages"))
+        foreach (auto lang, parent->xmlChildren())
+        {
+            languages.append(lang->attribute("name"));
+        }
+    if (!languages.isEmpty()) result += "languages: " + languages.join(", ") + newline;
+
+    temp = stat(character, "cr: ", "challengerating", "value") + newline;
+
+    // spellclasses/spellclass[name="Rogue" spells="Spontaneous" maxspelllevel="1" cantripcount="2" spellcount="0"]
+    // spellslots/spellslot[name="1st" count="2" used="0"]
+    // cantrips/spell[name="Mage Hand" class="Rogue" casttime="1 action" range="30 feet" duration="1 minute" dc="12" casterlevel="1"]
+    // spellsknown/spell[name="Counterspell" level="3rd" class="Rogue" casttime="1 reaction" range="60 feet" duration="" dc="12" casterlevel="1" componenttext="Somatic" schooltext="Abjuration" castsleft="0" spontaneous="yes"]
+    // -->
+    // spells:
+    // - The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared
+    // - Cantrips (at will): fire bolt, light, mage hand, prestidigitation, shocking grasp
+    // - 1st level (4 slots): detect magic, identify, mage armor*, magic missile
+    // - 2nd level (3 slots): detect thoughts, mirror image, misty step
+    QMultiMap<QString,QString> spellnames;
+    QMap<QString,QString> spellslots;
+    if (auto parent = character->xmlChild("spellslots"))
+        foreach (auto slot, parent->xmlChildren("spellslot"))
+        {
+            spellslots.insert(slot->attribute("name"), slot->attribute("count"));
+        }
+    else if (auto parent = character->xmlChild("spellclasses")) // pathfinder
+        foreach (auto spclass, parent->xmlChildren("spellclass"))
+        {
+            foreach (auto splevel, spclass->xmlChildren("spelllevel"))
+            {
+                QString casts = splevel->attribute("maxcasts");
+                if (!casts.isEmpty())    // 0th level don't have casts
+                    spellslots.insert(splevel->attribute("level"), casts);
+            }
+        }
+
+    if (auto parent = character->xmlChild("cantrips"))
+        foreach (auto spell, parent->xmlChildren("spell"))
+        {
+            spellnames.insert(0, spell->attribute("name"));
+        }
+    if (auto parent = character->xmlChild("spellsknown"))
+        foreach (auto spell, parent->xmlChildren("spell"))
+        {
+            spellnames.insert(spell->attribute("level"), spell->attribute("name"));
+        }
+    if (!spellnames.isEmpty())
+    {
+        result += "spells:\n";
+        foreach (auto level, spellnames.uniqueKeys())
+        {
+            QString count = spellslots.value(level);
+            if (count.isEmpty()) count = "at will";
+            QString lvl = (level == 0) ? "Cantrip" : (level + " level");
+            result += "    - " + lvl + " (" + count + "): " + spellnames.values(level).join(", ") + newline;
+        }
+    }
+
+
+
+    //  spells:
+    //      - <description>
+    //      - <spell level>: <spell-list>
+
+
+    //  traits:
+    //      - [<trait-name>, <trait-description>]
+    //      - ...
+
+    if (auto parent = character->xmlChild("otherspecials"))
+    {
+        result += "traits:" + newline;
+        foreach (auto trait, parent->xmlChildren("special"))
+        {
+            result += "    - [" + quotes(trait->attribute("name")) + ", " + stattext(trait->xmlChild("description")) + ']' + newline;
+        }
+    }
+
+    //  actions:
+    //      - [<trait-name>, <trait-description>]
+    //      - ...
+    result += "actions:" + newline;
+    if (auto parent = character->xmlChild("melee"))
+        foreach (auto melee, parent->xmlChildren("weapon"))
+        {
+            result += "    - [" + melee->attribute("name") + ", " + melee->attribute("attack") + " " + melee->attribute("damage") + ']' + newline;
+        }
+    if (auto parent = character->xmlChild("ranged"))
+        foreach (auto melee, parent->xmlChildren("weapon"))
+        {
+            result += "    - [" + melee->attribute("name") + ", " + melee->attribute("attack") + " " + melee->attribute("damage") + ']' + newline;
+        }
+
+    //  legendary_actions:
+    //      - [<legendary_actions-name>, <legendary_actions-description>]
+    //      - ...
+
+
+    //  reactions:
+    //      - [<reaction-name>, <reaction-description>]
+    //      - ...
+
+
+#if 0
+name: string
+size: string
+type: string
+subtype: string
+alignment: string
+ac: number
+hp: number
+hit_dice: string
+speed: string
+stats: [number, number, number, number, number, number]
+fage_stats: [number, number, number, number, number, number, number, number, number]
+saves:
+    - <ability-score>: number
+skillsaves:
+    - <skill-name>: number
+damage_vulnerabilities: string
+damage_resistances: string
+damage_immunities: string
+condition_immunities: string
+senses: string
+languages: string
+cr: number
+spells:
+    - <description>
+    - <spell level>: <spell-list>
+traits:
+    - [<trait-name>, <trait-description>]
+    - ...
+actions:
+    - [<trait-name>, <trait-description>]
+    - ...
+legendary_actions:
+    - [<legendary_actions-name>, <legendary_actions-description>]
+    - ...
+reactions:
+    - [<reaction-name>, <reaction-description>]
+    - ...
+#endif
+
+    // Put the statblock wrapper on the result
+    if (!result.isEmpty())
+    {
+        result.prepend("```statblock\n");
+        result.append("```\n");
+    }
+    return result;
+}
+
+
 static const QString write_html(bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
     // Put the children of the BODY into this frame.
@@ -1573,7 +1885,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 }
 
 
-static const QString get_content_text(XmlElement *parent, const ExportLinks &links)
+static const QString get_content_text(XmlElement *parent, const ExportLinks &links, bool dice /*=true*/)
 {
 #if DEBUG_LEVEL > 4
     qDebug() << "...write para-children";
@@ -1624,7 +1936,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         // No embedded HTML
         result = text;
     }
-    if (detect_dice_rolls) replace_dice(result);
+    if (dice && detect_dice_rolls) replace_dice(result);
     return result.trimmed();
 }
 
@@ -1748,26 +2060,55 @@ static const QString write_snippet(XmlElement *snippet)
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
         QString gmtext = get_content_text(gm_directions, gmlinks);
-        gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
-        result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>" + newline;
+        if (use_admonition)
+        {
+            result += "```ad-warning\ntitle: GM Directions\n" + gmtext + "\n```\n";
+        }
+        else
+        {
+            gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
+            result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>" + newline;
+        }
     }
 
     // Possibly set a SPAN on the main snippet, for style and veracity
-    QStringList classes;
-    QStringList titles;
-    if (!sn_style.isEmpty())
+    if (use_admonition)
     {
-        classes.append(QString("RW%1").arg(sn_style));
-        titles.append(QString("Style: %1").arg(sn_style));
+        if (!sn_style.isEmpty())
+        {
+            if (sn_style == "Read_Aloud")
+                result += "```ad-note\ntitle: Read-Aloud\n";
+            else if (sn_style == "Flavor")
+                result += "```ad-tip\ntitle: Flavor\n";
+            else if (sn_style == "Callout")
+                result += "```ad-quote\ntitle: Callout\n";
+            else if (sn_style == "Handout")     // Message style
+                result += "```ad-warning\ntitle: Message\n";
+            else
+            {
+                qWarning() << "Unknown style for snippet:" << sn_style;
+                sn_style = QString();  // not a supported style
+            }
+        }
     }
-    if (!sn_veracity.isEmpty())
+    else
     {
-        classes.append(QString("RWveracity-%1").arg(sn_veracity));
-        titles.append(QString("Veracity: %1").arg(sn_veracity));
+        QStringList classes;
+        QStringList titles;
+        if (!sn_style.isEmpty())
+        {
+            classes.append(QString("RW%1").arg(sn_style));
+            titles.append(QString("Style: %1").arg(sn_style));
+        }
+        if (!sn_veracity.isEmpty())
+        {
+            classes.append(QString("RWveracity-%1").arg(sn_veracity));
+            titles.append(QString("Veracity: %1").arg(sn_veracity));
+        }
+        QString title;
+        if (!titles.isEmpty()) title = QString(" title=\"%1\"").arg(titles.join(", "));
+        if (!classes.isEmpty()) result += "<span class=\"" + classes.join(" ") + '"' + title + '>';
     }
-    QString title;
-    if (!titles.isEmpty()) title = QString(" title=\"%1\"").arg(titles.join(", "));
-    if (!classes.isEmpty()) result += "<span class=\"" + classes.join(" ") + '"' + title + '>';
 
     //
     // The rest of the processing depends on the snippet type
@@ -1810,7 +2151,17 @@ static const QString write_snippet(XmlElement *snippet)
                         // Need to convert this HTML into markup
                         for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
                         {
-                            if (zip.getCurrentFileName().startsWith("statblocks_html/"))
+                            if (create_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
+                            {
+                                QuaZipFile file(&zip);
+                                if (!file.open(QuaZipFile::ReadOnly))
+                                    qWarning() << "Failed to open XML file from zip: " << zip.getCurrentFileName();
+                                else
+                                {
+                                    result += write_5e_statblock(file.readAll());
+                                }
+                            }
+                            else if (zip.getCurrentFileName().startsWith("statblocks_html/"))
                             {
                                 QuaZipFile file(&zip);
                                 if (!file.open(QuaZipFile::ReadOnly))
@@ -1954,6 +2305,11 @@ static const QString write_snippet(XmlElement *snippet)
             result += hlabel(snippetName(snippet)) + tags + annotationText(snippet) + endsnippet;
     }
     // Hybrid_Tag
+
+    if (use_admonition && !sn_style.isEmpty())
+    {
+        result += "```\n";
+    }
 
     return result;
 }
@@ -2764,7 +3120,9 @@ void toMarkdown(const XmlElement *root_elem,
                 bool tag_for_each_suffix,
                 bool graph_connections,
                 bool mark_dice_rolls,
-                bool mark_html_dice_rolls)
+                bool mark_html_dice_rolls,
+                bool do_statblocks,
+                bool add_admonition)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -2782,6 +3140,9 @@ void toMarkdown(const XmlElement *root_elem,
     connections_as_graph = graph_connections;
     detect_dice_rolls    = mark_dice_rolls;
     detect_html_dice_rolls = mark_html_dice_rolls;
+    create_statblocks = do_statblocks;
+    use_admonition = add_admonition;
+
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
 

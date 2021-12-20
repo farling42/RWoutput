@@ -41,6 +41,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool tag_for_each_suffix,
                 bool graph_connections,
                 bool mark_dice_rolls,
-                bool mark_html_dice_rolls);
+                bool mark_html_dice_rolls,
+                bool do_statblocks,
+                bool add_admonition);
 
 #endif // OUTPUTMARKDOWN_H
