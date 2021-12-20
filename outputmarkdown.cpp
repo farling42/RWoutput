@@ -1822,12 +1822,20 @@ static const QString write_snippet(XmlElement *snippet)
                                         qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
                                     else
                                     {
+#if 0
+                                        // THIS WORKS FOR PATHFINDER GENERATED FILES,
+                                        // BUT NOT FOR SOME OTHER GAME SYSTEMS (WHERE THEY HAVE STATS ON A SINGLE LINE BETWEEN TWO PARALLEL LINES)
                                         // Replace section headers in portfolio HTML with proper section header.
                                         // Ensure other line breaks have a blank line in front of them.
-                                        // Ensure any --- marker has a blank line in front of it (don't add another if one already there!)
                                         static const QRegularExpression header("\n---\n([^\n]+)\n---\n", QRegularExpression::UseUnicodePropertiesOption);
+                                        body.replace(header, "\n\n### \\1\n");
+#endif
+
+                                        // Ensure any --- marker has a blank line in front of it (don't add another if one already there!)
                                         static const QRegularExpression line("([^\n])\n---\n", QRegularExpression::UseUnicodePropertiesOption);
-                                        result += body.replace(header, "\n\n### \\1\n").replace(line, "\\1\n\n---\n");
+                                        body.replace(line, "\\1\n\n---\n");
+
+                                        result += body;
                                     }
                                 }
                             }

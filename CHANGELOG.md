@@ -1,7 +1,11 @@
 # 4.7
+Don't auto-number sections (which was added in 4.3).
+
 If the note filename includes prefix and/or suffix, then add an alias into the note containing just the base name.
 
 Save the selected settings after an export/output, so that the same settings can be used when you next open the application.
+
+Revert the change made in 4.4 to have --- / name / --- on three lines in an HL portfolio file be converted into a section header, since it works for Pathfinder files but not for some other game systems!
 
 # 4.6
 Add option to mark dice rolls with `dice: <expr>` (for Obsidian "Dice Roller" plug-in).
