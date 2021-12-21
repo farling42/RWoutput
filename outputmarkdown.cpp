@@ -1479,7 +1479,7 @@ static inline const QString read_gumbo(const GumboNode *node, const GumboStyles 
     styleManager.finish(result);
     // GUMBO puts "<br>" in, which need to be "\n" to work with markdown,
     // but we should ignore RW_LINE_BREAK at the end of a line.
-    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline).trimmed();
+    return result.replace(RW_LINE_BREAK + newline, newline).replace(RW_LINE_BREAK, newline);
 }
 
 
@@ -1933,7 +1933,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
         const GumboNode *titlenode = head ? getGumboChild(head, "title") : nullptr;
         if (titlenode)
         {
-            QString title = read_gumbo(titlenode, cssStyles);
+            QString title = read_gumbo(titlenode, cssStyles).trimmed();
 
             // Strip HL from name
             int pos = title.lastIndexOf(" - created with Hero Lab");
@@ -1946,7 +1946,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 #ifdef DUMP_CHILDREN
     dump_children("BODY", body);
 #endif
-    result += read_gumbo(body ? body : output->root, cssStyles) + newline;
+    result += read_gumbo(body ? body : output->root, cssStyles).trimmed() + newline;
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
@@ -2013,7 +2013,8 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         result = text;
     }
     if (dice && detect_dice_rolls) replace_dice(result);
-    return result.trimmed();
+
+    return result;
 }
 
 
@@ -2025,7 +2026,7 @@ static inline const QString annotationText(const XmlElement *snippet, bool wrapp
 
     // Remove newline from either end of paragraph
     static const ExportLinks nolinks;
-    QString result = get_content_text(annotation, nolinks);
+    QString result = get_content_text(annotation, nolinks).trimmed();
     result.replace("&#xd;\n","\n");
     if (!wrapped)
         return result;
@@ -2135,7 +2136,7 @@ static const QString write_snippet(XmlElement *snippet)
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
-        QString gmtext = get_content_text(gm_directions, gmlinks);
+        QString gmtext = get_content_text(gm_directions, gmlinks).trimmed();
         if (use_admonition_gmdir)
         {
             result += "```ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + "\n```\n";
@@ -2193,7 +2194,7 @@ static const QString write_snippet(XmlElement *snippet)
     {
         // child is either <contents> or <gm_directions> or both
         if (auto contents = snippet->xmlChild("contents"))
-            result += get_content_text(contents, links) + newline;
+            result += get_content_text(contents, links).trimmed() + newline;
 
         // Multi_Line has no annotation
         result += getTags(snippet) + endsnippet;
@@ -2201,7 +2202,13 @@ static const QString write_snippet(XmlElement *snippet)
     else if (sn_type == "Labeled_Text")
     {
         if (auto contents = snippet->xmlChild("contents"))
-            result += hlabel(snippetName(snippet)) + get_content_text(contents, links) + newline;
+        {
+            QString text = get_content_text(contents, links);
+            result += hlabel(snippetName(snippet));
+            // If content starts with \n then it might be a table, so add an extra blank line
+            if (text.startsWith("\n")) result += "\n\n";
+            result += text.trimmed() + newline;
+        }
 
         // Labeled_Text has no annotation
         result += getTags(snippet) + endsnippet;
