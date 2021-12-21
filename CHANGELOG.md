@@ -6,6 +6,8 @@ Allow Admonition plug-in to be enabled separately for GM Directions and RW snipp
 Any Labeled_Text snippets which start with a table will now be formatted properly (The table will be put on its own line with a blank line between it and the snippet's label)
 
 Statblock improvements:
+- Get STATS appearing properly.
+- If Dice Roller is enabled, then set flag for 5e-statblock to do the dice replacements (in 5e-statblock version 2).
 - only include Saves and Skills which aren't the same as the base stat modifier.
 - Always put Passive Perception into Senses, and Perception into the Skills line (even if same bonus as stat).
 - Always put in Languages, using "--" if no languages are defined.
