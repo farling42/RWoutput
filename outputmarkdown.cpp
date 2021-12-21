@@ -1564,8 +1564,10 @@ static inline QString quotes(const QString &value)
 {
     return '"' + value + '"';
 }
+
 static inline QString stattext(XmlElement *node)
 {
+    // Disable dice roll substitution in the text (until the 5e-statblock plugin supports it)
     QString value = get_content_text(node, NO_LINKS, false).trimmed();
     value.replace(QRegExp("[\n]+"), "\\n");
     return value;
@@ -1960,7 +1962,15 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
     return result;
 }
 
-
+/**
+ * @brief get_content_text
+ * Decodes the HTML contained in the specified @parent.
+ * The result is not trimmed() so that tables can be handled properly in Labeled_Text snippets.
+ * @param parent
+ * @param links
+ * @param dice
+ * @return
+ */
 static const QString get_content_text(XmlElement *parent, const ExportLinks &links, bool dice /*=true*/)
 {
 #if DEBUG_LEVEL > 4
