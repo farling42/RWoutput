@@ -1,3 +1,6 @@
+# 4.9
+Make decoding of Portfolios optional.
+
 # 4.8
 Add option to generate ADMONITION blocks for GM Directions as well as RW styles (Read-Aloud, Flavor, Callout and Message).
 

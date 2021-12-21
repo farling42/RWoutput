@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>522</width>
-    <height>620</height>
+    <width>532</width>
+    <height>643</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -259,12 +259,25 @@ FILE</string>
              </widget>
             </item>
             <item>
-             <widget class="QCheckBox" name="createStatblocks">
+             <widget class="QCheckBox" name="decodeStatblocks">
               <property name="toolTip">
-               <string>Creates ```statblock in the output</string>
+               <string>Read the HTML statblock from POR files and put inline into Notes</string>
               </property>
               <property name="text">
-               <string>Create Statblocks from Portfolios</string>
+               <string>Show Portfolio statblock inline</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="create5EStatblocks">
+              <property name="toolTip">
+               <string>Converts the XML in the Portfolio into YAML suitable for Obsidian's 5E-STATBLOCK plugin</string>
+              </property>
+              <property name="text">
+               <string>Use 5E-Statblocks plugin for Portfolios</string>
               </property>
              </widget>
             </item>
@@ -400,7 +413,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>522</width>
+     <width>532</width>
      <height>21</height>
     </rect>
    </property>

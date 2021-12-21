@@ -255,7 +255,8 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->graphConnections->isChecked(),
                ui->diceRoller->isChecked(),
                ui->diceRollerHtml->isChecked(),
-               ui->createStatblocks->isChecked(),
+               ui->decodeStatblocks->isChecked(),
+               ui->create5EStatblocks->isChecked(),
                ui->addAdmonition->isChecked());
 
     setStatusText("Markdown file SAVE complete.");

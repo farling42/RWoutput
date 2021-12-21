@@ -66,7 +66,8 @@ static int  gumbofilenumber = 0;
 static bool connections_as_graph=true;
 static bool detect_dice_rolls=false;
 static bool detect_html_dice_rolls=false;
-static bool create_statblocks=false;
+static bool create_statblocks=true;
+static bool create_5e_statblocks=false;
 static bool use_admonition=false;
 
 #undef DUMP_CHILDREN
@@ -2214,56 +2215,60 @@ static const QString write_snippet(XmlElement *snippet)
                     result += write_ext_object(ext_object->attribute("name"), contents->byteData(), asset->attribute("filename"), annotationText(snippet, false));
                     result += getTags(snippet);
 
-                    // Put in markers for statblock
-                    QByteArray store = contents->byteData();
-                    QBuffer buffer(&store);
-                    QuaZip zip(&buffer);
-                    if (zip.open(QuaZip::mdUnzip))
+                    if (create_5e_statblocks || create_statblocks)
                     {
-                        // Need to convert this HTML into markup
-                        for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
+                        // Put in markers for statblock
+                        QByteArray store = contents->byteData();
+                        QBuffer buffer(&store);
+                        QuaZip zip(&buffer);
+                        if (zip.open(QuaZip::mdUnzip))
                         {
-                            if (create_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
+                            // Need to convert this HTML into markup
+                            for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
                             {
-                                QuaZipFile file(&zip);
-                                if (!file.open(QuaZipFile::ReadOnly))
-                                    qWarning() << "Failed to open XML file from zip: " << zip.getCurrentFileName();
-                                else
+                                if (create_5e_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
                                 {
-                                    result += write_5e_statblock(file.readAll());
-                                }
-                            }
-                            else if (zip.getCurrentFileName().startsWith("statblocks_html/"))
-                            {
-                                QuaZipFile file(&zip);
-                                if (!file.open(QuaZipFile::ReadOnly))
-                                    qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
-                                else
-                                {
-                                    QString body = write_html(false, sn_type, file.readAll());
-                                    if (body.isEmpty())
-                                        qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
+                                    QuaZipFile file(&zip);
+                                    if (!file.open(QuaZipFile::ReadOnly))
+                                        qWarning() << "Failed to open XML file from zip: " << zip.getCurrentFileName();
                                     else
                                     {
+                                        result += write_5e_statblock(file.readAll());
+                                    }
+                                }
+                                if (create_statblocks && zip.getCurrentFileName().startsWith("statblocks_html/"))
+                                {
+                                    QuaZipFile file(&zip);
+                                    if (!file.open(QuaZipFile::ReadOnly))
+                                        qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
+                                    else
+                                    {
+                                        QString body = write_html(false, sn_type, file.readAll());
+                                        if (body.isEmpty())
+                                            qWarning() << "GUMBO failed to parse" << zip.getCurrentFileName();
+                                        else
+                                        {
 #if 0
-                                        // THIS WORKS FOR PATHFINDER GENERATED FILES,
-                                        // BUT NOT FOR SOME OTHER GAME SYSTEMS (WHERE THEY HAVE STATS ON A SINGLE LINE BETWEEN TWO PARALLEL LINES)
-                                        // Replace section headers in portfolio HTML with proper section header.
-                                        // Ensure other line breaks have a blank line in front of them.
-                                        static const QRegularExpression header("\n---\n([^\n]+)\n---\n", QRegularExpression::UseUnicodePropertiesOption);
-                                        body.replace(header, "\n\n### \\1\n");
+                                            // THIS WORKS FOR PATHFINDER GENERATED FILES,
+                                            // BUT NOT FOR SOME OTHER GAME SYSTEMS (WHERE THEY HAVE STATS ON A SINGLE LINE BETWEEN TWO PARALLEL LINES)
+                                            // Replace section headers in portfolio HTML with proper section header.
+                                            // Ensure other line breaks have a blank line in front of them.
+                                            static const QRegularExpression header("\n---\n([^\n]+)\n---\n", QRegularExpression::UseUnicodePropertiesOption);
+                                            body.replace(header, "\n\n### \\1\n");
 #endif
 
-                                        // Ensure any --- marker has a blank line in front of it (don't add another if one already there!)
-                                        static const QRegularExpression line("([^\n])\n---\n", QRegularExpression::UseUnicodePropertiesOption);
-                                        body.replace(line, "\\1\n\n---\n");
+                                            // Ensure any --- marker has a blank line in front of it (don't add another if one already there!)
+                                            static const QRegularExpression line("([^\n])\n---\n", QRegularExpression::UseUnicodePropertiesOption);
+                                            body.replace(line, "\\1\n\n---\n");
 
-                                        result += body;
+                                            result += body;
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
+                    } // if (create_5e_statblocks || create_statblocks)
+
                     result += newline;
                 }
             }
@@ -3194,6 +3199,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool mark_dice_rolls,
                 bool mark_html_dice_rolls,
                 bool do_statblocks,
+                bool do_5e_statblocks,
                 bool add_admonition)
 {
 #ifdef TIME_CONVERSION
@@ -3213,6 +3219,7 @@ void toMarkdown(const XmlElement *root_elem,
     detect_dice_rolls    = mark_dice_rolls;
     detect_html_dice_rolls = mark_html_dice_rolls;
     create_statblocks = do_statblocks;
+    create_5e_statblocks = do_5e_statblocks;
     use_admonition = add_admonition;
 
     gumbofilenumber   = 0;
