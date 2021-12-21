@@ -2013,6 +2013,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         result = text;
     }
     if (dice && detect_dice_rolls) replace_dice(result);
+    return result.trimmed();
 }
 
 
