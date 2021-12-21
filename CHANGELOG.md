@@ -5,6 +5,12 @@ Allow Admonition plug-in to be enabled separately for GM Directions and RW snipp
 
 Any Labeled_Text snippets which start with a table will now be formatted properly (The table will be put on its own line with a blank line between it and the snippet's label)
 
+Statblock improvements:
+- only include Saves and Skills which aren't the same as the base stat modifier.
+- Always put Passive Perception into Senses, and Perception into the Skills line (even if same bonus as stat).
+- Always put in Languages, using "--" if no languages are defined.
+- If ability or weapon/attack name ends with "(creature name)" then remove that part.
+
 # 4.9
 Make decoding of Portfolios optional.
 
