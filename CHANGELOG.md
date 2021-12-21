@@ -1,7 +1,9 @@
 # 4.10
-Move Obsidian.md options into a separate dialog window.
+Move Obsidian.md options into a separate dialog window (as there are so many options now!)
 
 Allow Admonition plug-in to be enabled separately for GM Directions and RW snippet styles.
+
+Any Labeled_Text snippets which start with a table will now be formatted properly (The table will be put on its own line with a blank line between it and the snippet's label)
 
 # 4.9
 Make decoding of Portfolios optional.
