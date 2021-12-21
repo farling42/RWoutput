@@ -43,6 +43,7 @@
 #include "outputmarkdown.h"
 #include "mappinsdialog.h"
 #include "fg_category_delegate.h"
+#include "ui_obsidiandialog.h"
 
 #ifdef GEN_TEXT_DOCUMENT
 #include "gentextdocument.h"
@@ -218,6 +219,32 @@ void MainWindow::on_saveHtml_clicked()
     saveSettings();
 }
 
+void MainWindow::on_obsidianPlugins_clicked()
+{
+    QSettings settings;
+
+    QDialog dialog(this);
+    Ui_ObsidianDialog obsidian;
+    obsidian.setupUi(&dialog);
+
+    // Set current settings
+    foreach (auto *widget, dialog.findChildren<QCheckBox*>())
+    {
+        QVariant value = settings.value("obsidian/" + widget->objectName());
+        if (value.isValid()) widget->setChecked(value.toBool());
+    }
+
+    // Remember current settings
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        foreach (auto *widget, dialog.findChildren<QCheckBox*>())
+        {
+            settings.setValue("obsidian/" + widget->objectName(), widget->isChecked());
+        }
+    }
+}
+
+
 void MainWindow::on_saveMarkdown_clicked()
 {
     QSettings settings;
@@ -245,19 +272,20 @@ void MainWindow::on_saveMarkdown_clicked()
 
     toMarkdown(root_element,
                maxWidth(),
-               ui->createMapPins->isChecked(),
+               settings.value("obsidian/useLeaflet").toBool(),
                ui->revealMask->isChecked(),
                ui->foldersByCategory->isChecked(),
-               ui->obsidianLinks->isChecked(),
+               ui->useWikilinks->isChecked(),
                ui->createNavPanel->isChecked(),
                ui->tagForEachPrefix->isChecked(),
                ui->tagForEachSuffix->isChecked(),
-               ui->graphConnections->isChecked(),
-               ui->diceRoller->isChecked(),
-               ui->diceRollerHtml->isChecked(),
+               settings.value("obsidian/useMermaid").toBool(),
+               settings.value("obsidian/useDiceRollsSnippets").toBool(),
+               settings.value("obsidian/useDiceRollsHtml").toBool(),
                ui->decodeStatblocks->isChecked(),
-               ui->create5EStatblocks->isChecked(),
-               ui->addAdmonition->isChecked());
+               settings.value("obsidian/use5estatblocks").toBool(),
+               settings.value("obsidian/useAdmonitionGMdir").toBool(),
+               settings.value("obsidian/useAdmonitionStyles").toBool() );
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();

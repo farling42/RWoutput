@@ -1,3 +1,8 @@
+# 4.10
+Move Obsidian.md options into a separate dialog window.
+
+Allow Admonition plug-in to be enabled separately for GM Directions and RW snippet styles.
+
 # 4.9
 Make decoding of Portfolios optional.
 

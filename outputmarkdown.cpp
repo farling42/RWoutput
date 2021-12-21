@@ -68,7 +68,8 @@ static bool detect_dice_rolls=false;
 static bool detect_html_dice_rolls=false;
 static bool create_statblocks=true;
 static bool create_5e_statblocks=false;
-static bool use_admonition=false;
+static bool use_admonition_gmdir=false;
+static bool use_admonition_style=false;
 
 #undef DUMP_CHILDREN
 
@@ -1576,7 +1577,9 @@ static inline QString join_list(const QString &label, const QStringList &list)
     if (list.isEmpty()) return QString();
     static const QString indent1{QStringLiteral(":\n    - [")};
     static const QString indentN{QStringLiteral("]\n    - [")};
-    return label + indent1 + list.join(indentN) + ']' + newline;
+    static const QRegularExpression twocommas("[, ]+,");
+    // Plugin fails if two commas appear together
+    return label + indent1 + list.join(indentN).replace(twocommas, ",") + ']' + newline;
 }
 
 
@@ -2010,7 +2013,6 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
         result = text;
     }
     if (dice && detect_dice_rolls) replace_dice(result);
-    return result.trimmed();
 }
 
 
@@ -2133,7 +2135,7 @@ static const QString write_snippet(XmlElement *snippet)
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
     {
         QString gmtext = get_content_text(gm_directions, gmlinks);
-        if (use_admonition)
+        if (use_admonition_gmdir)
         {
             result += "```ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + "\n```\n";
         }
@@ -2145,7 +2147,7 @@ static const QString write_snippet(XmlElement *snippet)
     }
 
     // Possibly set a SPAN on the main snippet, for style and veracity
-    if (use_admonition)
+    if (use_admonition_style)
     {
         if (!sn_style.isEmpty())
         {
@@ -2383,7 +2385,7 @@ static const QString write_snippet(XmlElement *snippet)
     }
     // Hybrid_Tag
 
-    if (use_admonition && !sn_style.isEmpty())
+    if (use_admonition_style && !sn_style.isEmpty())
     {
         result += "```\n";
     }
@@ -3200,7 +3202,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool mark_html_dice_rolls,
                 bool do_statblocks,
                 bool do_5e_statblocks,
-                bool add_admonition)
+                bool add_admonition_gmdir,
+                bool add_admonition_rwstyle)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3220,7 +3223,8 @@ void toMarkdown(const XmlElement *root_elem,
     detect_html_dice_rolls = mark_html_dice_rolls;
     create_statblocks = do_statblocks;
     create_5e_statblocks = do_5e_statblocks;
-    use_admonition = add_admonition;
+    use_admonition_gmdir = add_admonition_gmdir;
+    use_admonition_style = add_admonition_rwstyle;
 
     gumbofilenumber   = 0;
     collator.setNumericMode(true);

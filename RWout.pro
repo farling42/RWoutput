@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 4.9
+VERSION = 4.10
 
 QT       += core gui printsupport network
 
@@ -52,7 +52,8 @@ HEADERS += \
 
 FORMS += \
         mainwindow.ui \
-        mappinsdialog.ui
+        mappinsdialog.ui \
+        obsidiandialog.ui
 
 macx {
 MACDEPLOYQT_OPTIONS = -verbose 3 -dmg

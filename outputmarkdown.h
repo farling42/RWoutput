@@ -44,6 +44,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool mark_html_dice_rolls,
                 bool do_statblocks,
                 bool do_5e_statblocks,
-                bool add_admonition);
+                bool add_admonition_gmdir,
+                bool add_adminition_rwstyle);
 
 #endif // OUTPUTMARKDOWN_H

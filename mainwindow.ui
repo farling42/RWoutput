@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>532</width>
-    <height>643</height>
+    <width>509</width>
+    <height>534</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -154,7 +154,7 @@ FILE</string>
           </widget>
          </item>
          <item>
-          <widget class="QGroupBox" name="groupBox">
+          <widget class="QGroupBox" name="markdownOptions">
            <property name="title">
             <string>Markdown</string>
            </property>
@@ -170,25 +170,12 @@ FILE</string>
              </widget>
             </item>
             <item>
-             <widget class="QCheckBox" name="obsidianLinks">
+             <widget class="QCheckBox" name="useWikilinks">
               <property name="toolTip">
                <string>When unchecked, all links will use markdown link syntax</string>
               </property>
               <property name="text">
                <string>Use wikilinks where possible</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="createMapPins">
-              <property name="toolTip">
-               <string>Create map pin information for Leaflet</string>
-              </property>
-              <property name="text">
-               <string>Create Map Pins</string>
               </property>
               <property name="checked">
                <bool>true</bool>
@@ -223,42 +210,6 @@ FILE</string>
              </widget>
             </item>
             <item>
-             <widget class="QCheckBox" name="graphConnections">
-              <property name="toolTip">
-               <string>If not selected, then text description is given for each connection</string>
-              </property>
-              <property name="text">
-               <string>Use Mermaid Graph for Connections</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="diceRoller">
-              <property name="toolTip">
-               <string>Detect dice rolls in RW snippet text</string>
-              </property>
-              <property name="text">
-               <string>Mark Dice Rolls in snippets</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="diceRollerHtml">
-              <property name="toolTip">
-               <string>Detect dice rolls in Portfolio files and Embedded HTML files</string>
-              </property>
-              <property name="text">
-               <string>Mark Dice Rolls in HTML (por)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
              <widget class="QCheckBox" name="decodeStatblocks">
               <property name="toolTip">
                <string>Read the HTML statblock from POR files and put inline into Notes</string>
@@ -272,22 +223,9 @@ FILE</string>
              </widget>
             </item>
             <item>
-             <widget class="QCheckBox" name="create5EStatblocks">
-              <property name="toolTip">
-               <string>Converts the XML in the Portfolio into YAML suitable for Obsidian's 5E-STATBLOCK plugin</string>
-              </property>
+             <widget class="QPushButton" name="obsidianPlugins">
               <property name="text">
-               <string>Use 5E-Statblocks plugin for Portfolios</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="addAdmonition">
-              <property name="toolTip">
-               <string>Create YAML blocks for Admonition blocks for GM Directions &amp; non-normal snippet styles</string>
-              </property>
-              <property name="text">
-               <string>Use Admonition for GM Dir &amp;&amp; Styles</string>
+               <string>Obsidian Plugin Options</string>
               </property>
              </widget>
             </item>
@@ -413,7 +351,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>532</width>
+     <width>509</width>
      <height>21</height>
     </rect>
    </property>

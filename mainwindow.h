@@ -43,11 +43,9 @@ private slots:
     void on_savePdf_clicked();
     void on_print_clicked();
     void on_simpleHtml_clicked();
-
     void on_mapPins_clicked();
-
-    void on_saveFgMod_clicked();
-
+    void on_saveFgMod_clicked();    
+    void on_obsidianPlugins_clicked();
 private:
     Ui::MainWindow *ui;
     XmlElement *root_element;
