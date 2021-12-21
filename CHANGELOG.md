@@ -1,7 +1,9 @@
 # 4.8
 Add option to generate ADMONITION blocks for GM Directions as well as RW styles (Read-Aloud, Flavor, Callout and Message).
 
-Add option to generate 5e-statblock blocks for characters stored in HL portfolio files (formatted properly for DnD 5E and sort-of works for Pathfinder 1E too).
+Add option to generate 5E-STATBLOCK blocks for characters stored in HL portfolio files (formatted properly for DnD 5E and sort-of works for Pathfinder 1E too).
+
+A separate *realmworks-admonition.css* is shipped to make the admonition blocks smaller.
 
 # 4.7
 Don't auto-number sections (which was added in 4.3).
