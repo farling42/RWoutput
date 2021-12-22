@@ -45,6 +45,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool do_statblocks,
                 bool do_5e_statblocks,
                 bool add_admonition_gmdir,
-                bool add_adminition_rwstyle);
+                bool add_adminition_rwstyle,
+                bool add_frontmatter_labeled_text,
+                bool add_frontmatter_numeric);
 
 #endif // OUTPUTMARKDOWN_H

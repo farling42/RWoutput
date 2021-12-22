@@ -70,6 +70,8 @@ static bool create_statblocks=true;
 static bool create_5e_statblocks=false;
 static bool use_admonition_gmdir=false;
 static bool use_admonition_style=false;
+static bool frontmatter_labeled_text=true;
+static bool frontmatter_numeric=true;
 
 #undef DUMP_CHILDREN
 
@@ -134,7 +136,7 @@ static inline const QString validFilename(const QString &string)
 }
 
 
-static const QString snippetName(XmlElement *elem)
+static const QString snippetName(const XmlElement *elem)
 {
     QString result;
     result = elem->attribute("label");   // For Labeled_Text with manual label
@@ -2671,6 +2673,30 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             else if (tags.length() > 1)
                 stream << validTag(snippet->attribute("label")) << ": [ " << tags.join(",") << " ]" << newline;
         }
+        else if (frontmatter_labeled_text && sntype == "Labeled_Text")
+        {
+            if (auto contents = snippet->xmlChild("contents"))
+            {
+                QString value = get_content_text(contents, NO_LINKS, /*dice*/ false);       // TODO - links?
+
+                // If content starts with \n then it might be a table, so add an extra blank line
+                if (value.length() < 30 &&
+                    !value.startsWith("\n"))   // probably a table, so don't create the variable
+                {
+                    value = value.trimmed();
+                    if (!value.contains("\n"))
+                        stream << validTag(snippetName(snippet)) << ": " << value << newline;
+                }
+            }
+
+        }
+        else if (frontmatter_numeric && sntype == "Numeric")
+        {
+            if (auto contents = snippet->xmlChild("contents"))
+            {
+                stream << validTag(snippetName(snippet)) << ": " << contents->childString() << newline;
+            }
+        }
     }
 
     if (parent) {
@@ -3257,7 +3283,9 @@ void toMarkdown(const XmlElement *root_elem,
                 bool do_statblocks,
                 bool do_5e_statblocks,
                 bool add_admonition_gmdir,
-                bool add_admonition_rwstyle)
+                bool add_admonition_rwstyle,
+                bool add_frontmatter_labeled_text,
+                bool add_frontmatter_numeric)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3279,6 +3307,8 @@ void toMarkdown(const XmlElement *root_elem,
     create_5e_statblocks = do_5e_statblocks;
     use_admonition_gmdir = add_admonition_gmdir;
     use_admonition_style = add_admonition_rwstyle;
+    frontmatter_labeled_text = add_frontmatter_labeled_text;
+    frontmatter_numeric      = add_frontmatter_numeric;
 
     gumbofilenumber   = 0;
     collator.setNumericMode(true);

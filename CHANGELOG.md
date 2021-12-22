@@ -1,3 +1,8 @@
+# 4.11
+Provide option to add Labeled_Text and/or Numeric fields to the frontmatter.
+
+Only Labeled_Text fields with a single line of text of less than 30 characters will be included.
+
 # 4.10
 Move Obsidian.md options into a separate dialog window (as there are so many options now!)
 

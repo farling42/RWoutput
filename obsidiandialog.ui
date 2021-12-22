@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>274</width>
-    <height>202</height>
+    <height>248</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,6 +19,9 @@
      <property name="text">
       <string>Use leaflet for Smart Images</string>
      </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
@@ -26,12 +29,18 @@
      <property name="text">
       <string>Use Mermaid graph for Connections</string>
      </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
     <widget class="QCheckBox" name="useDiceRollsSnippets">
      <property name="text">
       <string>Mark Dice Rolls in snippets</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
@@ -54,12 +63,29 @@
      <property name="text">
       <string>Use Admonition for GM Directions</string>
      </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
     <widget class="QCheckBox" name="useAdmonitionStyles">
      <property name="text">
       <string>Use Admonition for Snippet Styles</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="fmLabeledText">
+     <property name="text">
+      <string>Add simple Labeled_Text into frontmatter</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="fmNumeric">
+     <property name="text">
+      <string>Add Numeric snippets into frontmatter</string>
      </property>
     </widget>
    </item>

@@ -285,7 +285,10 @@ void MainWindow::on_saveMarkdown_clicked()
                ui->decodeStatblocks->isChecked(),
                settings.value("obsidian/use5estatblocks").toBool(),
                settings.value("obsidian/useAdmonitionGMdir").toBool(),
-               settings.value("obsidian/useAdmonitionStyles").toBool() );
+               settings.value("obsidian/useAdmonitionStyles").toBool(),
+               settings.value("obsidian/fmLabeledText").toBool(),
+               settings.value("obsidian/fmNumeric").toBool()
+               );
 
     setStatusText("Markdown file SAVE complete.");
     qApp->processEvents();
