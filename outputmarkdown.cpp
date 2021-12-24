@@ -78,6 +78,7 @@ static bool frontmatter_numeric=true;
 static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QHash<QString,QString> topic_filename;               // key=topic_id/plot_id, value=<valid filename for this topic/plot>
 static QHash<const XmlElement*,QString> topic_full_name;    // key=topic_id, value=<prefix+public_name+suffix>
+static QHash<QString,QString> tag_full_name;                // key=tag_id, value=name attribute of <domain> or <domain_global>
 
 extern QString map_pin_title;
 extern QString map_pin_description;
@@ -136,7 +137,7 @@ static inline const QString validFilename(const QString &string)
 }
 
 
-static const QString snippetName(const XmlElement *elem)
+static const QString snippetLabel(const XmlElement *elem)
 {
     QString result;
     result = elem->attribute("label");   // For Labeled_Text with manual label
@@ -192,7 +193,7 @@ static const QString dirFile(const QString &dirname, const QString &filename)
 
 static const QString parentDirName(const XmlElement *topic)
 {
-    XmlElement *parent = qobject_cast<XmlElement*>(topic->parent());
+    XmlElement *parent = topic->parent();
     if (parent && parent->objectName() == "topic")
         return parentDirName(parent) + QDir::separator() + topic_filename.value(parent->attribute("topic_id"));
     else
@@ -845,7 +846,13 @@ static void replace_dice(QString &string)
     }
 }
 
-
+/**
+ * @brief getTextChildren
+ * Return the string built from all the text elements, ignoring all formatting.
+ * @param node
+ * @param allowWhitespace
+ * @return
+ */
 static const QString getTextChildren(const GumboNode *node, bool allowWhitespace)
 {
     QString result;
@@ -900,7 +907,7 @@ static const GumboNode *getGumboChild(const GumboNode *parent, const QString &na
  * @param node
  * @return
  */
-static const QString textContent(const QString &source)
+static const QString textContent(const QString &source, bool dice=true)
 {
     // If no HTML, then simply return the original text.
     if (source.indexOf(">") < 0) return source;
@@ -919,7 +926,7 @@ static const QString textContent(const QString &source)
         // Get GUMBO to release all the memory
         gumbo_destroy_output(&kGumboDefaultOptions, output);
     }
-    if (detect_dice_rolls) replace_dice(result);
+    if (dice && detect_dice_rolls) replace_dice(result);
     return result;
 }
 
@@ -1109,23 +1116,6 @@ static inline QString tag_string(const QString &domain, const QString &label)
 }
 
 
-static QString tag_label(const XmlElement *tag_assign)
-{
-    QString tag_name    = global_names.value(tag_assign->attribute("tag_id"));
-    QString domain_name = global_names.value(tag_assign->attribute("domain_id"));
-    // Don't include:
-    //   Export/<any tag>  <- always present on every single topic during export.
-    //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
-    if (!domain_name.isEmpty() &&
-        domain_name != "Export" &&
-        (domain_name != "Utility" || tag_name != "Empty"))
-    {
-        return tag_string(domain_name, tag_name);
-    }
-    return QString();
-}
-
-
 static const QString getTags(const XmlElement *node, bool withnl=true)
 {
     const auto tag_nodes = node->xmlChildren("tag_assign");
@@ -1134,8 +1124,12 @@ static const QString getTags(const XmlElement *node, bool withnl=true)
     QStringList tags;
     foreach (const auto &tag_assign, tag_nodes)
     {
-        QString tag = tag_label(tag_assign);
-        if (!tag.isEmpty()) tags.append("#" + tag);
+        QString tag = tag_full_name.value(tag_assign->attribute("tag_id"));
+        // Don't include:
+        //   Export/<any tag>  <- always present on every single topic during export.
+        //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
+        if ((!tag.isEmpty() || tag.startsWith("Export:") || tag == "Utility:Empty"))
+                tags.append("#" + tag);
     }
     QString result;
     result.reserve(100);
@@ -2252,7 +2246,7 @@ static const QString write_snippet(XmlElement *snippet)
         if (auto contents = snippet->xmlChild("contents"))
         {
             QString text = get_content_text(contents, links);
-            result += hlabel(snippetName(snippet));
+            result += hlabel(snippetLabel(snippet));
             // If content starts with \n then it might be a table, so add an extra blank line
             if (text.startsWith("\n")) result += "\n\n";
             result += text.trimmed() + newline;
@@ -2396,7 +2390,7 @@ static const QString write_snippet(XmlElement *snippet)
         {
             QString datestr = gregorian(date->attribute("gregorian"));
             if (datestr.isEmpty()) datestr = canonicalTime(date->attribute("canonical"));
-            result += hlabel(snippetName(snippet)) + datestr + annotationText(snippet) + newline;
+            result += hlabel(snippetLabel(snippet)) + datestr + annotationText(snippet) + newline;
             result += getTags(snippet) + endsnippet;
         }
     }
@@ -2409,7 +2403,7 @@ static const QString write_snippet(XmlElement *snippet)
             finish = gregorian(date->attribute("gregorian_end"));
             if (start.isEmpty())  start  = canonicalTime(date->attribute("canonical_start"));
             if (finish.isEmpty()) finish = canonicalTime(date->attribute("canonical_end"));
-            result += hlabel(snippetName(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + newline;
+            result += hlabel(snippetLabel(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + newline;
             result += getTags(snippet) + endsnippet;
         }
     }
@@ -2421,7 +2415,7 @@ static const QString write_snippet(XmlElement *snippet)
         if (tags.length() > 0)
         {
             // In non-tag text before showing all connected tags
-            result += hlabel(snippetName(snippet)) + tags.join(", ") + annotationText(snippet) + newline;
+            result += hlabel(snippetLabel(snippet)) + tags.join(", ") + annotationText(snippet) + newline;
             result += getTags(snippet) + endsnippet;
         }
     }
@@ -2429,7 +2423,7 @@ static const QString write_snippet(XmlElement *snippet)
     {
         if (auto contents = snippet->xmlChild("contents"))
         {
-            result += hlabel(snippetName(snippet)) + contents->childString() + annotationText(snippet) + newline;
+            result += hlabel(snippetLabel(snippet)) + contents->childString() + annotationText(snippet) + newline;
             result += getTags(snippet) + endsnippet;
         }
     }
@@ -2437,7 +2431,7 @@ static const QString write_snippet(XmlElement *snippet)
     {
         QString tags = getTags(snippet, /*withnl*/false);   // tags will be on the same line as this snippet
         if (!tags.isEmpty())
-            result += hlabel(snippetName(snippet)) + tags + annotationText(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + tags + annotationText(snippet) + endsnippet;
     }
     // Hybrid_Tag
 
@@ -2667,25 +2661,26 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         {
             QStringList tags;
             foreach (const auto &tag, snippet->xmlChildren("tag_assign"))
-                tags.append('"' + global_names.value(tag->attribute("tag_id")) + '"');
+                tags.append('"' + tag_full_name.value(tag->attribute("tag_id")) + '"');
             if (tags.length() == 1)
-                stream << validTag(snippet->attribute("label")) << ": " << tags.first() << newline;
+                stream << validTag(snippetLabel(snippet)) << ": " << tags.first() << newline;
             else if (tags.length() > 1)
-                stream << validTag(snippet->attribute("label")) << ": [ " << tags.join(",") << " ]" << newline;
+                stream << validTag(snippetLabel(snippet)) << ": [ " << tags.join(", ") << " ]" << newline;
         }
         else if (frontmatter_labeled_text && sntype == "Labeled_Text")
         {
             if (auto contents = snippet->xmlChild("contents"))
             {
-                QString value = get_content_text(contents, NO_LINKS, /*dice*/ false);       // TODO - links?
+                // No formatting in value!
+                QString value = textContent(contents->xmlChild()->fixedText(), /*dice*/ false);
 
                 // If content starts with \n then it might be a table, so add an extra blank line
-                if (value.length() < 30 &&
+                if (value.length() < 60 &&
                     !value.startsWith("\n"))   // probably a table, so don't create the variable
                 {
                     value = value.trimmed();
                     if (!value.contains("\n"))
-                        stream << validTag(snippetName(snippet)) << ": " << value << newline;
+                        stream << validTag(snippetLabel(snippet)) << ": " << value << newline;
                 }
             }
 
@@ -2694,7 +2689,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         {
             if (auto contents = snippet->xmlChild("contents"))
             {
-                stream << validTag(snippetName(snippet)) << ": " << contents->childString() << newline;
+                stream << validTag(snippetLabel(snippet)) << ": " << contents->childString() << newline;
             }
         }
     }
@@ -3238,10 +3233,20 @@ static void write_storyboard(const XmlElement *root_elem)
 static void read_structure(XmlElement *structure)
 {
     global_names.clear();
-    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag_global"))
-        global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
-    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag"))
-        global_names.insert(tag->attribute("tag_id"), tag->attribute("name"));
+    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag_global"))    // parent is <domain_global>
+    {
+        const QString tag_id = tag->attribute("tag_id");
+        const QString name   = tag->attribute("name");
+        tag_full_name.insert(tag_id, tag_string(tag->parent()->attribute("name"), name));
+        global_names.insert(tag_id, tag->attribute("name"));
+    }
+    foreach (const auto &tag, structure->findChildren<XmlElement*>("tag"))   // parent is <domain>
+    {
+        const QString tag_id = tag->attribute("tag_id");
+        const QString name   = tag->attribute("name");
+        tag_full_name.insert(tag_id, tag_string(tag->parent()->attribute("name"), name));
+        global_names.insert(tag_id, tag->attribute("name"));
+    }
 
     foreach (const auto &cat, structure->findChildren<XmlElement*>("category_global"))
         global_names.insert(cat->attribute("category_id"), cat->attribute("name"));

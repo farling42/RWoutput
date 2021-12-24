@@ -55,6 +55,7 @@ public:
     void dump_tree() const;
     QString snippetName() const;
     QString childString() const;
+    XmlElement *parent() const { return qobject_cast<XmlElement*>(QObject::parent()); }
 
 private:
     XmlElement(QXmlStreamReader*, QObject *parent = nullptr);

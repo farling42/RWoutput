@@ -1,3 +1,8 @@
+# 4.11.1
+When putting Labeled_Text into the frontmatter, ensure that the value doesn't include any formatting.
+
+Fix an issue with Tag_Multi_Domain not being decoded properly.
+
 # 4.11
 Provide option to add Labeled_Text and/or Numeric fields to the frontmatter.
 
