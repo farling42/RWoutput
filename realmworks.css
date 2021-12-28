@@ -1,31 +1,8 @@
-/* Auto-numbering of sections within topics (H1 = title, H2 = first section) */
-/*
-<--- Unreliable when scrolling down long pages, so don't do it by default
-body, h1 {
-    counter-reset: rwh2counter;
-}
-h2:before {
-    content:  counter(rwh2counter) ".\0000a0\0000a0";
-    counter-increment: rwh2counter;
-    counter-reset: rwh3counter;
-}
-h3:before {
-    content:  counter(rwh2counter) "." counter(rwh3counter) ".\0000a0\0000a0";
-    counter-increment: rwh3counter;
-    counter-reset: rwh4counter;
-}
-h4:before {
-    content:  counter(rwh2counter) "." counter(rwh3counter) "." counter(rwh4counter) ".\0000a0\0000a0";
-    counter-increment: rwh4counter;
-}
-*/
 /* Snippet Style */
 .RWCallout, .RWHandout, .RWFlavor, .RWRead_Aloud {
-    padding: 3px;
-    margin: 2px 0px;
-    padding-right: 30px;
-    display: inline-block;
-    width: 100%;
+    margin-top: 1.5rem;
+    padding-top: 0.1rem;
+    display: block;
 }
 /* GM Directions */
 .RWgmDirAndContents {
@@ -35,10 +12,8 @@ h4:before {
 .RWgmDirections {
     border: 2px solid #423d00;
     padding: 0px 3px;
-    padding-right: 30px;
     margin-left: 15px;
-    display: inline-block;
-    width: 100%;
+    display: block;
 }
 /* Snippet Veracity */
 .RWveracity-Partial, .RWveracity-Lie {
@@ -103,21 +78,24 @@ body.theme-dark .RWRead_Aloud {
 }
 
 /* Additional markers for styles */
-body .RWCallout:before, body .RWCallout:before, body .RWHandout:before, body .RWFlavor:before, body .RWRead_Aloud:before {
+.RWgmDirections:before, .RWCallout:before, .RWCallout:before, .RWHandout:before, .RWFlavor:before, .RWRead_Aloud:before {
     display: block;
     margin-top: -0.7rem;
     font-size: 0.7rem;
     color: green;
 }
-body .RWCallout:before {
-        content: "Callout:"
+.RWgmDirections:before {
+    content: "GM Directions:"
 }
-body .RWHandout:before {
-        content: "Handout:"
+.RWCallout:before {
+    content: "Callout:"
 }
-body .RWFlavor:before {
-        content: "Flavor:"
+.RWHandout:before {
+    content: "Handout:"
 }
-body .RWRead_Aloud:before {
-        content: "Read Aloud:"
+.RWFlavor:before {
+    content: "Flavor:"
+}
+.RWRead_Aloud:before {
+    content: "Read Aloud:"
 }
