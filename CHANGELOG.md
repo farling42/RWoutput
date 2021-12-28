@@ -1,3 +1,14 @@
+# 4.12
+Ensure multiple paragraphs in a single styled snippet need to be broken apart with "<br>" instead of fully separate paragraphs.
+
+Include a small label indicating the style at the start of each style block (not when using Admonition blocks).
+
+Add italic font-style to Flavor and Handout RW styles (to match default settings in RW).
+
+Fix a problem with generating the wrong tags.
+
+Handle duplicated link spans in the RWexport file.
+
 # 4.11.1
 When putting Labeled_Text into the frontmatter, ensure that the value doesn't include any formatting.
 

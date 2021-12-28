@@ -25,6 +25,7 @@ h4:before {
     margin: 2px 0px;
     padding-right: 30px;
     display: inline-block;
+    width: 100%;
 }
 /* GM Directions */
 .RWgmDirAndContents {
@@ -35,14 +36,15 @@ h4:before {
     border: 2px solid #423d00;
     padding: 0px 3px;
     padding-right: 30px;
-        margin-left: 15px;
+    margin-left: 15px;
     display: inline-block;
+    width: 100%;
 }
-
 /* Snippet Veracity */
 .RWveracity-Partial, .RWveracity-Lie {
     border-width: 3px;
     padding: 0px 3px;
+    width: 100%;
 }
 .RWveracity-Partial {
     border-style: dashed;
@@ -67,9 +69,11 @@ body.theme-light .RWCallout {
 }
 body.theme-light .RWHandout {
     background: #e8e1d980;
+    font-style: italic;
 }
 body.theme-light .RWFlavor {
     background: #efd4d280;
+    font-style: italic;
 }
 body.theme-light .RWRead_Aloud {
     background: #d1dff280;
@@ -88,10 +92,32 @@ body.theme-dark .RWCallout {
 }
 body.theme-dark .RWHandout {
     background: #00383880;
+    font-style: italic;
 }
 body.theme-dark .RWFlavor {
     background: #30003080;
+    font-style: italic;
 }
 body.theme-dark .RWRead_Aloud {
     background: #28280080;
+}
+
+/* Additional markers for styles */
+body .RWCallout:before, body .RWCallout:before, body .RWHandout:before, body .RWFlavor:before, body .RWRead_Aloud:before {
+    display: block;
+    margin-top: -0.7rem;
+    font-size: 0.7rem;
+    color: green;
+}
+body .RWCallout:before {
+        content: "Callout:"
+}
+body .RWHandout:before {
+        content: "Handout:"
+}
+body .RWFlavor:before {
+        content: "Flavor:"
+}
+body .RWRead_Aloud:before {
+        content: "Read Aloud:"
 }

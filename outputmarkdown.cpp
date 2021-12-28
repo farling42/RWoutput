@@ -75,7 +75,6 @@ static bool frontmatter_numeric=true;
 
 #undef DUMP_CHILDREN
 
-static const QStringList predefined_styles = { "Normal", "Read_Aloud", "Handout", "Flavor", "Callout" };
 static QHash<QString,QString> topic_filename;               // key=topic_id/plot_id, value=<valid filename for this topic/plot>
 static QHash<const XmlElement*,QString> topic_full_name;    // key=topic_id, value=<prefix+public_name+suffix>
 static QHash<QString,QString> tag_full_name;                // key=tag_id, value=name attribute of <domain> or <domain_global>
@@ -121,10 +120,17 @@ struct ExportLink
 typedef QList<ExportLink> ExportLinks;
 static ExportLinks NO_LINKS;
 
-void sortLinks(ExportLinks &list)
+static inline void sortLinks(ExportLinks &list)
 {
     // Get entries in order starting with HIGHEST start, and proceeding to LOWEST start.
     std::sort(list.begin(), list.end(), [](ExportLink left, ExportLink right) { return right.start < left.start; });
+    // Remove duplicates
+    QMutableListIterator<ExportLink> it(list);
+    while (it.hasNext()) {
+        ExportLink &item = it.next();
+        if (it.hasNext() && item.start == it.peekNext().start)
+            it.remove();
+    }
 }
 
 static inline const QString validFilename(const QString &string)
@@ -641,7 +647,7 @@ private:
                 foreach (const auto &value, values)
                 {
                     if      (value == "line-through") strikethru = true;
-                    else if (value == "underline")    underline = true;
+                    else if (value == "underline")    underline  = true;
                     //else if (value == "none") ;
                     //else qWarning() << "Unknown element in text-decoration: " << value;
                 }
@@ -861,6 +867,7 @@ static const QString getTextChildren(const GumboNode *node, bool allowWhitespace
     {
     case GUMBO_NODE_WHITESPACE:
         if (!allowWhitespace) break;
+        [[fallthrough]];
     case GUMBO_NODE_TEXT:
     case GUMBO_NODE_CDATA:
         result += QString(node->v.text.text);
@@ -1127,8 +1134,9 @@ static const QString getTags(const XmlElement *node, bool withnl=true)
         QString tag = tag_full_name.value(tag_assign->attribute("tag_id"));
         // Don't include:
         //   Export/<any tag>  <- always present on every single topic during export.
+        //   Import/<any tag>  <- quite often present on imports.
         //   Utility/Empty     <- auto-added by Realm Works durin quick topic creation
-        if ((!tag.isEmpty() || tag.startsWith("Export:") || tag == "Utility:Empty"))
+        if (!(tag.isEmpty() || tag.startsWith("Export/") || tag.startsWith("Import/") || tag == "Utility/Empty"))
                 tags.append("#" + tag);
     }
     QString result;
@@ -2146,13 +2154,10 @@ static const QString write_snippet(XmlElement *snippet)
     qDebug() << "...snippet" << sn_type;
 #endif
 
+    // Get whatever links might be on this snippet.
+    // Collect links into a set to remove duplicates.
     ExportLinks links;
     ExportLinks gmlinks;
-
-    QString result;
-    result.reserve(1000);
-
-    // Get whatever links might be on this snippet
     foreach (const auto &link, snippet->xmlChildren("link"))
     {
         const QString target_id = link->attribute("target_id");
@@ -2172,8 +2177,12 @@ static const QString write_snippet(XmlElement *snippet)
             }
         }
     }
+    // Convert to sorted list
     sortLinks(links);
     sortLinks(gmlinks);
+
+    QString result;
+    result.reserve(1000);
 
     // Put GM-Directions first - which could occur on any snippet
     if (auto gm_directions = snippet->xmlChild("gm_directions"))
@@ -2236,7 +2245,11 @@ static const QString write_snippet(XmlElement *snippet)
     {
         // child is either <contents> or <gm_directions> or both
         if (auto contents = snippet->xmlChild("contents"))
-            result += get_content_text(contents, links).trimmed() + newline;
+        {
+            QString text = get_content_text(contents, links).trimmed() + newline;
+            if (!use_admonition_style) text.replace("\n\n","<br>\n");
+            result += text + newline;
+        }
 
         // Multi_Line has no annotation
         result += getTags(snippet) + endsnippet;
