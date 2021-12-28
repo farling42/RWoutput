@@ -78,13 +78,13 @@ body.theme-dark .RWRead_Aloud {
 }
 
 /* Additional markers for styles */
-.RWgmDirections:before, .RWCallout:before, .RWCallout:before, .RWHandout:before, .RWFlavor:before, .RWRead_Aloud:before {
+.RWgmDirections2:before, .RWCallout:before, .RWCallout:before, .RWHandout:before, .RWFlavor:before, .RWRead_Aloud:before {
     display: block;
     margin-top: -0.7rem;
     font-size: 0.7rem;
     color: green;
 }
-.RWgmDirections:before {
+.RWgmDirections2:before {
     content: "GM Directions:"
 }
 .RWCallout:before {
