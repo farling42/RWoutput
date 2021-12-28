@@ -1,3 +1,10 @@
+# 4.13
+Slight change to CSS for RW styles.
+
+Put </span> at the end of paragraphs with an RW style so that they are formatted in the new "live preview" editor.
+
+Ensure all snippets are followed by a single blank line.
+
 # 4.12
 Ensure multiple paragraphs in a single styled snippet need to be broken apart with "<br>" instead of fully separate paragraphs.
 

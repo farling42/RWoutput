@@ -89,7 +89,6 @@ extern bool show_full_map_pin_tooltip;
 static const QString oldAssetsDir("asset-files");
 static const QString assetsDir("zz_asset-files");
 static const QString newline("\n");
-static const QString endsnippet("\n");  // blank line after every snippet
 static const QString frontmatterMarker("---\n");
 
 static QString mainPageName;
@@ -1091,7 +1090,15 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     return result;
 }
 
-
+/**
+ * @brief write_ext_object
+ * No newline at the end
+ * @param obj_name
+ * @param data
+ * @param filename
+ * @param annotation
+ * @return
+ */
 static const QString write_ext_object(const QString &obj_name, const QByteArray &data, const QString &filename, const QString &annotation)
 {
     Q_UNUSED(obj_name)
@@ -1112,7 +1119,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     result += "!" + createLink(filename, filename);
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
-    result += createLink(filename, annotation.isEmpty() ? "open outside" : annotation) + newline;
+    result += createLink(filename, annotation.isEmpty() ? "open outside" : annotation);
     return result;
 }
 
@@ -1603,7 +1610,12 @@ static inline QString st_save(XmlElement *character, const QString &prefix, cons
     return QString();
 }
 
-
+/**
+ * @brief write_5e_statblock
+ * Adds terminating newline
+ * @param constxml
+ * @return
+ */
 static const QString write_5e_statblock(const QByteArray &constxml)
 {
     QString result;
@@ -1941,7 +1953,14 @@ reactions:
     return result;
 }
 
-
+/**
+ * @brief write_html
+ * No newline at the end
+ * @param use_fixed_title
+ * @param sntype
+ * @param data
+ * @return
+ */
 static const QString write_html(bool use_fixed_title, const QString &sntype, const QByteArray &data)
 {
     // Put the children of the BODY into this frame.
@@ -1988,7 +2007,7 @@ static const QString write_html(bool use_fixed_title, const QString &sntype, con
 #ifdef DUMP_CHILDREN
     dump_children("BODY", body);
 #endif
-    result += read_gumbo(body ? body : output->root, cssStyles).trimmed() + newline;
+    result += read_gumbo(body ? body : output->root, cssStyles).trimmed();
 
     // Get GUMBO to release all the memory
     gumbo_destroy_output(&kGumboDefaultOptions, output);
@@ -2147,9 +2166,11 @@ static inline QString gregorian(const QString &source)
 
 static const QString write_snippet(XmlElement *snippet)
 {
-    QString sn_type     = snippet->attribute("type");
-    QString sn_style    = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout
-    QString sn_veracity = snippet->attribute("veracity");
+    const QString sn_type     = snippet->attribute("type");
+    const QString sn_veracity = snippet->attribute("veracity");
+    QString sn_style          = snippet->attribute("style"); // Read_Aloud, Callout, Flavor, Handout  - not const since might get cancelled
+    QString endspan{newline};   // Might be </span>
+    bool inspan=false;
 #if DUMP_LEVEL > 3
     qDebug() << "...snippet" << sn_type;
 #endif
@@ -2190,13 +2211,14 @@ static const QString write_snippet(XmlElement *snippet)
         QString gmtext = get_content_text(gm_directions, gmlinks).trimmed();
         if (use_admonition_gmdir)
         {
-            result += "```ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + "\n```\n";
+            result += "```ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + "\n```";
         }
         else
         {
             gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
-            result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>" + newline;
+            result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>";
         }
+        result += newline + newline;
     }
 
     // Possibly set a SPAN on the main snippet, for style and veracity
@@ -2235,7 +2257,11 @@ static const QString write_snippet(XmlElement *snippet)
         }
         QString title;
         if (!titles.isEmpty()) title = QString(" title=\"%1\"").arg(titles.join(", "));
-        if (!classes.isEmpty()) result += "<span class=\"" + classes.join(" ") + '"' + title + '>';
+        if (!classes.isEmpty()) {
+            result  += "<span class=\"" + classes.join(" ") + '"' + title + '>';
+            endspan =  "</span>" + newline;
+            inspan=true;
+        }
     }
 
     //
@@ -2246,13 +2272,11 @@ static const QString write_snippet(XmlElement *snippet)
         // child is either <contents> or <gm_directions> or both
         if (auto contents = snippet->xmlChild("contents"))
         {
-            QString text = get_content_text(contents, links).trimmed() + newline;
-            if (!use_admonition_style) text.replace("\n\n","<br>\n");
-            result += text + newline;
+            QString text = get_content_text(contents, links).trimmed();
+            if (!use_admonition_style && inspan) text.replace("\n\n","<br>\n");
+            // Multi_Line has no annotation
+            result += text + endspan + getTags(snippet);
         }
-
-        // Multi_Line has no annotation
-        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Labeled_Text")
     {
@@ -2260,13 +2284,11 @@ static const QString write_snippet(XmlElement *snippet)
         {
             QString text = get_content_text(contents, links);
             result += hlabel(snippetLabel(snippet));
-            // If content starts with \n then it might be a table, so add an extra blank line
+            // If content starts with \n then it might be a table, so add an extra blank line at the end of the table
             if (text.startsWith("\n")) result += "\n\n";
-            result += text.trimmed() + newline;
+            // Labeled_Text has no annotation
+            result += text.trimmed() + endspan + getTags(snippet);
         }
-
-        // Labeled_Text has no annotation
-        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Portfolio")
     {
@@ -2278,7 +2300,7 @@ static const QString write_snippet(XmlElement *snippet)
                 if (auto contents = asset->xmlChild("contents"))
                 {
                     result += write_ext_object(ext_object->attribute("name"), contents->byteData(), asset->attribute("filename"), annotationText(snippet, false));
-                    result += getTags(snippet);
+                    result += endspan + getTags(snippet);
 
                     if (create_5e_statblocks || create_statblocks)
                     {
@@ -2326,15 +2348,14 @@ static const QString write_snippet(XmlElement *snippet)
                                             static const QRegularExpression line("([^\n])\n---\n", QRegularExpression::UseUnicodePropertiesOption);
                                             body.replace(line, "\\1\n\n---\n");
 
-                                            result += body;
+                                            // Ensure a blank line after the statblock
+                                            result += body + newline + newline;
                                         }
                                     }
                                 }
                             }
                         }
                     } // if (create_5e_statblocks || create_statblocks)
-
-                    result += newline;
                 }
             }
         }
@@ -2368,10 +2389,11 @@ static const QString write_snippet(XmlElement *snippet)
                             filename.endsWith(".htm")  ||
                             filename.endsWith(".rtf"))
                         {
-                            result += write_html(true, sn_type, contents->byteData());
+                            // Terminate the write_ext_object with a blank line before putting the explicit markup into the note
+                            result += newline + newline + write_html(true, sn_type, contents->byteData());
                         }
                     }
-                    result += getTags(snippet) + endsnippet;
+                    result += endspan + getTags(snippet);
                 }
             }
         }
@@ -2394,8 +2416,8 @@ static const QString write_snippet(XmlElement *snippet)
             if (!pins.isEmpty()) usemap = "map-" + asset->attribute("filename");
 
             result += write_image(smart_image->attribute("name"), contents->byteData(), mask, filename, annotationText(snippet, false), usemap, pins);
+            result += endspan + getTags(snippet);
         }
-        result += getTags(snippet) + endsnippet;
     }
     else if (sn_type == "Date_Game")
     {
@@ -2403,8 +2425,7 @@ static const QString write_snippet(XmlElement *snippet)
         {
             QString datestr = gregorian(date->attribute("gregorian"));
             if (datestr.isEmpty()) datestr = canonicalTime(date->attribute("canonical"));
-            result += hlabel(snippetLabel(snippet)) + datestr + annotationText(snippet) + newline;
-            result += getTags(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + datestr + annotationText(snippet) + endspan + getTags(snippet);
         }
     }
     else if (sn_type == "Date_Range")
@@ -2416,8 +2437,7 @@ static const QString write_snippet(XmlElement *snippet)
             finish = gregorian(date->attribute("gregorian_end"));
             if (start.isEmpty())  start  = canonicalTime(date->attribute("canonical_start"));
             if (finish.isEmpty()) finish = canonicalTime(date->attribute("canonical_end"));
-            result += hlabel(snippetLabel(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + newline;
-            result += getTags(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + "From: " + start + " To: " + finish + annotationText(snippet) + endspan + getTags(snippet);
         }
     }
     else if (sn_type == "Tag_Standard")
@@ -2428,23 +2448,21 @@ static const QString write_snippet(XmlElement *snippet)
         if (tags.length() > 0)
         {
             // In non-tag text before showing all connected tags
-            result += hlabel(snippetLabel(snippet)) + tags.join(", ") + annotationText(snippet) + newline;
-            result += getTags(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + tags.join(", ") + annotationText(snippet) + endspan + getTags(snippet);
         }
     }
     else if (sn_type == "Numeric")
     {
         if (auto contents = snippet->xmlChild("contents"))
         {
-            result += hlabel(snippetLabel(snippet)) + contents->childString() + annotationText(snippet) + newline;
-            result += getTags(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + contents->childString() + annotationText(snippet) + endspan + getTags(snippet);
         }
     }
     else if (sn_type == "Tag_Multi_Domain")
     {
         QString tags = getTags(snippet, /*withnl*/false);   // tags will be on the same line as this snippet
         if (!tags.isEmpty())
-            result += hlabel(snippetLabel(snippet)) + tags + annotationText(snippet) + endsnippet;
+            result += hlabel(snippetLabel(snippet)) + tags + annotationText(snippet) + endspan;
     }
     // Hybrid_Tag
 
@@ -2452,6 +2470,9 @@ static const QString write_snippet(XmlElement *snippet)
     {
         result += "```\n";
     }
+    // Ensure blank line between snippets
+    if (!result.endsWith("\n\n"))
+        result += newline;
 
     return result;
 }
