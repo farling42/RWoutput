@@ -1,3 +1,5 @@
+![Latest Release Download Count](https://img.shields.io/github/downloads/farling42/RWoutput/latest/module.zip)
+
 # RWoutput
 Tool to convert a Realm Works Output or Export file into other formats.
 
