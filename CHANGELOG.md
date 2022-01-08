@@ -1,3 +1,11 @@
+# 4.15
+For Pathfinder and D&D5E, the encounter blocks now include HP, AC, Init Modifier, XP.
+(The XP is optional for D&D5E, since some portfolios won't include challengerating and XP).
+Also fixes Action section of generated statblocks to use quotes to ensure no issues with wierd characters.
+
+# 4.14
+First look at generating encounter YAML blocks for use with the "Initiative Tracker" plugin of obsidian.md.
+
 # 4.13
 Slight change to CSS for RW styles.
 

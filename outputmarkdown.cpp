@@ -461,6 +461,18 @@ static inline QString topic_link(const XmlElement *topic)
 }
 
 
+static QString xmlValue(const XmlElement *node, const QStringList fields, const QString &attributename)
+{
+    const XmlElement *find = node;
+    for (auto &field: fields)
+    {
+        find = node->xmlChild(field);
+        if (!find) return QString();
+    }
+    return find->attribute(attributename);
+}
+
+
 static inline const QString getGumboAttribute(const GumboNode *node, const QString &name)
 {
     GumboAttribute **attributes = reinterpret_cast<GumboAttribute**>(node->v.element.attributes.data);
@@ -1783,13 +1795,13 @@ static const QString write_5e_statblock(const QByteArray &constxml)
             QString name = weapon->attribute("name");
             if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
 
-            actions.append(name + ", " +
+            actions.append(quotes(name) + ", " + quotes(
                            weapon->attribute("categorytext") + " Attack: " +
                            weapon->attribute("attack") + " to hit, " +
                            reach +
                            "one target. " +   // presumably (since melee)
                            "Hit: " +
-                           weapon->attribute("damage") + " damage");
+                           weapon->attribute("damage") + " damage"));
         }
     }
     if (auto parent = character->xmlChild("ranged"))
@@ -1802,13 +1814,13 @@ static const QString write_5e_statblock(const QByteArray &constxml)
             QString name = weapon->attribute("name");
             if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
 
-            actions.append(name + ", " +
+            actions.append(quotes(name) + ", " + quotes(
                            "Ranged Weapon Attack:" +
                            weapon->attribute("attack") + " to hit, " +
                            ranged->attribute("range") +
                            ", one target. " +   // presumably (since melee)
                            "Hit: " +
-                           weapon->attribute("damage") + " damage");
+                           weapon->attribute("damage") + " damage"));
         }
 
     if (auto parent = character->xmlChild("languages"))
@@ -1883,7 +1895,7 @@ static const QString write_5e_statblock(const QByteArray &constxml)
     }
 
     if (!movements.isEmpty())
-        result += "speed: \"" + movements.join(", ") + '"' + newline;
+        result += "speed: " + quotes(movements.join(", ")) + newline;
 
     //  traits:
     //      - [<trait-name>, <trait-description>]
@@ -2311,27 +2323,88 @@ static const QString write_snippet(XmlElement *snippet)
                         QuaZip zip(&buffer);
                         if (zip.open(QuaZip::mdUnzip))
                         {
+                            // Put encounter block BEFORE other stat blocks
+                            if (initiative_tracker && zip.setCurrentFile("index.xml"))
+                            {
+                                QuaZipFile indexfile(&zip);
+                                if (!indexfile.open(QuaZipFile::ReadOnly))
+                                    qWarning() << "Failed to open index file from zip: " << zip.getCurrentFileName();
+                                else
+                                {
+                                    XmlElement *index = XmlElement::readTree(&indexfile);
+                                    QString system = index->findChild<XmlElement*>("game")->attribute("folder");
+                                    QStringList creatures;
+                                    const auto characters = index->findChildren<XmlElement*>("character");
+                                    for (auto child : characters)
+                                    {
+                                        bool minion = child->parent()->objectName() == "minions";
+
+                                        const XmlElement* statblocks = minion ? child->parent()->parent()->xmlChild("statblocks") : child->xmlChild("statblocks");
+                                        QString statfilename;
+                                        for (auto statblock : statblocks->xmlChildren("statblock"))
+                                            if (statblock->attribute("format") == "xml") {
+                                                statfilename = statblock->attribute("folder") + "/" + statblock->attribute("filename");
+                                                break;
+                                            }
+                                        if (!statfilename.isEmpty() && zip.setCurrentFile(statfilename))
+                                        {
+                                            QuaZipFile statfile(&zip);
+                                            if (!statfile.open(QuaZipFile::ReadOnly))
+                                                qWarning() << "Failed to open statblock file from zip: " << zip.getCurrentFileName();
+                                            else
+                                            {
+                                                XmlElement *stat = XmlElement::readTree(&statfile);
+                                                XmlElement *character = nullptr;
+                                                const auto characters = stat->findChildren<XmlElement*>("character");
+                                                for (auto onechar : characters)
+                                                    if (onechar->attribute("name") == child->attribute("name"))
+                                                    {
+                                                        character = onechar;
+                                                        break;
+                                                    }
+                                                if (character == nullptr)
+                                                {
+                                                    qWarning() << "Failed to find character" << child->attribute("name") << "in statblock XML file";
+                                                }
+                                                else
+                                                {
+                                                    QString extrainfo;
+                                                    // coc7 & wod do not provide any information in XML block
+                                                    if (system == "pathfinder")
+                                                        extrainfo = ", " + xmlValue(character, {"health"}, "hitpoints") +
+                                                               ", " + xmlValue(character, {"armorclass"}, "ac") +
+                                                               ", " + xmlValue(character, {"initiative"}, "total") +
+                                                               ", " + xmlValue(character, {"xpaward"}, "value");
+                                                    else if (system == "5e")
+                                                    {
+                                                        extrainfo = ", " + xmlValue(character, {"health"}, "hitpoints") +
+                                                               ", " + xmlValue(character, {"armorclass"}, "ac") +
+                                                               ", " + xmlValue(character, {"initiative"}, "total");
+                                                        // XP award is optional
+                                                        QString xp = xmlValue(character, {"xpaward"}, "value");
+                                                        if (!xp.isEmpty()) extrainfo += ", " + xp;
+                                                    }
+
+                                                    // Remove trailing #<digit> from creature name (if present)
+                                                    QString name = character->attribute("name");
+                                                    int pos = name.indexOf(" #");
+                                                    if (pos > 0) name.truncate(pos);
+
+                                                    creatures.append("  - " + name + extrainfo + "\n");
+                                                    // optionally, add HP + AC + Initiative Modifier
+                                                }
+                                            }
+                                        }
+
+                                    }
+                                    if (creatures.length() > 0)
+                                        result += "```encounter\ncreatures:\n" + creatures.join(QString()) + "```" + newline + newline;
+                                }
+                            }
+
                             // Need to convert this HTML into markup
                             for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
                             {
-                                if (initiative_tracker && zip.getCurrentFileName() == "index.xml") {
-                                    QuaZipFile file(&zip);
-                                    if (!file.open(QuaZipFile::ReadOnly))
-                                        qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
-                                    else
-                                    {
-                                        XmlElement *index = XmlElement::readTree(&file);
-                                        QStringList creatures;
-                                        const auto characters = index->findChildren<XmlElement*>("character");
-                                        for (auto child : characters)
-                                        {
-                                            creatures.append("- " + child->attribute("name") + "\n");
-                                            // optionally, add HP + AC + Initiative Modifier
-                                        }
-                                        if (creatures.length() > 0)
-                                            result += "```encounter\ncreatures:\n" + creatures.join(QString()) + "```\n";
-                                    }
-                                }
                                 if (create_5e_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
                                 {
                                     QuaZipFile file(&zip);
@@ -2372,7 +2445,7 @@ static const QString write_snippet(XmlElement *snippet)
                                         }
                                     }
                                 }
-                            }
+                            } /* for goToNextFile */
                         }
                     } // if (create_5e_statblocks || create_statblocks)
                 }
