@@ -287,7 +287,8 @@ void MainWindow::on_saveMarkdown_clicked()
                settings.value("obsidian/useAdmonitionGMdir").toBool(),
                settings.value("obsidian/useAdmonitionStyles").toBool(),
                settings.value("obsidian/fmLabeledText").toBool(),
-               settings.value("obsidian/fmNumeric").toBool()
+               settings.value("obsidian/fmNumeric").toBool(),
+               settings.value("obsidian/useInitiativeTracker").toBool()
                );
 
     setStatusText("Markdown file SAVE complete.");

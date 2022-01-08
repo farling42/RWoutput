@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>274</width>
-    <height>248</height>
+    <width>304</width>
+    <height>271</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -54,7 +54,14 @@
    <item>
     <widget class="QCheckBox" name="use5estatblocks">
      <property name="text">
-      <string>Create yaml for 5E-Statblocks from Portfolio files</string>
+      <string>Create TTRPG-Statblocks from each Portfolio</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="useInitiativeTracker">
+     <property name="text">
+      <string>Create Initiative Tracker Encounter from each Portfolio</string>
      </property>
     </widget>
    </item>

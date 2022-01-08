@@ -72,6 +72,7 @@ static bool use_admonition_gmdir=false;
 static bool use_admonition_style=false;
 static bool frontmatter_labeled_text=true;
 static bool frontmatter_numeric=true;
+static bool initiative_tracker=true;
 
 #undef DUMP_CHILDREN
 
@@ -2302,7 +2303,7 @@ static const QString write_snippet(XmlElement *snippet)
                     result += write_ext_object(ext_object->attribute("name"), contents->byteData(), asset->attribute("filename"), annotationText(snippet, false));
                     result += endspan + getTags(snippet);
 
-                    if (create_5e_statblocks || create_statblocks)
+                    if (create_5e_statblocks || create_statblocks || initiative_tracker)
                     {
                         // Put in markers for statblock
                         QByteArray store = contents->byteData();
@@ -2313,6 +2314,24 @@ static const QString write_snippet(XmlElement *snippet)
                             // Need to convert this HTML into markup
                             for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
                             {
+                                if (initiative_tracker && zip.getCurrentFileName() == "index.xml") {
+                                    QuaZipFile file(&zip);
+                                    if (!file.open(QuaZipFile::ReadOnly))
+                                        qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
+                                    else
+                                    {
+                                        XmlElement *index = XmlElement::readTree(&file);
+                                        QStringList creatures;
+                                        const auto characters = index->findChildren<XmlElement*>("character");
+                                        for (auto child : characters)
+                                        {
+                                            creatures.append("- " + child->attribute("name") + "\n");
+                                            // optionally, add HP + AC + Initiative Modifier
+                                        }
+                                        if (creatures.length() > 0)
+                                            result += "```encounter\ncreatures:\n" + creatures.join(QString()) + "```\n";
+                                    }
+                                }
                                 if (create_5e_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
                                 {
                                     QuaZipFile file(&zip);
@@ -3324,7 +3343,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_admonition_gmdir,
                 bool add_admonition_rwstyle,
                 bool add_frontmatter_labeled_text,
-                bool add_frontmatter_numeric)
+                bool add_frontmatter_numeric,
+                bool add_initiative_tracker)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3348,6 +3368,7 @@ void toMarkdown(const XmlElement *root_elem,
     use_admonition_style = add_admonition_rwstyle;
     frontmatter_labeled_text = add_frontmatter_labeled_text;
     frontmatter_numeric      = add_frontmatter_numeric;
+    initiative_tracker       = add_initiative_tracker;
 
     gumbofilenumber   = 0;
     collator.setNumericMode(true);
