@@ -1,3 +1,8 @@
+# 4.16
+Ensure that minions are added to 5e-statblocks as well as the main character.
+
+Ensure that statblock generation doesn't fail for SWADE (and other) game systems.
+
 # 4.15
 For Pathfinder and D&D5E, the encounter blocks now include HP, AC, Init Modifier, XP.
 (The XP is optional for D&D5E, since some portfolios won't include challengerating and XP).

@@ -6,7 +6,7 @@
 
 # Ensure "Enable Qt quick compiler" is disabled in the "qmake" step of Projects -> Build Options
 
-VERSION = 4.15
+VERSION = 4.16
 
 QT       += core gui printsupport network
 

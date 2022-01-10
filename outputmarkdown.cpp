@@ -1546,7 +1546,7 @@ static void dump_children(const QString &from, const GumboNode *parent)
 #endif
 
 
-static inline QString stat(XmlElement *node, const QString &prefix, const QString &field, const QString &attribute=QString())
+static inline QString stat(XmlElement *node, const QString &prefix, const QString &field, const QString &attribute, const QString &suffix)
 {
     if (!field.isEmpty())
     {
@@ -1579,8 +1579,8 @@ static inline QString stat(XmlElement *node, const QString &prefix, const QStrin
     }
 
     QString result = attribute.isEmpty() ? node->fixedText() : node->attribute(attribute);
-    if (!result.isEmpty()) result.prepend(prefix);
-    return result;
+    if (result.isEmpty()) return result;
+    return prefix + result + suffix;
 }
 
 static const QString get_content_text(XmlElement *parent, const ExportLinks &links, bool dice=true);
@@ -1616,8 +1616,8 @@ static inline QString st_save(XmlElement *character, const QString &prefix, cons
 {
     // base_mod: text attribute has "0" whilst base and modified has "+0"
     // save_mod: text attribute has "+0"
-    const QString base_mod = stat(character,"", "abilityscores/abilityscore+name+" + abilityname + "/abilbonus",   "modified");
-    const QString save_mod = stat(character,"", "abilityscores/abilityscore+name+" + abilityname + "/savingthrow", "text");
+    const QString base_mod = stat(character, "", "abilityscores/abilityscore+name+" + abilityname + "/abilbonus",   "modified", QString());
+    const QString save_mod = stat(character, "", "abilityscores/abilityscore+name+" + abilityname + "/savingthrow", "text",     QString());
     if (base_mod != save_mod)
         return indent + prefix + save_mod;
 
@@ -1632,16 +1632,7 @@ static inline QString st_save(XmlElement *character, const QString &prefix, cons
  */
 static const QString write_5e_statblock(const QByteArray &constxml)
 {
-    QString result;
-    QString temp;
-
-    QStringList senses;
-    QStringList traits;
-    QStringList legendaries;
-    QStringList reactions;
-    QStringList actions;
-    QStringList movements;
-    QStringList languages;
+    QString finalresult;
 
     QByteArray xml(constxml);   // convert from const to non-const
     QBuffer buffer(&xml);
@@ -1657,266 +1648,271 @@ static const QString write_5e_statblock(const QByteArray &constxml)
         return QString();
     }
 
-    XmlElement *character = tree->findChild<XmlElement*>("character");
-    if (!character)
+    QList<XmlElement*> children = tree->findChildren<XmlElement*>("character");
+    if (children.isEmpty())
     {
         qWarning() << "write_5e_statblock: failed to find <character> in XML string buffer";
         return QString();
     }
 
-    // Set up the suffix which should be ignored on ability names.
-    const QString ignorename = " (" + character->attribute("name") + ")";
-
-    result += stat(character, "name: ",      QString(),    "name") + newline;
-    result += stat(character, "size: ",      "size",       "name") + newline;
-    result += stat(character, "race: ",      "race",       "displayname") + newline;
-    result += stat(character, "type: ",      "types/type", "name") + newline;
-    result += stat(character, "subtype: ",   "subrace",    "name") + newline;
-    result += stat(character, "alignment: ", "alignment",  "name") + newline;
-    result += stat(character, "ac: ",        "armorclass", "ac")   + newline;
-    result += stat(character, "hp: ",        "health",     "hitpoints") + newline;
-    result += stat(character, "hit_dice: ",  "health",     "hitdice") + newline;
-
-    // Add a flag to add Dice Roller markers
-    if (detect_dice_rolls) result += "dice: true" + newline;
-
-    temp = stat(character, "", "movement/speed", "value");
-    if (!temp.isEmpty()) movements.append(temp + " ft.");
-    //
-    if (character->xmlChild("abilityscores"))
+    for (XmlElement *character : children)
     {
-        // D&D 5E
-        result +=
-            stat(character, "stats: [", "abilityscores/abilityscore+name+Strength/abilvalue", "text") +
-            stat(character, ", ", "abilityscores/abilityscore+name+Dexterity/abilvalue", "text") +
-            stat(character, ", ", "abilityscores/abilityscore+name+Constitution/abilvalue", "text") +
-            stat(character, ", ", "abilityscores/abilityscore+name+Intelligence/abilvalue", "text") +
-            stat(character, ", ", "abilityscores/abilityscore+name+Wisdom/abilvalue", "text") +
-            stat(character, ", ", "abilityscores/abilityscore+name+Charisma/abilvalue", "text") + ']' + newline;
-        const QString saves =
-            st_save(character, "Str: ", "Strength") +
-            st_save(character, "Dex: ", "Dexterity") +
-            st_save(character, "Con: ", "Constitution") +
-            st_save(character, "Int: ", "Intelligence") +
-            st_save(character, "Wis: ", "Wisdom") +
-            st_save(character, "Cha: ", "Charisma");
-        if (!saves.isEmpty()) result += "saves:" + saves + newline;
+        QString result;
+        QString temp;
 
-    }
-    else
-    {
-        // Pathfinder
-        result +=
-            stat(character, "stats: [", "attributes/attribute+name+Strength/attrvalue", "modified") +
-            stat(character, ", ", "attributes/attribute+name+Dexterity/attrvalue", "modified") +
-            stat(character, ", ", "attributes/attribute+name+Constitution/attrvalue", "modified") +
-            stat(character, ", ", "attributes/attribute+name+Intelligence/attrvalue", "modified") +
-            stat(character, ", ", "attributes/attribute+name+Wisdom/attrvalue", "modified") +
-            stat(character, ", ", "attributes/attribute+name+Charisma/attrvalue", "modified") + ']' + newline;
-        result += "saves:" +
-            stat(character, indent + "Con: ", "saves/save+abbr+Fort", "save") +
-            stat(character, indent + "Dex: ",  "saves/save+abbr+Ref", "save") +
-            stat(character, indent + "Wis: ", "saves/save+abbr+Will", "save") + newline;
-    }
+        QStringList senses;
+        QStringList traits;
+        QStringList legendaries;
+        QStringList reactions;
+        QStringList actions;
+        QStringList movements;
+        QStringList languages;
 
-    if (auto parent = character->xmlChild("skills"))
-    {
-        result += "skillsaves:";
-        foreach (auto skill, parent->xmlChildren("skill"))
+        // Set up the suffix which should be ignored on ability names.
+        const QString ignorename = " (" + character->attribute("name") + ")";
+
+        result += stat(character, "name: ",      QString(),    "name",        newline);
+        result += stat(character, "size: ",      "size",       "name",        newline);
+        result += stat(character, "race: ",      "race",       "displayname", newline);
+        result += stat(character, "type: ",      "types/type", "name",        newline);
+        result += stat(character, "subtype: ",   "subrace",    "name",        newline);
+        result += stat(character, "alignment: ", "alignment",  "name",        newline);
+        result += stat(character, "ac: ",        "armorclass", "ac",          newline);
+        result += stat(character, "hp: ",        "health",     "hitpoints",   newline);
+        result += stat(character, "hit_dice: ",  "health",     "hitdice",     newline);
+
+        // Add a flag to add Dice Roller markers
+        if (detect_dice_rolls) result += "dice: true" + newline;
+
+        temp = stat(character, "", "movement/speed", "value", " ft.");
+        if (!temp.isEmpty()) movements.append(temp);
+        //
+        if (character->xmlChild("abilityscores"))
         {
-            QString name      = skill->attribute("name");
-            QString abilbonus = skill->attribute("abilbonus");
-            QString value     = skill->attribute("value");
-            // Statblock doesn't include skills where the skill matches the stat bonus.
-            // but always seems to include the Perception skill.
-            if (abilbonus != value || name == "Perception")
+            // D&D 5E
+            result +=
+                    stat(character, "stats: [", "abilityscores/abilityscore+name+Strength/abilvalue", "text", QString()) +
+                    stat(character, ", ", "abilityscores/abilityscore+name+Dexterity/abilvalue",      "text", QString()) +
+                    stat(character, ", ", "abilityscores/abilityscore+name+Constitution/abilvalue",   "text", QString()) +
+                    stat(character, ", ", "abilityscores/abilityscore+name+Intelligence/abilvalue",   "text", QString()) +
+                    stat(character, ", ", "abilityscores/abilityscore+name+Wisdom/abilvalue",         "text", QString()) +
+                    stat(character, ", ", "abilityscores/abilityscore+name+Charisma/abilvalue",       "text", ']' + newline);
+            const QString saves =
+                    st_save(character, "Str: ", "Strength") +
+                    st_save(character, "Dex: ", "Dexterity") +
+                    st_save(character, "Con: ", "Constitution") +
+                    st_save(character, "Int: ", "Intelligence") +
+                    st_save(character, "Wis: ", "Wisdom") +
+                    st_save(character, "Cha: ", "Charisma");
+            if (!saves.isEmpty()) result += "saves:" + saves + newline;
+
+        }
+        else if (character->xmlChild("attributes"))
+        {
+            // Pathfinder (and SWADE?)
+            result +=
+                    stat(character, "stats: [", "attributes/attribute+name+Strength/attrvalue", "modified", QString()) +
+                    stat(character, ", ", "attributes/attribute+name+Dexterity/attrvalue",      "modified", QString()) +
+                    stat(character, ", ", "attributes/attribute+name+Constitution/attrvalue",   "modified", QString()) +
+                    stat(character, ", ", "attributes/attribute+name+Intelligence/attrvalue",   "modified", QString()) +
+                    stat(character, ", ", "attributes/attribute+name+Wisdom/attrvalue",         "modified", QString()) +
+                    stat(character, ", ", "attributes/attribute+name+Charisma/attrvalue",       "modified", ']' + newline);
+            const QString saves =
+                    stat(character, indent + "Con: ", "saves/save+abbr+Fort", "save", QString()) +
+                    stat(character, indent + "Dex: ",  "saves/save+abbr+Ref", "save", QString()) +
+                    stat(character, indent + "Wis: ", "saves/save+abbr+Will", "save", QString());
+            if (!saves.isEmpty()) result += "saves:" + saves + newline;
+        }
+
+        if (auto parent = character->xmlChild("skills"))
+        {
+            result += "skillsaves:";
+            foreach (auto skill, parent->xmlChildren("skill"))
             {
-                if (value.front() != '-') value.prepend('+');
-                result += indent + name + ": " + value;
+                QString name      = skill->attribute("name");
+                QString abilbonus = skill->attribute("abilbonus");
+                QString value     = skill->attribute("value");
+                // Statblock doesn't include skills where the skill matches the stat bonus.
+                // but always seems to include the Perception skill.
+                if (abilbonus != value || name == "Perception")
+                {
+                    if (value.front() != '-') value.prepend('+');
+                    result += indent + quotes(name) + ": " + value;
+                }
             }
-        }
-        result += newline;
-    }
-
-    temp = stat(character, "", "damagevulnerabilities", "text");
-    if (!temp.isEmpty()) result += "damage_vulnerabilities: " + temp + newline;
-
-    temp = stat(character, "", "damageresistances", "text");
-    if (!temp.isEmpty()) result += "damage_resistances: " + temp + newline;
-
-    temp = stat(character, "", "damageimmunities", "text");
-    if (!temp.isEmpty()) result += "damage_immunities: " + temp + newline;
-
-    temp = stat(character, "", "conditionimmunities", "text");
-    if (!temp.isEmpty()) result += "condition_immunities: " + temp + newline;
-
-    temp = stat(character, "", "challengerating", "value");
-    if (!temp.isEmpty()) result += "cr: " + temp + newline;
-
-    if (auto parent = character->xmlChild("otherspecials"))
-    {
-        foreach (auto special, parent->xmlChildren("special"))
-        {
-            QString name = special->attribute("name");
-            if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
-
-            QString value = quotes(name) + ", " + quotes(stattext(special->xmlChild("description")));
-
-            QString type = special->attribute("type");
-            if (type == "Action")
-                actions.append(value);
-            else if (type == "Legendary")
-                legendaries.append(value);
-            else if (type == "Reaction")
-                reactions.append(value);
-            else if (type == "Movement")
-                movements.append(name);
-            else if (type == "Sense")
-                senses.append(name);
-            else if (type == "Special")
-                traits.append(value);
-            else if (type == "Language")
-                languages.append(name);
-        }
-    }
-
-    if (auto parent = character->xmlChild("senses"))
-        foreach (auto sense, parent->xmlChildren())
-        {
-            senses.append(sense->attribute("name"));
+            result += newline;
         }
 
-    if (auto parent = character->xmlChild("melee"))
-    {
-        QString reach = stat(character, "reach ", "size/reach", "value") + " ft., ";
-        foreach (auto weapon, parent->xmlChildren("weapon"))
+        result += stat(character, "damage_vulnerabilities: ", "damagevulnerabilities", "text",  newline);
+        result += stat(character, "damage_resistances: ",     "damageresistances",     "text",  newline);
+        result += stat(character, "damage_immunities: ",      "damageimmunities",      "text",  newline);
+        result += stat(character, "condition_immunities: ",   "conditionimmunities",   "text",  newline);
+        result += stat(character, "cr: ",                     "challengerating",       "value", newline);
+
+        if (auto parent = character->xmlChild("otherspecials"))
         {
-            // <weapon name="Longsword" categorytext="Melee Weapon" typetext="Slashing" attack="+9" damage="13 (2d8+4) slashing" quantity="1" isproficient="yes">
-            // - [Bite, Melee Weapon Attack:+ 15 to hit, reach 15 ft., one target. Hit: 19 (2d10 + 8) piercing damage plus 9 (2d8) acid damage.]
-            QString name = weapon->attribute("name");
-            if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
-
-            actions.append(quotes(name) + ", " + quotes(
-                           weapon->attribute("categorytext") + " Attack: " +
-                           weapon->attribute("attack") + " to hit, " +
-                           reach +
-                           "one target. " +   // presumably (since melee)
-                           "Hit: " +
-                           weapon->attribute("damage") + " damage"));
-        }
-    }
-    if (auto parent = character->xmlChild("ranged"))
-        foreach (auto weapon, parent->xmlChildren("weapon"))
-        {
-            // <weapon name="Spell Attack" categorytext="Thrown Weapon" typetext="" attack="+3" damage="As Spell" equipped="mainhand" quantity="1" isproficient="yes">
-            //    <rangedattack attack="+5" range="150 ft./600 ft."/>
-            // - [Longbow. Ranged Weapon Attack: +6 to hit, range 150/600 ft., one target. Hit: 8 (1d8 + 4) piercing damage.]
-            XmlElement *ranged = weapon->xmlChild("rangedattack");
-            QString name = weapon->attribute("name");
-            if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
-
-            actions.append(quotes(name) + ", " + quotes(
-                           "Ranged Weapon Attack:" +
-                           weapon->attribute("attack") + " to hit, " +
-                           ranged->attribute("range") +
-                           ", one target. " +   // presumably (since melee)
-                           "Hit: " +
-                           weapon->attribute("damage") + " damage"));
-        }
-
-    if (auto parent = character->xmlChild("languages"))
-        foreach (auto lang, parent->xmlChildren())
-        {
-            languages.append(lang->attribute("name"));
-        }
-
-    // Lastly, senses has passive perception at the end of the line
-    QString passive_perception = stat(character, "", "skills/skill+name+Perception", "passive");
-    if (!passive_perception.isEmpty()) senses.append("Passive Perception " + passive_perception);
-
-    if (senses.length() > 0)
-        result += "senses: " + quotes(senses.join(", ")) + newline;
-
-    result += "languages: " + (languages.isEmpty() ? "--" : languages.join(", ")) + newline;
-
-    // spellclasses/spellclass[name="Rogue" spells="Spontaneous" maxspelllevel="1" cantripcount="2" spellcount="0"]
-    // spellslots/spellslot[name="1st" count="2" used="0"]
-    // cantrips/spell[name="Mage Hand" class="Rogue" casttime="1 action" range="30 feet" duration="1 minute" dc="12" casterlevel="1"]
-    // spellsknown/spell[name="Counterspell" level="3rd" class="Rogue" casttime="1 reaction" range="60 feet" duration="" dc="12" casterlevel="1" componenttext="Somatic" schooltext="Abjuration" castsleft="0" spontaneous="yes"]
-    // -->
-    // spells:
-    // - The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared
-    // - Cantrips (at will): fire bolt, light, mage hand, prestidigitation, shocking grasp
-    // - 1st level (4 slots): detect magic, identify, mage armor*, magic missile
-    // - 2nd level (3 slots): detect thoughts, mirror image, misty step
-    QMultiMap<QString,QString> spellnames;
-    QMap<QString,QString> spellslots;
-    if (auto parent = character->xmlChild("spellslots"))
-        foreach (auto slot, parent->xmlChildren("spellslot"))
-        {
-            QString count = slot->attribute("count");
-            spellslots.insert(slot->attribute("name"), count + (count=="1" ? " slot" : " slots"));
-        }
-    else if (auto parent = character->xmlChild("spellclasses")) // pathfinder
-        foreach (auto spclass, parent->xmlChildren("spellclass"))
-        {
-            foreach (auto splevel, spclass->xmlChildren("spelllevel"))
+            foreach (auto special, parent->xmlChildren("special"))
             {
-                QString casts = splevel->attribute("maxcasts");
-                if (!casts.isEmpty())    // 0th level don't have casts
-                    spellslots.insert(splevel->attribute("level"), casts);
+                QString name = special->attribute("name");
+                if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
+
+                QString value = quotes(name) + ", " + quotes(stattext(special->xmlChild("description")));
+
+                QString type = special->attribute("type");
+                if (type == "Action")
+                    actions.append(value);
+                else if (type == "Legendary")
+                    legendaries.append(value);
+                else if (type == "Reaction")
+                    reactions.append(value);
+                else if (type == "Movement")
+                    movements.append(name);
+                else if (type == "Sense")
+                    senses.append(name);
+                else if (type == "Special")
+                    traits.append(value);
+                else if (type == "Language")
+                    languages.append(name);
             }
         }
 
-    if (auto parent = character->xmlChild("cantrips"))
-        foreach (auto spell, parent->xmlChildren("spell"))
+        if (auto parent = character->xmlChild("senses"))
+            foreach (auto sense, parent->xmlChildren())
+            {
+                senses.append(sense->attribute("name"));
+            }
+
+        if (auto parent = character->xmlChild("melee"))
         {
-            spellnames.insert(0, spell->attribute("name"));
+            QString reach = stat(character, "reach ", "size/reach", "value", " ft., ");
+            foreach (auto weapon, parent->xmlChildren("weapon"))
+            {
+                // <weapon name="Longsword" categorytext="Melee Weapon" typetext="Slashing" attack="+9" damage="13 (2d8+4) slashing" quantity="1" isproficient="yes">
+                // - [Bite, Melee Weapon Attack:+ 15 to hit, reach 15 ft., one target. Hit: 19 (2d10 + 8) piercing damage plus 9 (2d8) acid damage.]
+                QString name = weapon->attribute("name");
+                if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
+
+                actions.append(quotes(name) + ", " + quotes(
+                                   weapon->attribute("categorytext") + " Attack: " +
+                                   weapon->attribute("attack") + " to hit, " +
+                                   reach +
+                                   "one target. " +   // presumably (since melee)
+                                   "Hit: " +
+                                   weapon->attribute("damage") + " damage"));
+            }
         }
-    if (auto parent = character->xmlChild("spellsknown"))
-        foreach (auto spell, parent->xmlChildren("spell"))
+        if (auto parent = character->xmlChild("ranged"))
+            foreach (auto weapon, parent->xmlChildren("weapon"))
+            {
+                // <weapon name="Spell Attack" categorytext="Thrown Weapon" typetext="" attack="+3" damage="As Spell" equipped="mainhand" quantity="1" isproficient="yes">
+                //    <rangedattack attack="+5" range="150 ft./600 ft."/>
+                // - [Longbow. Ranged Weapon Attack: +6 to hit, range 150/600 ft., one target. Hit: 8 (1d8 + 4) piercing damage.]
+                XmlElement *ranged = weapon->xmlChild("rangedattack");
+                QString name = weapon->attribute("name");
+                if (name.endsWith(ignorename)) name.truncate(name.length() - ignorename.length());
+
+                actions.append(quotes(name) + ", " + quotes(
+                                   "Ranged Weapon Attack:" +
+                                   weapon->attribute("attack") + " to hit, " +
+                                   ranged->attribute("range") +
+                                   ", one target. " +   // presumably (since melee)
+                                   "Hit: " +
+                                   weapon->attribute("damage") + " damage"));
+            }
+
+        if (auto parent = character->xmlChild("languages"))
+            foreach (auto lang, parent->xmlChildren())
+            {
+                languages.append(lang->attribute("name"));
+            }
+
+        // Lastly, senses has passive perception at the end of the line
+        QString passive_perception = stat(character, "Passive Perception ", "skills/skill+name+Perception", "passive", QString());
+        if (!passive_perception.isEmpty()) senses.append(passive_perception);
+
+        if (senses.length() > 0)
+            result += "senses: " + quotes(senses.join(", ")) + newline;
+
+        result += "languages: " + (languages.isEmpty() ? "--" : languages.join(", ")) + newline;
+
+        // spellclasses/spellclass[name="Rogue" spells="Spontaneous" maxspelllevel="1" cantripcount="2" spellcount="0"]
+        // spellslots/spellslot[name="1st" count="2" used="0"]
+        // cantrips/spell[name="Mage Hand" class="Rogue" casttime="1 action" range="30 feet" duration="1 minute" dc="12" casterlevel="1"]
+        // spellsknown/spell[name="Counterspell" level="3rd" class="Rogue" casttime="1 reaction" range="60 feet" duration="" dc="12" casterlevel="1" componenttext="Somatic" schooltext="Abjuration" castsleft="0" spontaneous="yes"]
+        // -->
+        // spells:
+        // - The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared
+        // - Cantrips (at will): fire bolt, light, mage hand, prestidigitation, shocking grasp
+        // - 1st level (4 slots): detect magic, identify, mage armor*, magic missile
+        // - 2nd level (3 slots): detect thoughts, mirror image, misty step
+        QMultiMap<QString,QString> spellnames;
+        QMap<QString,QString> spellslots;
+        if (auto parent = character->xmlChild("spellslots"))
+            foreach (auto slot, parent->xmlChildren("spellslot"))
+            {
+                QString count = slot->attribute("count");
+                spellslots.insert(slot->attribute("name"), count + (count=="1" ? " slot" : " slots"));
+            }
+        else if (auto parent = character->xmlChild("spellclasses")) // pathfinder
+            foreach (auto spclass, parent->xmlChildren("spellclass"))
+            {
+                foreach (auto splevel, spclass->xmlChildren("spelllevel"))
+                {
+                    QString casts = splevel->attribute("maxcasts");
+                    if (!casts.isEmpty())    // 0th level don't have casts
+                        spellslots.insert(splevel->attribute("level"), casts);
+                }
+            }
+
+        if (auto parent = character->xmlChild("cantrips"))
+            foreach (auto spell, parent->xmlChildren("spell"))
+            {
+                spellnames.insert(0, spell->attribute("name"));
+            }
+        if (auto parent = character->xmlChild("spellsknown"))
+            foreach (auto spell, parent->xmlChildren("spell"))
+            {
+                spellnames.insert(spell->attribute("level"), spell->attribute("name"));
+            }
+        //  spells:
+        //      - <description>
+        //      - <spell level>: <spell-list>
+        if (!spellnames.isEmpty())
         {
-            spellnames.insert(spell->attribute("level"), spell->attribute("name"));
+            result += "spells: ";
+            foreach (auto level, spellnames.uniqueKeys())
+            {
+                QString count = spellslots.value(level);
+                if (count.isEmpty()) count = "at will";
+                QString lvl = (level == 0) ? "Cantrip" : (level + " level");
+                const QStringList spells = spellnames.values(level);
+                result += indent + lvl + " (" + count + "): " + spells.join(", ");
+            }
+            result += newline;
         }
-    //  spells:
-    //      - <description>
-    //      - <spell level>: <spell-list>
-    if (!spellnames.isEmpty())
-    {
-        result += "spells: ";
-        foreach (auto level, spellnames.uniqueKeys())
-        {
-            QString count = spellslots.value(level);
-            if (count.isEmpty()) count = "at will";
-            QString lvl = (level == 0) ? "Cantrip" : (level + " level");
-            const QStringList spells = spellnames.values(level);
-            result += indent + lvl + " (" + count + "): " + spells.join(", ");
-        }
-        result += newline;
-    }
 
-    if (!movements.isEmpty())
-        result += "speed: " + quotes(movements.join(", ")) + newline;
+        if (!movements.isEmpty())
+            result += "speed: " + quotes(movements.join(", ")) + newline;
 
-    //  traits:
-    //      - [<trait-name>, <trait-description>]
-    //      - ...
-    result += join_list("traits", traits);
+        //  traits:
+        //      - [<trait-name>, <trait-description>]
+        //      - ...
+        result += join_list("traits", traits);
 
-    //  actions:
-    //      - [<trait-name>, <trait-description>]
-    //      - ...
-    result += join_list("actions", actions);
+        //  actions:
+        //      - [<trait-name>, <trait-description>]
+        //      - ...
+        result += join_list("actions", actions);
 
-    //  legendary_actions:
-    //      - [<legendary_actions-name>, <legendary_actions-description>]
-    //      - ...
-    result += join_list("legendary_actions", legendaries);
+        //  legendary_actions:
+        //      - [<legendary_actions-name>, <legendary_actions-description>]
+        //      - ...
+        result += join_list("legendary_actions", legendaries);
 
-    //  reactions:
-    //      - [<reaction-name>, <reaction-description>]
-    //      - ...
-    result += join_list("reactions", reactions);
+        //  reactions:
+        //      - [<reaction-name>, <reaction-description>]
+        //      - ...
+        result += join_list("reactions", reactions);
 
 #if 0
 name: string
@@ -1958,13 +1954,17 @@ reactions:
     - ...
 #endif
 
-    // Put the statblock wrapper on the result
-    if (!result.isEmpty())
-    {
-        result.prepend(codeblock + "statblock" + newline);
-        result.append(codeblock + newline);
-    }
-    return result;
+        // Put the statblock wrapper on the result
+        if (!result.isEmpty())
+        {
+            result.prepend(codeblock + "statblock" + newline);
+            result.append(codeblock + newline);
+        }
+
+        finalresult += result;
+    } /* for each child */
+
+    return finalresult;
 }
 
 /**
