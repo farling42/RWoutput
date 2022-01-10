@@ -91,6 +91,7 @@ static const QString oldAssetsDir("asset-files");
 static const QString assetsDir("zz_asset-files");
 static const QString newline("\n");
 static const QString frontmatterMarker("---\n");
+static const QString codeblock("```");
 
 static QString mainPageName;
 static QString imported_date;
@@ -1053,7 +1054,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     {
         int height = image_size.height();
         // The leaflet plugin for Obsidian uses latitude/longitude, so (y,x)
-        result += "\n```leaflet\n";
+        result += newline + codeblock + "leaflet" + newline;
         if (!image_name.isEmpty()) result += "id: " + image_name + newline;
         result += "image: [[" + filename + "]]\n";
         if (height > 1500) result += "height: " + mapCoord(height * 2) + "px\n";   // double the scaled height seems to work
@@ -1091,7 +1092,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
             }
             result += newline;
         }
-        result += "```";
+        result += codeblock;
     }
     else
     {
@@ -1960,8 +1961,8 @@ reactions:
     // Put the statblock wrapper on the result
     if (!result.isEmpty())
     {
-        result.prepend("```statblock\n");
-        result.append("```\n");
+        result.prepend(codeblock + "statblock" + newline);
+        result.append(codeblock + newline);
     }
     return result;
 }
@@ -2176,6 +2177,43 @@ static inline QString gregorian(const QString &source)
     return datetime.toString(QLocale::system().dateTimeFormat());    //QLocale::system().toString(datetime);
 }
 
+/**
+ * @brief encounter_creature
+ * Determine how many additional parameters can be found for a creature being added to an ENCOUNTER block.
+ * @param character
+ * @return
+ */
+static inline QString encounter_creature(XmlElement *character)
+{
+    // Remove trailing #<digit> from creature name (if present)
+    QString name = character->attribute("name");
+    int pos = name.indexOf(" #");
+    if (pos > 0) name.truncate(pos);
+
+    QString result{"  - " + name};
+    QString part;
+    const QString prefix{", "};
+
+    // Both PF1 and DND5E have the same structure in their XML, so let's assume it is the same for other game systems.
+    part = xmlValue(character, {"health"}, "hitpoints");
+    if (part.isEmpty()) return result;
+    result += prefix + part;
+
+    part = xmlValue(character, {"armorclass"}, "ac");
+    if (part.isEmpty()) return result;
+    result += prefix + part;
+
+    part = xmlValue(character, {"initiative"}, "total");
+    if (part.isEmpty()) return result;
+    result += prefix + part;
+
+    part =   xmlValue(character, {"xpaward"}, "value");
+    if (part.isEmpty()) return result;
+    result += prefix + part;
+
+    return result;
+}
+
 
 static const QString write_snippet(XmlElement *snippet)
 {
@@ -2224,7 +2262,7 @@ static const QString write_snippet(XmlElement *snippet)
         QString gmtext = get_content_text(gm_directions, gmlinks).trimmed();
         if (use_admonition_gmdir)
         {
-            result += "```ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + "\n```";
+            result += codeblock + "ad-warning\ntitle: GM Directions\ncollapse: open\n" + gmtext + newline + codeblock;
         }
         else
         {
@@ -2240,13 +2278,13 @@ static const QString write_snippet(XmlElement *snippet)
         if (!sn_style.isEmpty())
         {
             if (sn_style == "Read_Aloud")
-                result += "```ad-note\ntitle: Read-Aloud\n";
+                result += codeblock + "ad-note\ntitle: Read-Aloud\n";
             else if (sn_style == "Flavor")
-                result += "```ad-tip\ntitle: Flavor\n";
+                result += codeblock + "ad-tip\ntitle: Flavor\n";
             else if (sn_style == "Callout")
-                result += "```ad-quote\ntitle: Callout\n";
+                result += codeblock + "ad-quote\ntitle: Callout\n";
             else if (sn_style == "Handout")     // Message style
-                result += "```ad-warning\ntitle: Message\n";
+                result += codeblock + "ad-warning\ntitle: Message\n";
             else
             {
                 qWarning() << "Unknown style for snippet:" << sn_style;
@@ -2368,37 +2406,14 @@ static const QString write_snippet(XmlElement *snippet)
                                                 }
                                                 else
                                                 {
-                                                    QString extrainfo;
-                                                    // coc7 & wod do not provide any information in XML block
-                                                    if (system == "pathfinder")
-                                                        extrainfo = ", " + xmlValue(character, {"health"}, "hitpoints") +
-                                                               ", " + xmlValue(character, {"armorclass"}, "ac") +
-                                                               ", " + xmlValue(character, {"initiative"}, "total") +
-                                                               ", " + xmlValue(character, {"xpaward"}, "value");
-                                                    else if (system == "5e")
-                                                    {
-                                                        extrainfo = ", " + xmlValue(character, {"health"}, "hitpoints") +
-                                                               ", " + xmlValue(character, {"armorclass"}, "ac") +
-                                                               ", " + xmlValue(character, {"initiative"}, "total");
-                                                        // XP award is optional
-                                                        QString xp = xmlValue(character, {"xpaward"}, "value");
-                                                        if (!xp.isEmpty()) extrainfo += ", " + xp;
-                                                    }
-
-                                                    // Remove trailing #<digit> from creature name (if present)
-                                                    QString name = character->attribute("name");
-                                                    int pos = name.indexOf(" #");
-                                                    if (pos > 0) name.truncate(pos);
-
-                                                    creatures.append("  - " + name + extrainfo + "\n");
-                                                    // optionally, add HP + AC + Initiative Modifier
+                                                    creatures.append(encounter_creature(character));
                                                 }
                                             }
                                         }
 
                                     }
                                     if (creatures.length() > 0)
-                                        result += "```encounter\ncreatures:\n" + creatures.join(QString()) + "```" + newline + newline;
+                                        result += codeblock + "encounter\ncreatures:\n" + creatures.join(newline) + newline + codeblock + newline + newline;
                                 }
                             }
 
@@ -2560,7 +2575,7 @@ static const QString write_snippet(XmlElement *snippet)
 
     if (use_admonition_style && !sn_style.isEmpty())
     {
-        result += "```\n";
+        result += codeblock + newline;
     }
     // Ensure blank line between snippets
     if (!result.endsWith("\n\n"))
@@ -2947,13 +2962,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
 
             if (!nodes.isEmpty() && !relationships.isEmpty())
             {
-                stream << "```mermaid" << newline;
+                stream << codeblock + "mermaid" + newline;
                 // graph doesn't allow two-headed arrows
                 // TD = topdown, rather than LR = left-to-right
                 stream << "flowchart TD" << newline;
                 stream << setJoin(nodes, newline) << newline;
                 stream << setJoin(relationships, newline) << newline;
-                stream << "```\n";
+                stream << codeblock + newline;
 
                 stream << "%%\nlinks: [ " << setJoin(targets, ", ") << " ]\n%%\n";
             }
@@ -3234,13 +3249,13 @@ static void write_relationships(const XmlElement *root_elem)
             startFile(stream);
             stream << frontmatterMarker;
 
-            stream << "```mermaid" << newline;
+            stream <<  + "mermaid" + newline;
             // graph doesn't allow two-headed arrows
             // TD = topdown, rather than LR = left-to-right
             stream << "flowchart TD" << newline;
             stream << setJoin(nodes, newline) << newline;
             stream << setJoin(relationships, newline) << newline;
-            stream << "```\n";
+            stream << codeblock + newline;
             file.close();
         }
     }
@@ -3342,11 +3357,11 @@ static void write_storyboard(const XmlElement *root_elem)
             stream << "# " << plot_name << newline;
             if (!description.isEmpty()) stream << description << newline;
 
-            stream << "```mermaid" << newline;
+            stream << codeblock + "mermaid" + newline;
             stream << "flowchart TD" << newline;
             stream << nodes.join("\n") << newline;
             stream << links.join("\n") << newline;
-            stream << "```" << newline;
+            stream << codeblock + newline;
 
             if (!otherlinks.isEmpty())
                 stream << "%%links: [ " << setJoin(otherlinks, ", ") << " ]" << newline;
