@@ -90,6 +90,8 @@ extern bool show_full_map_pin_tooltip;
 
 static const QString oldAssetsDir("asset-files");
 static const QString assetsDir("zz_asset-files");
+static const QString templatesDir("templates");
+
 static const QString newline("\n");
 static const QString frontmatterMarker("---\n");
 static const QString codeblock("```");
@@ -156,6 +158,14 @@ static const QString snippetLabel(const XmlElement *elem)
     if (!result.isEmpty()) return result;
 
     return global_names.value(elem->attribute("facet_id"));
+}
+
+
+static inline const QString childText(XmlElement *element)
+{
+    XmlElement *child = element->xmlChild();
+    if (child == nullptr) return QString();
+    return child->fixedText();
 }
 
 
@@ -334,6 +344,184 @@ static void write_support_files()
         QFile::copy(pathname, basefile.fileName());
         basefile.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
     }
+}
+
+
+static inline QString addStyle(const QString &from, bool is_bold)
+{
+    if (is_bold)
+        return "**" + from + "**";
+    else
+        return from;
+}
+
+
+static inline QString capitalise(const QString &from)
+{
+    QString result{from};
+    if (!result.isEmpty()) result.replace(0, 1, from.front().toUpper());
+    return result;
+}
+
+
+static inline QString heading(int level, const QString &title)
+{
+    return QString(level,QChar('#')) + ' ' + title + newline;
+}
+
+
+static QString template_partition(int level, const XmlElement *partition)
+{
+    QString result = heading(level, partition->attribute("name"));
+    result.reserve(1000);
+    static const QString MARKER_START{"{{ "};
+    static const QString MARKER_FINISH{" }}"};
+
+    for (auto &child: partition->xmlChildren())
+    {
+        QString elem = child->objectName();
+        if (elem == "facet_global" || elem == "facet")
+        {
+            QString name = child->attribute("name");
+            QString facet = child->attribute("type");
+            if (facet == "Hybrid_Tag" || facet == "Tag_Standard")
+            {
+                QString tagname = validTag(global_names.value(child->attribute("domain_id")));
+                QString tag_id   = child->attribute("tag_id");  // only with Hybrid_Tag
+                if (!tag_id.isEmpty()) tagname.append('/' + validTag(global_names.value(tag_id)));
+
+                //QString is_lock  = child->attribute("is_lock_domain");
+                //QString is_multi = child->attribute("is_multi_tag");
+
+                result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
+                        ' ' + MARKER_START + "#" + tagname + MARKER_FINISH + newline;
+            }
+            else if (facet == "Labeled_Text" || facet == "Numeric")
+            {
+                result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
+                        ' ' + MARKER_START + name.toLower() + MARKER_FINISH + newline;
+            }
+            else if (facet == "Multi_Line")
+            {
+                result += addStyle(name + ':', true) +
+                        ' ' + MARKER_START + name.toLower() + MARKER_FINISH + newline;
+            }
+            else if (facet == "Date_Game")
+            {
+                QString format = child->attribute("date_format");
+
+                result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
+                        ' ' + MARKER_START + format + MARKER_FINISH + newline;
+            }
+            else if (facet == "Date_Range")
+            {
+                QString format = child->attribute("date_format");
+
+                result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
+                        ' ' + MARKER_START + format + MARKER_FINISH + newline;
+            }
+            else if (facet == "Picture" || facet == "Smart_Image" || facet == "Portfolio" || facet == "Statblock")
+            {
+                //QString size  = child->attribute("thumbnail_size");  // Picture + Smart_Image
+                result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
+                        ' ' + MARKER_START + facet + ':' + name.toLower() + MARKER_FINISH + newline;
+            }
+            else
+            {
+                result += MARKER_START + facet.toLower() + MARKER_FINISH + newline;
+                qDebug() << "Unsupported facet type:" << facet;
+            }
+        }
+        else if (elem == "partition" || elem == "partition_global")
+        {
+            result += template_partition(level+1, child);
+        }
+        else if (elem == "description" || elem == "summary" || elem == "purpose")
+        {
+            QString contents{childText(child)};
+            if (!contents.isEmpty())
+            {
+                result += "%% " + capitalise(elem) + ": " + contents + " %%" + newline;
+            }
+            else
+                qDebug() << "no text for partition" << elem;
+        }
+        else
+            qDebug() << "Unsupported element in partition:" << elem;
+
+        // Maybe have some children?
+        if (elem == "partition" || elem == "partition_global")
+            ;
+        else
+            for (auto node: child->xmlChildren())
+            {
+                QString elem2 = node->objectName();
+                if (elem2 == "description" || elem2 == "summary" || elem2 == "purpose")
+                {
+                    QString contents{childText(node)};
+                    if (!contents.isEmpty())
+                    {
+                        result += "%% " + capitalise(elem2) + ": " + contents + " %%" + newline;
+                    }
+                    else
+                        qDebug() << "no text for partition" << elem2;
+                }
+                else
+                    qDebug() << "Unexpected child of facet:" << elem2;
+            }
+    }
+    // Ensure blank line after the partition
+    if (!result.endsWith("\n\n")) result += newline;
+    return newline + result;
+}
+
+
+static void write_template(const XmlElement *category)
+{
+    QFile outfile(dirFile(templatesDir, validFilename(category->attribute("name"))) + ".md");
+    if (!outfile.open(QFile::WriteOnly))
+    {
+        qWarning() << "Failed to create template file for category" << category->attribute("name");
+        return;
+    }
+    QTextStream stream(&outfile);
+
+    stream << heading(1, category->attribute("name"));
+
+    for (auto &child: category->xmlChildren())
+    {
+        QString elem = child->objectName();
+        if (elem == "partition" || elem == "partition_global")
+        {
+            stream << template_partition(2, child);
+        }
+        else if (elem == "description" || elem == "summary" || elem == "purpose")
+        {
+            QString contents{childText(child)};
+            if (!contents.isEmpty())
+            {
+                stream << "%% " + capitalise(elem) + ": " + contents + " %%" + newline;
+            }
+            else
+                qDebug() << "no text for category" << elem;
+        }
+        else if (elem == "category" || elem == "category_global")
+            ;  // We don't care about nested categories
+        else
+            qWarning() << "Unsupported element in category:" << child->objectName();
+    }
+
+    outfile.close();
+}
+
+
+static void write_category_templates(const XmlElement *structure)
+{
+    foreach (const auto &cat, structure->findChildren<XmlElement*>("category_global"))
+        write_template(cat);
+
+    foreach (const auto &cat, structure->findChildren<XmlElement*>("category"))
+        write_template(cat);
 }
 
 
@@ -1050,7 +1238,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
 
     QString result;
     result.reserve(1000);
-    if (!image_name.isEmpty()) result += "### " + image_name + newline;
+    if (!image_name.isEmpty()) result += heading(3, image_name);
 
     if (show_leaflet_pins && !pins.isEmpty())
     {
@@ -1131,7 +1319,7 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
     file.write (data);
     file.close();
 
-    if (!obj_name.isEmpty()) result += "### " + obj_name + newline;
+    if (!obj_name.isEmpty()) result += heading(3, obj_name);
     result += "!" + createLink(filename, filename);
 
     // Create a link to open the file externally, either using the annotation as a link, or just a hard-coded string
@@ -1468,8 +1656,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             }
             else if (tag.length() == 2 && tag[0] == 'h' && tag[1].isDigit())
             {
-                result += QString(tag.midRef(1).toInt(),'#') + ' ';
-                result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace).trimmed();
+                result += heading(tag.midRef(1).toInt(), decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace).trimmed());
             }
             else
             {
@@ -2070,7 +2257,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
     result.reserve(1000);
     if (!parent->xmlChild()) return "";
 
-    QString text = parent->xmlChild()->fixedText();
+    QString text{childText(parent)};
     text.replace("&#xd;", "\n");    // Get to correct length for fixing links
 
     // Now substitute any required links
@@ -2614,7 +2801,7 @@ static const QString write_section(XmlElement *section, int level)
     // Start with HEADER for the section (H1 used for topic title)
     QString sname = section->attribute("name");
     if (sname.isEmpty()) sname = global_names.value(section->attribute("partition_id"));
-    result += QString(level+1,'#') + ' ' + sname + newline;
+    result += heading(level+1, sname);
 
     // Write snippets
     foreach (const auto &snippet, section->xmlChildren("snippet"))
@@ -2830,7 +3017,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             if (auto contents = snippet->xmlChild("contents"))
             {
                 // No formatting in value!
-                QString value = textContent(contents->xmlChild()->fixedText(), /*dice*/ false);
+                QString value = textContent(childText(contents), /*dice*/ false);
 
                 // If content starts with \n then it might be a table, so add an extra blank line
                 if (value.length() < 60 &&
@@ -2902,7 +3089,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << " |\n\n";
     }
 
-    stream << "# " << topic_full_name.value(topic) << newline;
+    stream << heading(1, topic_full_name.value(topic));
 
     // Process all <sections>, applying the linkage for this topic
     foreach (const auto &section, topic->xmlChildren("section"))
@@ -3099,7 +3286,7 @@ static void write_separate_index(const XmlElement *root_elem)
 
             foreach (const auto &cat, unique_keys)
             {
-                stream << "# " << internal_link(cat) << newline;
+                stream << heading(1, internal_link(cat));
 
                 // Organise topics alphabetically
                 auto topics = categories.values(cat);
@@ -3184,7 +3371,7 @@ static void write_category_files(const XmlElement *tree)
             if (other_cat != catname) stream << "  - " << validFilename(other_cat) << newline;
         }
         stream << frontmatterMarker;
-        stream << "# " << catname << newline;
+        stream << heading(1, catname);
         file.close();
     }
 }
@@ -3371,7 +3558,7 @@ static void write_storyboard(const XmlElement *root_elem)
             stream << "Tag: Storyboard" << newline;
             stream << frontmatterMarker;
 
-            stream << "# " << plot_name << newline;
+            stream << heading(1, plot_name);
             if (!description.isEmpty()) stream << description << newline;
 
             stream << codeblock + "mermaid" + newline;
@@ -3420,6 +3607,11 @@ static void read_structure(XmlElement *structure)
         global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
     foreach (const auto &facet, structure->findChildren<XmlElement*>("partition"))
         global_names.insert(facet->attribute("partition_id"), facet->attribute("name"));
+
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("domain_global"))
+        global_names.insert(facet->attribute("domain_id"), facet->attribute("name"));
+    foreach (const auto &facet, structure->findChildren<XmlElement*>("domain"))
+        global_names.insert(facet->attribute("domain_id"), facet->attribute("name"));
 }
 
 /**
@@ -3450,7 +3642,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_frontmatter_labeled_text,
                 bool add_frontmatter_numeric,
                 bool add_initiative_tracker,
-                bool permit_table_extended)
+                bool permit_table_extended,
+                bool create_category_templates)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3513,6 +3706,7 @@ void toMarkdown(const XmlElement *root_elem,
     // Write out the individual TOPIC files now:
     // Note use of findChildren to find children at all levels,
     // whereas xmlChildren returns only direct children.
+    if (create_category_templates) write_category_templates(root_elem->xmlChild("structure"));
     write_support_files();
     write_separate_index(root_elem);
     write_category_files(root_elem);

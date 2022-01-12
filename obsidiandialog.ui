@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>304</width>
-    <height>294</height>
+    <height>317</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -100,6 +100,13 @@
     <widget class="QCheckBox" name="useTableExtended">
      <property name="text">
       <string>Allow tables to use &quot;Table Extended&quot; settings</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="createCategoryTemplates">
+     <property name="text">
+      <string>Create a Template for each Category definition</string>
      </property>
     </widget>
    </item>

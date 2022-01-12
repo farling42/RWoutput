@@ -1,6 +1,8 @@
 # 4.17
 Add support for the "Table Extended" plugin of Obsidian - to allow headerless tables and column spanning.
 
+Add option to create a template MD file for each category defined in the structure definition.
+
 # 4.16
 Ensure that minions are added to 5e-statblocks as well as the main character.
 
