@@ -161,14 +161,6 @@ static const QString snippetLabel(const XmlElement *elem)
 }
 
 
-static inline const QString childText(XmlElement *element)
-{
-    XmlElement *child = element->xmlChild();
-    if (child == nullptr) return QString();
-    return child->fixedText();
-}
-
-
 static inline const QString validTag(const QString &string)
 {
     // Tag can only contain letters (case sensitive), digits, underscore and dash
@@ -383,8 +375,8 @@ static QString template_partition(int level, const XmlElement *partition)
         if (elem == "facet_global" || elem == "facet")
         {
             QString name = child->attribute("name");
-            QString facet = child->attribute("type");
-            if (facet == "Hybrid_Tag" || facet == "Tag_Standard")
+            QString fctype = child->attribute("type");
+            if (fctype == "Hybrid_Tag" || fctype == "Tag_Standard")
             {
                 QString tagname = validTag(global_names.value(child->attribute("domain_id")));
                 QString tag_id   = child->attribute("tag_id");  // only with Hybrid_Tag
@@ -396,40 +388,40 @@ static QString template_partition(int level, const XmlElement *partition)
                 result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
                         ' ' + MARKER_START + "#" + tagname + MARKER_FINISH + newline;
             }
-            else if (facet == "Labeled_Text" || facet == "Numeric")
+            else if (fctype == "Labeled_Text" || fctype == "Numeric" || fctype == "Tag_Multi_Domain")
             {
                 result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
                         ' ' + MARKER_START + name.toLower() + MARKER_FINISH + newline;
             }
-            else if (facet == "Multi_Line")
+            else if (fctype == "Multi_Line")
             {
                 result += addStyle(name + ':', true) +
                         ' ' + MARKER_START + name.toLower() + MARKER_FINISH + newline;
             }
-            else if (facet == "Date_Game")
+            else if (fctype == "Date_Game")
             {
                 QString format = child->attribute("date_format");
 
                 result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
                         ' ' + MARKER_START + format + MARKER_FINISH + newline;
             }
-            else if (facet == "Date_Range")
+            else if (fctype == "Date_Range")
             {
                 QString format = child->attribute("date_format");
 
                 result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
                         ' ' + MARKER_START + format + MARKER_FINISH + newline;
             }
-            else if (facet == "Picture" || facet == "Smart_Image" || facet == "Portfolio" || facet == "Statblock")
+            else if (fctype == "Picture" || fctype == "Smart_Image" || fctype == "Portfolio" || fctype == "Statblock")
             {
                 //QString size  = child->attribute("thumbnail_size");  // Picture + Smart_Image
                 result += addStyle(name + ':', child->attribute("label_style") == "Bold") +
-                        ' ' + MARKER_START + facet + ':' + name.toLower() + MARKER_FINISH + newline;
+                        ' ' + MARKER_START + fctype + ':' + name.toLower() + MARKER_FINISH + newline;
             }
             else
             {
-                result += MARKER_START + facet.toLower() + MARKER_FINISH + newline;
-                qDebug() << "Unsupported facet type:" << facet;
+                result += MARKER_START + fctype.toLower() + MARKER_FINISH + newline;
+                qDebug() << "Unsupported facet type:" << fctype;
             }
         }
         else if (elem == "partition" || elem == "partition_global")
@@ -438,7 +430,7 @@ static QString template_partition(int level, const XmlElement *partition)
         }
         else if (elem == "description" || elem == "summary" || elem == "purpose")
         {
-            QString contents{childText(child)};
+            QString contents{child->childString()};
             if (!contents.isEmpty())
             {
                 result += "%% " + capitalise(elem) + ": " + contents + " %%" + newline;
@@ -455,19 +447,19 @@ static QString template_partition(int level, const XmlElement *partition)
         else
             for (auto node: child->xmlChildren())
             {
-                QString elem2 = node->objectName();
-                if (elem2 == "description" || elem2 == "summary" || elem2 == "purpose")
+                QString childtype = node->objectName();
+                if (childtype == "description" || childtype == "summary" || childtype == "purpose")
                 {
-                    QString contents{childText(node)};
+                    QString contents{node->childString()};
                     if (!contents.isEmpty())
                     {
-                        result += "%% " + capitalise(elem2) + ": " + contents + " %%" + newline;
+                        result += "%% " + capitalise(childtype) + ": " + contents + " %%" + newline;
                     }
                     else
-                        qDebug() << "no text for partition" << elem2;
+                        qDebug() << "no text for partition" << childtype;
                 }
-                else
-                    qDebug() << "Unexpected child of facet:" << elem2;
+                else if (!childtype.isEmpty())
+                    qDebug() << "Unexpected child of facet:" << elem << ">" << childtype;
             }
     }
     // Ensure blank line after the partition
@@ -497,7 +489,7 @@ static void write_template(const XmlElement *category)
         }
         else if (elem == "description" || elem == "summary" || elem == "purpose")
         {
-            QString contents{childText(child)};
+            QString contents{child->childString()};
             if (!contents.isEmpty())
             {
                 stream << "%% " + capitalise(elem) + ": " + contents + " %%" + newline;
@@ -2257,7 +2249,7 @@ static const QString get_content_text(XmlElement *parent, const ExportLinks &lin
     result.reserve(1000);
     if (!parent->xmlChild()) return "";
 
-    QString text{childText(parent)};
+    QString text{parent->childString()};
     text.replace("&#xd;", "\n");    // Get to correct length for fixing links
 
     // Now substitute any required links
@@ -3017,7 +3009,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
             if (auto contents = snippet->xmlChild("contents"))
             {
                 // No formatting in value!
-                QString value = textContent(childText(contents), /*dice*/ false);
+                QString value = textContent(contents->childString(), /*dice*/ false);
 
                 // If content starts with \n then it might be a table, so add an extra blank line
                 if (value.length() < 60 &&
