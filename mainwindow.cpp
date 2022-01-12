@@ -288,7 +288,8 @@ void MainWindow::on_saveMarkdown_clicked()
                settings.value("obsidian/useAdmonitionStyles").toBool(),
                settings.value("obsidian/fmLabeledText").toBool(),
                settings.value("obsidian/fmNumeric").toBool(),
-               settings.value("obsidian/useInitiativeTracker").toBool()
+               settings.value("obsidian/useInitiativeTracker").toBool(),
+               settings.value("obsidian/useTableExtended").toBool()
                );
 
     setStatusText("Markdown file SAVE complete.");

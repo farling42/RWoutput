@@ -73,6 +73,7 @@ static bool use_admonition_style=false;
 static bool frontmatter_labeled_text=true;
 static bool frontmatter_numeric=true;
 static bool initiative_tracker=true;
+static bool use_table_extended=false;
 
 #undef DUMP_CHILDREN
 
@@ -102,6 +103,7 @@ static QMap<QString,QString> global_names;      // key=<any *_id>, value=<"name 
 static QString RW_LINE_BREAK("<rwbr>");
 static QChar   RW_LEFT_BRACKET  = QChar(8704);
 static QChar   RW_RIGHT_BRACKET = QChar(8705);
+static QString RW_ESCAPE_BAR{"&#124;"};
 
 
 template<class T>const QString setJoin(QSet<T> &value, const QString &joiner) {
@@ -1376,21 +1378,30 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
                 }
                 else
                 {
+                    bool mark_tx = (use_table_extended && table.contains("||"));
                     if (break1 < 0)
                     {
-                        // Only one line in the table, so put a fake line in front of it.
-                        int count = barCount;
-                        QString header = "|";
-                        while (--count) header += " |";
-                        break1 = header.length();    // set to index of the line break we are about to add.
-                        table.prepend(header + newline);
+                        if (use_table_extended)
+                            mark_tx = true;
+                        else
+                        {
+                            // Only one line in the table, so put a fake line in front of it.
+                            int count = barCount;
+                            QString header = "|";
+                            while (--count) header += " |";
+                            break1 = header.length();    // set to index of the line break we are about to add.
+                            table.prepend(header + newline);
+                        }
                     }
                     // Create the line of columns
                     QString columns = "|";
                     while (--barCount) columns += "---|";
                     table.insert(break1+1, columns + newline);
-                    // Count finished, so we can replace the "&#124;" with "\|" - required to have image links working
-                    table.replace("&#124;", "\\|");
+
+                    // Maybe need to include marker for "Table Extended" plugin
+                    if (mark_tx) result += newline + "-tx-";
+                    // Count finished, so we can replace the RW_ESCAPE_BAR with "\|" - required to have image links working
+                    table.replace(RW_ESCAPE_BAR, "\\|");
                     result += newline + table + newline + newline;
                 }
             }
@@ -1398,14 +1409,20 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
             {
                 QString row = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, allowWhitespace);
                 // end of line for table row
-                result += row.trimmed() + " |\n";
+                result += "| " + row.trimmed() + "\n";
             }
             else if (nestedTableCount==1 && tag == "td")
             {
                 // TD contains text directly, so allow whitespace within it
+                // If colspan is set and "Table Extended" is being used, then add extra "|" at the end.
+                int colspan=1;
+                if (use_table_extended) {
+                    QString attr = getGumboAttribute(node, "colspan");
+                    if (!attr.isEmpty()) colspan = attr.toInt();
+                }
                 QString cell = decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, /*allowWhitespace*/ true);
                 // TODO - do we need to detect double \n
-                result += "| " + cell.trimmed().replace(RW_LINE_BREAK,"<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|","&#124;") + ' ';
+                result += ' ' + cell.trimmed().replace(RW_LINE_BREAK,"<br>").replace("\n\n","<br>").replace("\n","<br>").replace("|",RW_ESCAPE_BAR) + ' ' + QString(colspan, QChar('|'));
             }
             else if (nestedTableCount==1 && tag == "tbody")
             {
@@ -3432,7 +3449,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_admonition_rwstyle,
                 bool add_frontmatter_labeled_text,
                 bool add_frontmatter_numeric,
-                bool add_initiative_tracker)
+                bool add_initiative_tracker,
+                bool permit_table_extended)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3457,6 +3475,7 @@ void toMarkdown(const XmlElement *root_elem,
     frontmatter_labeled_text = add_frontmatter_labeled_text;
     frontmatter_numeric      = add_frontmatter_numeric;
     initiative_tracker       = add_initiative_tracker;
+    use_table_extended       = permit_table_extended;
 
     gumbofilenumber   = 0;
     collator.setNumericMode(true);

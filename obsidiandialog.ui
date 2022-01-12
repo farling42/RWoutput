@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>304</width>
-    <height>271</height>
+    <height>294</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -93,6 +93,13 @@
     <widget class="QCheckBox" name="fmNumeric">
      <property name="text">
       <string>Add Numeric snippets into frontmatter</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="useTableExtended">
+     <property name="text">
+      <string>Allow tables to use &quot;Table Extended&quot; settings</string>
      </property>
     </widget>
    </item>

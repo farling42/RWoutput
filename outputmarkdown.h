@@ -48,6 +48,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_adminition_rwstyle,
                 bool add_frontmatter_labeled_text,
                 bool add_frontmatter_numeric,
-                bool add_initiative_tracker);
+                bool add_initiative_tracker,
+                bool permit_table_extended);
 
 #endif // OUTPUTMARKDOWN_H
