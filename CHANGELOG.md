@@ -1,3 +1,8 @@
+# 4.17
+Add option to include the HL portfolio and Statblock HTML/RTF files as links (previously this was ALWAYS done).
+
+Extract images from Porfolio files and include in 5e-statblock definitions.
+
 # 4.16
 Add support for the "Table Extended" plugin of Obsidian - to allow headerless tables and column spanning.
 

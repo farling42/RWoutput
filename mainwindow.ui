@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>509</width>
-    <height>534</height>
+    <width>515</width>
+    <height>557</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -210,6 +210,19 @@ FILE</string>
              </widget>
             </item>
             <item>
+             <widget class="QCheckBox" name="linkPorFile">
+              <property name="toolTip">
+               <string>If not selected, then the POR file and external HTML/RTF files for statblocks will NOT be included in the generated output.</string>
+              </property>
+              <property name="text">
+               <string>Include links to POR/Statblock files</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QCheckBox" name="decodeStatblocks">
               <property name="toolTip">
                <string>Read the HTML statblock from POR files and put inline into Notes</string>
@@ -351,7 +364,7 @@ FILE</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>509</width>
+     <width>515</width>
      <height>21</height>
     </rect>
    </property>

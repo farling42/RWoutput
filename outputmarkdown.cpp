@@ -74,6 +74,7 @@ static bool frontmatter_labeled_text=true;
 static bool frontmatter_numeric=true;
 static bool initiative_tracker=true;
 static bool use_table_extended=false;
+static bool create_por_link=true;
 
 #undef DUMP_CHILDREN
 
@@ -1286,6 +1287,21 @@ static const QString write_image(const QString &image_name, const QByteArray &or
     return result;
 }
 
+
+static bool write_binary_file(const QString &filename, const QByteArray &data)
+{
+    QFile file(dirFile(assetsDir, filename));
+    if (!file.open(QFile::WriteOnly))
+    {
+        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
+        return false;
+    }
+    file.write (data);
+    file.close();
+    return true;
+}
+
+
 /**
  * @brief write_ext_object
  * No newline at the end
@@ -1299,18 +1315,14 @@ static const QString write_ext_object(const QString &obj_name, const QByteArray 
 {
     Q_UNUSED(obj_name)
 
+    // Write the asset data to an external file
+    if (!write_binary_file(filename, data))
+    {
+        return QString();
+    }
+
     QString result;
     result.reserve(1000);
-    // Write the asset data to an external file
-    QFile file(dirFile(assetsDir, filename));
-    if (!file.open(QFile::WriteOnly))
-    {
-        qWarning() << "writeExtObject: failed to open file for writing:" << filename;
-        return result;
-    }
-    file.write (data);
-    file.close();
-
     if (!obj_name.isEmpty()) result += heading(3, obj_name);
     result += "!" + createLink(filename, filename);
 
@@ -1826,7 +1838,7 @@ static inline QString st_save(XmlElement *character, const QString &prefix, cons
  * @param constxml
  * @return
  */
-static const QString write_5e_statblock(const QByteArray &constxml)
+static const QString write_5e_statblock(const QMap<QString,QByteArray> &image_files, const QByteArray &constxml)
 {
     QString finalresult;
 
@@ -1867,6 +1879,20 @@ static const QString write_5e_statblock(const QByteArray &constxml)
         // Set up the suffix which should be ignored on ability names.
         const QString ignorename = " (" + character->attribute("name") + ")";
 
+        XmlElement *imagesparent = character->xmlChild("images");
+        if (imagesparent)
+        {
+            const auto images = imagesparent->xmlChildren("image");
+            for (const auto &image: images)
+            {
+                QString filename = image->attribute("filename");
+                if (image_files.contains(filename) &&
+                    write_binary_file(filename, image_files.value(filename)))
+                {
+                    result += "image: [[" + filename + "]]" + newline;
+                }
+            }
+        }
         result += stat(character, "name: ",      QString(),    "name",        newline);
         result += stat(character, "size: ",      "size",       "name",        newline);
         result += stat(character, "race: ",      "race",       "displayname", newline);
@@ -2546,8 +2572,11 @@ static const QString write_snippet(XmlElement *snippet)
             {
                 if (auto contents = asset->xmlChild("contents"))
                 {
-                    result += write_ext_object(ext_object->attribute("name"), contents->byteData(), asset->attribute("filename"), annotationText(snippet, false));
-                    result += endspan + getTags(snippet);
+                    if (create_por_link)
+                    {
+                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), asset->attribute("filename"), annotationText(snippet, false));
+                        result += endspan + getTags(snippet);
+                    }
 
                     if (create_5e_statblocks || create_statblocks || initiative_tracker)
                     {
@@ -2555,6 +2584,7 @@ static const QString write_snippet(XmlElement *snippet)
                         QByteArray store = contents->byteData();
                         QBuffer buffer(&store);
                         QuaZip zip(&buffer);
+                        QMap<QString,QByteArray> image_files;
                         if (zip.open(QuaZip::mdUnzip))
                         {
                             // Put encounter block BEFORE other stat blocks
@@ -2575,11 +2605,14 @@ static const QString write_snippet(XmlElement *snippet)
 
                                         const XmlElement* statblocks = minion ? child->parent()->parent()->xmlChild("statblocks") : child->xmlChild("statblocks");
                                         QString statfilename;
+                                        QString imgfilename;
                                         for (auto statblock : statblocks->xmlChildren("statblock"))
+                                        {
                                             if (statblock->attribute("format") == "xml") {
                                                 statfilename = statblock->attribute("folder") + "/" + statblock->attribute("filename");
                                                 break;
                                             }
+                                        }
                                         if (!statfilename.isEmpty() && zip.setCurrentFile(statfilename))
                                         {
                                             QuaZipFile statfile(&zip);
@@ -2616,18 +2649,27 @@ static const QString write_snippet(XmlElement *snippet)
                             // Need to convert this HTML into markup
                             for (bool more=zip.goToFirstFile(); more; more=zip.goToNextFile())
                             {
-                                if (create_5e_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
+                                if (create_5e_statblocks && zip.getCurrentFileName().startsWith("images/"))
+                                {
+                                    QuaZipFile file(&zip);
+                                    if (file.open(QuaZipFile::ReadOnly))
+                                        image_files.insert(zip.getCurrentFileName().mid(7), file.readAll());
+                                }
+                                else if (create_5e_statblocks && zip.getCurrentFileName().startsWith("statblocks_xml/"))
                                 {
                                     QuaZipFile file(&zip);
                                     if (!file.open(QuaZipFile::ReadOnly))
                                         qWarning() << "Failed to open XML file from zip: " << zip.getCurrentFileName();
                                     else
                                     {
-                                        result += write_5e_statblock(file.readAll());
+                                        result += write_5e_statblock(image_files, file.readAll());
                                     }
                                 }
-                                if (create_statblocks && zip.getCurrentFileName().startsWith("statblocks_html/"))
+                                else if (create_statblocks && zip.getCurrentFileName().startsWith("statblocks_html/"))
                                 {
+                                    // Collect images for later
+
+
                                     QuaZipFile file(&zip);
                                     if (!file.open(QuaZipFile::ReadOnly))
                                         qWarning() << "Failed to open file from zip: " << zip.getCurrentFileName();
@@ -2686,14 +2728,17 @@ static const QString write_snippet(XmlElement *snippet)
                     }
                     else
                     {
-                        result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation);
+                        bool expand = filename.endsWith(".html") || filename.endsWith(".htm") || filename.endsWith(".rtf");
 
-                        if (filename.endsWith(".html") ||
-                            filename.endsWith(".htm")  ||
-                            filename.endsWith(".rtf"))
+                        if (!expand || create_por_link)
+                        {
+                            result += write_ext_object(ext_object->attribute("name"), contents->byteData(), filename, annotation) + newline;
+                        }
+
+                        if (expand)
                         {
                             // Terminate the write_ext_object with a blank line before putting the explicit markup into the note
-                            result += newline + newline + write_html(true, sn_type, contents->byteData());
+                            result += newline + write_html(true, sn_type, contents->byteData());
                         }
                     }
                     result += endspan + getTags(snippet);
@@ -3635,7 +3680,8 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_frontmatter_numeric,
                 bool add_initiative_tracker,
                 bool permit_table_extended,
-                bool create_category_templates)
+                bool create_category_templates,
+                bool link_por_file)
 {
 #ifdef TIME_CONVERSION
     QElapsedTimer timer;
@@ -3661,6 +3707,7 @@ void toMarkdown(const XmlElement *root_elem,
     frontmatter_numeric      = add_frontmatter_numeric;
     initiative_tracker       = add_initiative_tracker;
     use_table_extended       = permit_table_extended;
+    create_por_link          = link_por_file;
 
     gumbofilenumber   = 0;
     collator.setNumericMode(true);

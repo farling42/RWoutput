@@ -50,6 +50,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_frontmatter_numeric,
                 bool add_initiative_tracker,
                 bool permit_table_extended,
-                bool create_category_templates);
+                bool create_category_templates,
+                bool link_por_file);
 
 #endif // OUTPUTMARKDOWN_H

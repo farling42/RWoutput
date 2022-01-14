@@ -290,7 +290,8 @@ void MainWindow::on_saveMarkdown_clicked()
                settings.value("obsidian/fmNumeric").toBool(),
                settings.value("obsidian/useInitiativeTracker").toBool(),
                settings.value("obsidian/useTableExtended").toBool(),
-               settings.value("obsidian/createCategoryTemplates").toBool()
+               settings.value("obsidian/createCategoryTemplates").toBool(),
+               ui->linkPorFile->isChecked()
                );
 
     setStatusText("Markdown file SAVE complete.");
