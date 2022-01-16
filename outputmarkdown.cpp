@@ -96,6 +96,7 @@ static const QString templatesDir("templates");
 static const QString newline("\n");
 static const QString frontmatterMarker("---\n");
 static const QString codeblock("```");
+static const QString YAMLLIST("  - ");
 
 static QString mainPageName;
 static QString imported_date;
@@ -139,6 +140,7 @@ static inline void sortLinks(ExportLinks &list)
     }
 }
 
+
 static inline const QString validFilename(const QString &string)
 {
     // full character list from https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
@@ -146,6 +148,13 @@ static inline const QString validFilename(const QString &string)
     if (!invalid_chars.isValid()) qWarning() << "validFilename has invalid regexp";
     QString result(string);
     return result.replace(invalid_chars,"_");
+}
+
+
+static inline QString quotes(const QString &value)
+{
+    static const QChar QUOTE('"');
+    return QUOTE + value + QUOTE;
 }
 
 
@@ -254,7 +263,7 @@ inline QList<const XmlElement *> topicDescendents(const XmlElement *parent, cons
 
 static inline const QString mermaid_node_raw(const QString &name, const QString &label, bool internal_link=true)
 {
-    QString result = name + "([\"" + label + "\"])";
+    QString result = name + "([" + quotes(label) + "])";
     if (internal_link) result += "; class " + name + " internal-link";
     return result;
 }
@@ -1245,8 +1254,8 @@ static const QString write_image(const QString &image_name, const QByteArray &or
         result += "showAllMarkers: true\n";
         result += "preserveAspect: true\n";   // added to Leaflet in 4.4.0
         result += "bounds:\n";
-        result += "    - [0, 0]\n";
-        result += "    - [" + mapCoord(height) + ", " + mapCoord(image_size.width()) + "]\n";
+        result += YAMLLIST + "[0, 0]\n";
+        result += YAMLLIST + "[" + mapCoord(height) + ", " + mapCoord(image_size.width()) + "]\n";
 
         // Create the clickable MAP on top of the map
         foreach (const auto &pin, pins)
@@ -1271,7 +1280,7 @@ static const QString write_image(const QString &image_name, const QByteArray &or
             else
             {
                 result += internal_link(link);
-                //if (tooltip != link_name) result += ", \"" + tooltip.replace("\"","'") + "\"";
+                //if (tooltip != link_name) result += ", " + quotes(tooltip.replace("\"","'"));
             }
             result += newline;
         }
@@ -1681,7 +1690,7 @@ static const QString decode_gumbo(const GumboNode *parent, const GumboStyles &cs
                 for (unsigned count = node->v.element.attributes.length; count > 0; --count)
                 {
                     const GumboAttribute *attr = *attributes++;
-                    parts.append(QString("%1=\"%2\"").arg(attr->name, attr->value));
+                    parts.append(QString("%1=%2").arg(attr->name, quotes(attr->value)));
                 }
                 result += "<" + parts.join(' ') + ">";
                 result += decode_gumbo(node, cssStyles, styleManager, nestedTableCount, listtype, local_allowWhitespace);
@@ -1793,11 +1802,6 @@ static inline QString stat(XmlElement *node, const QString &prefix, const QStrin
 
 static const QString get_content_text(XmlElement *parent, const ExportLinks &links, bool dice=true);
 
-static inline QString quotes(const QString &value)
-{
-    return '"' + value + '"';
-}
-
 static inline QString stattext(XmlElement *node)
 {
     // Disable dice roll substitution in the text (until the 5e-statblock plugin supports it)
@@ -1807,14 +1811,13 @@ static inline QString stattext(XmlElement *node)
 }
 
 
-static const QString indent{QStringLiteral("\n    - ")};
-
+static const QString INDENT{newline + YAMLLIST};
 
 static inline QString join_list(const QString &label, const QStringList &list)
 {
     if (list.isEmpty()) return QString();
-    static const QString indent1{QStringLiteral(":\n    - [")};
-    static const QString indentN{QStringLiteral("]\n    - [")};
+    static const QString indent1{QStringLiteral(":\n  - [")};
+    static const QString indentN{QStringLiteral("]\n  - [")};
     static const QRegularExpression twocommas("[, ]+,");
     // Plugin fails if two commas appear together
     return label + indent1 + list.join(indentN).replace(twocommas, ",") + ']' + newline;
@@ -1827,7 +1830,7 @@ static inline QString st_save(XmlElement *character, const QString &prefix, cons
     const QString base_mod = stat(character, "", "abilityscores/abilityscore+name+" + abilityname + "/abilbonus",   "modified", QString());
     const QString save_mod = stat(character, "", "abilityscores/abilityscore+name+" + abilityname + "/savingthrow", "text",     QString());
     if (base_mod != save_mod)
-        return indent + prefix + save_mod;
+        return INDENT + prefix + save_mod;
 
     return QString();
 }
@@ -1940,9 +1943,9 @@ static const QString write_5e_statblock(const QMap<QString,QByteArray> &image_fi
                     stat(character, ", ", "attributes/attribute+name+Wisdom/attrvalue",         "modified", QString()) +
                     stat(character, ", ", "attributes/attribute+name+Charisma/attrvalue",       "modified", ']' + newline);
             const QString saves =
-                    stat(character, indent + "Con: ", "saves/save+abbr+Fort", "save", QString()) +
-                    stat(character, indent + "Dex: ",  "saves/save+abbr+Ref", "save", QString()) +
-                    stat(character, indent + "Wis: ", "saves/save+abbr+Will", "save", QString());
+                    stat(character, INDENT + "Con: ", "saves/save+abbr+Fort", "save", QString()) +
+                    stat(character, INDENT + "Dex: ",  "saves/save+abbr+Ref", "save", QString()) +
+                    stat(character, INDENT + "Wis: ", "saves/save+abbr+Will", "save", QString());
             if (!saves.isEmpty()) result += "saves:" + saves + newline;
         }
 
@@ -1959,7 +1962,7 @@ static const QString write_5e_statblock(const QMap<QString,QByteArray> &image_fi
                 if (abilbonus != value || name == "Perception")
                 {
                     if (value.front() != '-') value.prepend('+');
-                    result += indent + quotes(name) + ": " + value;
+                    result += INDENT + quotes(name) + ": " + value;
                 }
             }
             result += newline;
@@ -2069,6 +2072,7 @@ static const QString write_5e_statblock(const QMap<QString,QByteArray> &image_fi
         // - 2nd level (3 slots): detect thoughts, mirror image, misty step
         QMultiMap<QString,QString> spellnames;
         QMap<QString,QString> spellslots;
+        QString spelldesc;
         if (auto parent = character->xmlChild("spellslots"))
             foreach (auto slot, parent->xmlChildren("spellslot"))
             {
@@ -2096,19 +2100,52 @@ static const QString write_5e_statblock(const QMap<QString,QByteArray> &image_fi
             {
                 spellnames.insert(spell->attribute("level"), spell->attribute("name"));
             }
+        if (auto parent = character->xmlChild("classes"))
+            foreach (auto cls, parent->xmlChildren("class"))
+            {
+                QString casterlevel = cls->attribute("casterlevel");
+                if (casterlevel.isEmpty()) continue;
+                QStringList parts;
+
+                parts.append("The " + cls->attribute("name") + " is a level " + casterlevel + " caster");
+
+                QString spellattack = cls->attribute("spellattack");
+                if (!spellattack.isEmpty())
+                {
+                    // DND5E
+                    QString spellability = cls->attribute("spellability");
+                    if (!spellability.isEmpty()) parts.append("Spellcasting Ability " + spellability);
+                    if (!spellattack.isEmpty())  parts.append("Spell Attack " + spellattack);
+                    QString spellsavedc = cls->attribute("spellsavedc");
+                    if (!spellsavedc.isEmpty())  parts.append("Spell Save DC " + spellsavedc);
+                }
+                else
+                {
+                    // Pathfinder
+                    QString basespelldc = cls->attribute("basespelldc");
+                    if (!basespelldc.isEmpty()) parts.append("Base Spell DC " + basespelldc);
+
+                    QString overcomespellresistance = cls->attribute("overcomespellresistance");
+                    if (!overcomespellresistance.isEmpty()) parts.append("Overcome SR " + overcomespellresistance);
+                }
+
+                if (!spelldesc.isEmpty()) spelldesc += "; ";
+                spelldesc += parts.join(", ");
+            }
         //  spells:
         //      - <description>
         //      - <spell level>: <spell-list>
         if (!spellnames.isEmpty())
         {
-            result += "spells: ";
+            result += "spells: " + INDENT + spelldesc;
+            // first line = spellcasting description, such as "The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared"
             foreach (auto level, spellnames.uniqueKeys())
             {
                 QString count = spellslots.value(level);
                 if (count.isEmpty()) count = "at will";
                 QString lvl = (level == 0) ? "Cantrip" : (level + " level");
                 const QStringList spells = spellnames.values(level);
-                result += indent + lvl + " (" + count + "): " + spells.join(", ");
+                result += INDENT + lvl + " (" + count + "): " + spells.join(", ");
             }
             result += newline;
         }
@@ -2412,7 +2449,7 @@ static inline QString encounter_creature(XmlElement *character)
     int pos = name.indexOf(" #");
     if (pos > 0) name.truncate(pos);
 
-    QString result{"  - " + name};
+    QString result{YAMLLIST + name};
     QString part;
     const QString prefix{", "};
 
@@ -2529,9 +2566,9 @@ static const QString write_snippet(XmlElement *snippet)
             titles.append(QString("Veracity: %1").arg(sn_veracity));
         }
         QString title;
-        if (!titles.isEmpty()) title = QString(" title=\"%1\"").arg(titles.join(", "));
+        if (!titles.isEmpty()) title = QString(" title=%1").arg(quotes(titles.join(", ")));
         if (!classes.isEmpty()) {
-            result  += "<span class=\"" + classes.join(" ") + '"' + title + '>';
+            result  += "<span class=" + quotes(classes.join(" ")) + title + '>';
             endspan =  "</span>" + newline;
             inspan=true;
         }
@@ -2865,7 +2902,7 @@ static void startFile(QTextStream &stream)
 
     // The first part of the FRONTMATTER
     stream << frontmatterMarker;
-    stream << "ImportedOn: " << imported_date << newline;
+    stream << "ImportedOn: " << quotes(imported_date) << newline;
 
 }
 
@@ -3004,26 +3041,26 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     {
         QString true_name;
         stream << "Aliases:\n";
-        if (name_alias) stream << "  - " << basename << newline;
+        if (name_alias) stream << YAMLLIST << quotes(basename) << newline;
         foreach (const auto &alias, aliases)
         {
             QString name = alias->attribute("name");
             if (alias->attribute("is_true_name") == "true") true_name = name;
-            stream << "  - " << name << newline;
+            stream << YAMLLIST << quotes(name) << newline;
         }
-        if (!true_name.isEmpty()) stream << "True-Name: " << true_name << newline;
+        if (!true_name.isEmpty()) stream << "True-Name: " << quotes(true_name) << newline;
     }
     QStringList tags;
-    tags.append(tag_string("Category", category_name));
+    tags.append(quotes(tag_string("Category", category_name)));
     if (create_prefix_tag)
     {
         QString prefix = topic->attribute("prefix");
-        if (!prefix.isEmpty()) tags.append(tag_string("Prefix", prefix));
+        if (!prefix.isEmpty()) tags.append(quotes(tag_string("Prefix", prefix)));
     }
     if (create_suffix_tag)
     {
         QString suffix = topic->attribute("suffix");
-        if (!suffix.isEmpty()) tags.append(tag_string("Suffix", suffix));
+        if (!suffix.isEmpty()) tags.append(quotes(tag_string("Suffix", suffix)));
     }
     stream << "Tags: " << tags.join(" ");
     stream << newline;
@@ -3037,13 +3074,13 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         if (sntype == "Tag_Standard")
         {
             const XmlElement *tag = snippet->xmlChild("tag_assign");
-            if (tag) stream << validTag(global_names.value(snippet->attribute("facet_id"))) << ": " << global_names.value(tag->attribute("tag_id")) << newline;
+            if (tag) stream << validTag(global_names.value(snippet->attribute("facet_id"))) << ": " << quotes(global_names.value(tag->attribute("tag_id"))) << newline;
         }
         else if (sntype == "Tag_Multi_Domain")
         {
             QStringList tags;
             foreach (const auto &tag, snippet->xmlChildren("tag_assign"))
-                tags.append('"' + tag_full_name.value(tag->attribute("tag_id")) + '"');
+                tags.append(quotes(tag_full_name.value(tag->attribute("tag_id"))));
             if (tags.length() == 1)
                 stream << validTag(snippetLabel(snippet)) << ": " << tags.first() << newline;
             else if (tags.length() > 1)
@@ -3062,7 +3099,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 {
                     value = value.trimmed();
                     if (!value.contains("\n"))
-                        stream << validTag(snippetLabel(snippet)) << ": " << value << newline;
+                        stream << validTag(snippetLabel(snippet)) << ": " << quotes(value) << newline;
                 }
             }
 
@@ -3071,6 +3108,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         {
             if (auto contents = snippet->xmlChild("contents"))
             {
+                // No quotes needed, since we are putting in a number
                 stream << validTag(snippetLabel(snippet)) << ": " << contents->childString() << newline;
             }
         }
@@ -3079,18 +3117,18 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
     if (parent) {
         // Don't tell Breadcrumbs about the main page!
         QString link = (parent->objectName() == "topic") ? topic_filename.value(parent->attribute("topic_id")) : validFilename(category_name);
-        stream << "parent:\n  - " << link << "\nup:\n  - " << link << newline;
+        stream << "parent:\n" + YAMLLIST << quotes(link) << "\nup:\n" + YAMLLIST << quotes(link) << newline;
     }
     if (prev)
     {
         QString link = topic_filename.value(prev->attribute("topic_id"));
-        stream << "prev:\n  - " << link << newline;
+        stream << "prev:\n" + YAMLLIST << quotes(link) << newline;
     }
     if (next)
     {
         QString link = topic_filename.value(next->attribute("topic_id"));
-        stream << "next:\n  - " << link << newline;
-        //stream << "same:\n  - " << link << newline;
+        stream << "next:\n" + YAMLLIST << quotes(link) << newline;
+        //stream << "same:\n" + YAMLLIST << link << newline;
     }
     const auto children = topic->xmlChildren("topic");
     if (children.length() > 0)
@@ -3098,16 +3136,16 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         stream << "down:\n";
         foreach (const auto &child, topic->xmlChildren("topic"))
         {
-            stream << "  - " << topic_filename.value(child->attribute("topic_id")) << newline;
+            stream << YAMLLIST << quotes(topic_filename.value(child->attribute("topic_id"))) << newline;
         }
     }
-    stream << "RWtopicId: " << topic->attribute("topic_id") << newline;
+    stream << "RWtopicId: " << quotes(topic->attribute("topic_id")) << newline;
 
     // Connections
     foreach (const auto &child, topic->xmlChildren("connection"))
     {
         // Remove spaces from tag
-        stream << relationship(child).replace(" ", "") << ": " << internal_link(child->attribute("target_id")) << newline;
+        stream << relationship(child).replace(" ", "") << ": " << quotes(internal_link(child->attribute("target_id"))) << newline;
     }
     stream << frontmatterMarker;
 
@@ -3196,7 +3234,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
                 label.replace("-", newline);
                 if (!annotation.isEmpty()) label += newline + annotation;
 
-                if (!label.isEmpty()) label = "-- \"" + label + "\" ";
+                if (!label.isEmpty()) label = "-- " + quotes(label) + " ";
 
                 relationships.insert(source_id + label + arrow + target_id);
             }
@@ -3391,7 +3429,7 @@ static void write_category_files(const XmlElement *tree)
         startFile(stream);
 
         // frontmatter for folder information
-        stream << "up:\n  - " << mainPageName << newline;
+        stream << "up:\n" + YAMLLIST << quotes(mainPageName) << newline;
         stream << "down:\n";
         auto topics = categories.values(catname);
         std::sort(topics.begin(), topics.end(), sort_topics);
@@ -3399,13 +3437,13 @@ static void write_category_files(const XmlElement *tree)
         {
             if (global_names.value(topic->attribute("category_id")) == catname)
             {
-                stream << "  - " << topic_filename.value(topic->attribute("topic_id")) << newline;
+                stream << YAMLLIST << quotes(topic_filename.value(topic->attribute("topic_id"))) << newline;
             }
         }
         stream << "same:\n";
         foreach (const QString &other_cat, category_names)
         {
-            if (other_cat != catname) stream << "  - " << validFilename(other_cat) << newline;
+            if (other_cat != catname) stream << YAMLLIST << quotes(validFilename(other_cat)) << newline;
         }
         stream << frontmatterMarker;
         stream << heading(1, catname);
@@ -3472,7 +3510,7 @@ static void write_relationships(const XmlElement *root_elem)
             QString label = relationship(connection);
             label.replace("-", newline);
             if (!annotation.isEmpty()) label += newline + annotation;
-            if (!label.isEmpty()) label = "-- \"" + label + "\" ";
+            if (!label.isEmpty()) label = "-- " + quotes(label) + " ";
 
             relationships.insert(from + label + arrow + to);
         }
@@ -3592,7 +3630,7 @@ static void write_storyboard(const XmlElement *root_elem)
             QTextStream stream(&file);
 
             startFile(stream);
-            stream << "Tag: Storyboard" << newline;
+            stream << "Tag: " << quotes("Storyboard") << newline;
             stream << frontmatterMarker;
 
             stream << heading(1, plot_name);

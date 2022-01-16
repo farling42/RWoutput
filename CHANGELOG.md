@@ -1,3 +1,8 @@
+# 4.18
+Ensure all string values in the frontmatter are enclosed in double-quotes (numbers are not put inside quotes).
+
+In TTRPG statblocks, ensure the first line of the spells section describes the spellcaster, rather than being the first line of spells (not a perfect translation yet).
+
 # 4.17
 Add option to include the HL portfolio and Statblock HTML/RTF files as links (previously this was ALWAYS done).
 
