@@ -3062,8 +3062,7 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         QString suffix = topic->attribute("suffix");
         if (!suffix.isEmpty()) tags.append(quotes(tag_string("Suffix", suffix)));
     }
-    stream << "Tags: " << tags.join(" ");
-    stream << newline;
+    stream << "Tags:" << INDENT << tags.join(INDENT) << newline;
 
     // For each field with a tag_assign, create the field name in the frontmatter, e.g.
     // Class: name

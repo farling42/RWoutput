@@ -1,3 +1,6 @@
+# 4.18.1
+The Tags: line in MD needs to be a list if there is more than one entry.
+
 # 4.18
 Ensure all string values in the frontmatter are enclosed in double-quotes (numbers are not put inside quotes).
 
