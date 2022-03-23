@@ -90,6 +90,13 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="fmPrefixSuffix">
+     <property name="text">
+      <string>Add Prefix and Suffix fields into frontmatter</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QCheckBox" name="fmNumeric">
      <property name="text">
       <string>Add Numeric snippets into frontmatter</string>

@@ -288,6 +288,7 @@ void MainWindow::on_saveMarkdown_clicked()
                settings.value("obsidian/useAdmonitionStyles").toBool(),
                settings.value("obsidian/fmLabeledText").toBool(),
                settings.value("obsidian/fmNumeric").toBool(),
+               settings.value("obsidian/fmPrefixSuffix").toBool(),
                settings.value("obsidian/useInitiativeTracker").toBool(),
                settings.value("obsidian/useTableExtended").toBool(),
                settings.value("obsidian/createCategoryTemplates").toBool(),

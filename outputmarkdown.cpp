@@ -72,6 +72,7 @@ static bool use_admonition_gmdir=false;
 static bool use_admonition_style=false;
 static bool frontmatter_labeled_text=true;
 static bool frontmatter_numeric=true;
+static bool frontmatter_prefix_suffix=true;
 static bool initiative_tracker=true;
 static bool use_table_extended=false;
 static bool create_por_link=true;
@@ -3050,17 +3051,26 @@ static void write_topic_file(const XmlElement *topic, const XmlElement *parent, 
         }
         if (!true_name.isEmpty()) stream << "True-Name: " << quotes(true_name) << newline;
     }
+    stream << "Category: " << quotes(category_name) << newline;
     QStringList tags;
     tags.append(quotes(tag_string("Category", category_name)));
-    if (create_prefix_tag)
+
+    if (create_prefix_tag || frontmatter_prefix_suffix)
     {
         QString prefix = topic->attribute("prefix");
-        if (!prefix.isEmpty()) tags.append(quotes(tag_string("Prefix", prefix)));
+        if (!prefix.isEmpty())
+        {
+            if (create_prefix_tag) tags.append(quotes(tag_string("Prefix", prefix)));
+            if (frontmatter_prefix_suffix) stream << "Prefix: " << quotes(prefix) << newline;
+        }
     }
-    if (create_suffix_tag)
+    if (create_suffix_tag || frontmatter_prefix_suffix)
     {
         QString suffix = topic->attribute("suffix");
-        if (!suffix.isEmpty()) tags.append(quotes(tag_string("Suffix", suffix)));
+        if (!suffix.isEmpty()) {
+            if (create_suffix_tag) tags.append(quotes(tag_string("Suffix", suffix)));
+            if (frontmatter_prefix_suffix) stream << "Suffix: " << quotes(suffix) << newline;
+        }
     }
     stream << "Tags:" << INDENT << tags.join(INDENT) << newline;
 
@@ -3527,7 +3537,7 @@ static void write_relationships(const XmlElement *root_elem)
             startFile(stream);
             stream << frontmatterMarker;
 
-            stream <<  + "mermaid" + newline;
+            stream << codeblock + "mermaid" + newline;
             // graph doesn't allow two-headed arrows
             // TD = topdown, rather than LR = left-to-right
             stream << "flowchart TD" << newline;
@@ -3715,6 +3725,7 @@ void toMarkdown(const XmlElement *root_elem,
                 bool add_admonition_rwstyle,
                 bool add_frontmatter_labeled_text,
                 bool add_frontmatter_numeric,
+                bool add_frontmatter_prefix_suffix,
                 bool add_initiative_tracker,
                 bool permit_table_extended,
                 bool create_category_templates,
@@ -3742,6 +3753,7 @@ void toMarkdown(const XmlElement *root_elem,
     use_admonition_style = add_admonition_rwstyle;
     frontmatter_labeled_text = add_frontmatter_labeled_text;
     frontmatter_numeric      = add_frontmatter_numeric;
+    frontmatter_prefix_suffix = add_frontmatter_prefix_suffix;
     initiative_tracker       = add_initiative_tracker;
     use_table_extended       = permit_table_extended;
     create_por_link          = link_por_file;

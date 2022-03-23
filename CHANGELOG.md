@@ -1,3 +1,9 @@
+# 4.19
+For MD output:
+- add an option to put Prefix and Suffix entries into the frontmatter (only added if present in RW file).
+- fix bug with mermaid not being preceded by ``` in generated Relationships pages.
+- Add a Category entry to the frontmatter of each page.
+
 # 4.18.1
 The Tags: line in MD needs to be a list if there is more than one entry.
 
