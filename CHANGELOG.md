@@ -1,3 +1,6 @@
+# 4.20.1
+Callouts were nested wrong way round when GM Directions appeared along with normal contents in the same snippet.
+
 # 4.20
 Switch to using core Admonitions support within markdown output based on Obsidian.md v0.14.0
 

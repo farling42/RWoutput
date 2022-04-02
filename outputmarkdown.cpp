@@ -2518,20 +2518,12 @@ static const QString write_snippet(XmlElement *snippet)
 
     // Put GM-Directions first - which could occur on any snippet
     QString line_prefix;
-    if (auto gm_directions = snippet->xmlChild("gm_directions"))
+    auto gm_directions = snippet->xmlChild("gm_directions");
+    if (gm_directions && !use_admonition_gmdir)
     {
         QString gmtext = get_content_text(gm_directions, gmlinks).trimmed();
-        if (use_admonition_gmdir)
-        {
-            result += "> [!WARNING]+ GM Directions\n> " + gmtext.replace("\n","\n> ");
-        }
-        else
-        {
-            gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
-            result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>";
-        }
-        result += newline;
-        line_prefix = "\n> ";
+        gmtext.replace("\n\n","<br>\n");  // ensure that multiple paragraphs appears as a single block for the surrounding SPAN
+        result += "<span class=\"RWgmDirections\" title=\"GM Directions\">" + gmtext + "</span>" + newline + newline;
     }
 
     // Possibly set a SPAN on the main snippet, for style and veracity
@@ -2539,24 +2531,18 @@ static const QString write_snippet(XmlElement *snippet)
     {
         if (!sn_style.isEmpty())
         {
-            if (line_prefix.isEmpty())
-                line_prefix = "> ";
-            else
-                line_prefix = ">> ";  // nested inside GM-directions
-
-            result += line_prefix;
             if (sn_style == "Read_Aloud")
-                result += "[!QUOTE]+ Read-Aloud";
+                result += "> [!QUOTE]+ Read-Aloud";
             else if (sn_style == "Flavor")
-                result += "[!HINT]+ Flavor";
+                result += "> [!HINT]+ Flavor";
             else if (sn_style == "Callout")
-                result += "[!INFO]+ Callout";
+                result += "> [!INFO]+ Callout";
             else if (sn_style == "Handout")     // Message style
-                result += "[!EXAMPLE]+ Message";
+                result += "> [!EXAMPLE]+ Message";
             else
-                result += "[!QUESTION]+ " + sn_style;
+                result += "> [!QUESTION]+ " + sn_style;
             result += newline;
-
+            line_prefix = "> ";
         }
     }
     else
@@ -2580,6 +2566,20 @@ static const QString write_snippet(XmlElement *snippet)
             endspan =  "</span>" + newline;
             inspan=true;
         }
+    }
+
+    if (gm_directions && use_admonition_gmdir)
+    {
+        QString gmtext = get_content_text(gm_directions, gmlinks).trimmed();
+        // See if this is a GM-only or a normal snippet
+        // If there are also contents, then we need to nest the GM directions INSIDE the other contents.
+        bool only_gm = (snippet->attribute("purpose") == "Directions_Only");
+        line_prefix = only_gm ? "> " : ">> ";
+        result += line_prefix + "[!WARNING]+ GM Directions" + newline + line_prefix + gmtext.replace("\n","\n" + line_prefix) + newline;
+        // Blank line after GM directions, but might be inside callout block
+        line_prefix = "> ";
+        if (!only_gm) result += line_prefix;
+        result += newline;
     }
 
     //
