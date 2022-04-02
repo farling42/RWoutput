@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>304</width>
-    <height>317</height>
+    <height>340</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -68,7 +68,7 @@
    <item>
     <widget class="QCheckBox" name="useAdmonitionGMdir">
      <property name="text">
-      <string>Use Admonition for GM Directions</string>
+      <string>Use Callouts for GM Directions</string>
      </property>
      <property name="checked">
       <bool>true</bool>
@@ -78,7 +78,10 @@
    <item>
     <widget class="QCheckBox" name="useAdmonitionStyles">
      <property name="text">
-      <string>Use Admonition for Snippet Styles</string>
+      <string>Use Callouts for Snippet Styles</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
      </property>
     </widget>
    </item>

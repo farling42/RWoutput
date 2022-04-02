@@ -1,3 +1,6 @@
+# 4.20
+Switch to using core Admonitions support within markdown output based on Obsidian.md v0.14.0
+
 # 4.19
 For MD output:
 - add an option to put Prefix and Suffix entries into the frontmatter (only added if present in RW file).
